@@ -19,7 +19,7 @@ pub enum TableauxErr {
     ExpectedSiblings(usize, usize),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TableauxType {
     Unconnected,
     WeaklyConnected,

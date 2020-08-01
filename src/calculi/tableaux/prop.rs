@@ -19,9 +19,16 @@ impl From<ParseErr> for PropTabError {
 pub enum PropTabError {
     ParseErr(ParseErr),
     InvalidNodeId(usize),
+    InvalidClauseId(usize),
     Backtracking,
     BacktrackingEmpty,
     IllegalMove,
+    NotConnected,
+    ExpectedLeaf(usize),
+    AlreadyClosed(usize),
+    WouldMakeIrregular(String),
+    WouldMakeUnconnected,
+    WouldMakeNotStronglyConnected(String),
 }
 
 pub struct PropTableauxParams {
@@ -272,6 +279,7 @@ impl PropTabNode {
             let mut cs = String::new();
             for c in self.children.iter() {
                 cs.push_str(&c.to_string());
+                cs.push_str(",");
             }
             cs
         };
@@ -368,7 +376,7 @@ pub fn apply_expand(
     leaf_id: usize,
     clause_id: usize,
 ) -> PropTabResult<PropTableauxState> {
-    // ensureExpandability(state, leafID, clauseID)
+    ensure_expandable(&state, leaf_id, clause_id)?;
 
     let clause = &state.clause_set.clauses()[clause_id];
     let len = state.nodes.len();
@@ -380,7 +388,7 @@ pub fn apply_expand(
         leaf.children.push(len + i);
     }
 
-    // verifyExpandConnectedness(state, leafID)
+    verify_expand_connectedness(&state, leaf_id)?;
 
     if state.backtracking {
         state
@@ -443,6 +451,147 @@ pub fn apply_undo(mut state: PropTableauxState) -> PropTabResult<PropTableauxSta
     }
 }
 
+fn verify_expand_regularity(
+    state: &PropTableauxState,
+    leaf_id: usize,
+    clause_id: usize,
+) -> PropTabResult<()> {
+    let leaf = &state.nodes[leaf_id];
+    let mut lst: Vec<Atom<String>> = vec![leaf.into()];
+
+    let mut pred = None;
+
+    if let Some(p) = leaf.parent {
+        pred = Some(&state.nodes[p]);
+    }
+
+    while let Some(predecessor) = pred {
+        if let Some(p) = predecessor.parent {
+            lst.push(predecessor.into());
+            pred = Some(&state.nodes[p]);
+        } else {
+            break;
+        }
+    }
+
+    let clause = state.clause_set.clauses()[clause_id].atoms();
+
+    for atom in clause {
+        if lst.contains(atom) {
+            return Err(PropTabError::WouldMakeIrregular(atom.to_string()));
+        }
+    }
+
+    Ok(())
+}
+
+fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> PropTabResult<()> {
+    let leaf = &state.nodes[leaf_id];
+    let children = &leaf.children;
+
+    if leaf_id == 0 {
+        return Ok(());
+    }
+
+    match state.ty {
+        TableauxType::WeaklyConnected
+            if !children
+                .iter()
+                .fold(false, |acc, id| acc || state.node_is_closable(*id).unwrap()) =>
+        {
+            Err(PropTabError::WouldMakeUnconnected)
+        }
+        TableauxType::StronglyConnected
+            if !children
+                .iter()
+                .fold(false, |acc, id| acc || state.node_is_directly_closable(*id)) =>
+        {
+            Err(PropTabError::WouldMakeNotStronglyConnected(
+                leaf.to_string(),
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
+    let start = &state.root().children;
+    if ty == TableauxType::Unconnected {
+        true
+    } else {
+        let strong = ty == TableauxType::StronglyConnected;
+        start.iter().fold(true, |acc, id| {
+            acc && check_connectedness_subtree(state, *id, strong)
+        })
+    }
+}
+
+fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: bool) -> bool {
+    let node = &state.nodes[root];
+
+    // A subtree is weakly/strongly connected iff:
+    // 1. The root is a leaf OR at least one child of the root is a closed leaf
+    // 1a. For strong connectedness: The closed child is closed with the root
+    // 2. All child-subtrees are weakly/strongly connected themselves
+
+    if node.is_leaf() {
+        return true;
+    }
+
+    let mut has_directly_closed_child = false;
+    let mut all_children_connected = true;
+
+    for id in node.children.iter() {
+        let id = *id;
+        let child = &state.nodes[id];
+
+        let closed_cond = child.is_closed() && (!strong || child.close_ref == Some(root));
+
+        if child.is_leaf() && closed_cond {
+            has_directly_closed_child = true;
+        }
+        // All children are connected themselves
+        if !check_connectedness_subtree(state, id, strong) {
+            all_children_connected = false;
+            break;
+        }
+    }
+
+    has_directly_closed_child && all_children_connected
+}
+
+fn ensure_expandable(
+    state: &PropTableauxState,
+    leaf_id: usize,
+    clause_id: usize,
+) -> PropTabResult<()> {
+    if !check_connectedness(state, state.ty) {
+        return Err(PropTabError::NotConnected);
+    }
+
+    if leaf_id >= state.nodes.len() {
+        return Err(PropTabError::InvalidNodeId(leaf_id));
+    }
+    if clause_id >= state.clause_set.size() {
+        return Err(PropTabError::InvalidClauseId(clause_id));
+    }
+
+    let leaf = &state.nodes[leaf_id];
+
+    if !leaf.is_leaf() {
+        return Err(PropTabError::ExpectedLeaf(leaf_id));
+    }
+    if leaf.is_closed() {
+        return Err(PropTabError::AlreadyClosed(leaf_id));
+    }
+
+    if state.regular {
+        verify_expand_regularity(state, leaf_id, clause_id)
+    } else {
+        Ok(())
+    }
+}
+
 fn undo_close(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropTableauxState> {
     let mut nodes = state.nodes;
 
@@ -490,11 +639,20 @@ mod tests {
     };
     use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-    fn opts() -> PropTableauxParams {
+    fn undo_opts() -> PropTableauxParams {
         PropTableauxParams {
             tab_type: TableauxType::Unconnected,
             regular: false,
             backtracking: true,
+            cnf_strategy: CNFStrategy::Optimal,
+        }
+    }
+
+    fn expand_opts() -> PropTableauxParams {
+        PropTableauxParams {
+            tab_type: TableauxType::Unconnected,
+            regular: false,
+            backtracking: false,
             cnf_strategy: CNFStrategy::Optimal,
         }
     }
@@ -509,7 +667,7 @@ mod tests {
 
     #[test]
     fn undo_init() {
-        let state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+        let state = PropTableaux::parse_formula("a,b,c;d", Some(undo_opts())).unwrap();
         let res = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap_err();
 
         assert_eq!(res, PropTabError::BacktrackingEmpty);
@@ -517,7 +675,7 @@ mod tests {
 
     #[test]
     fn undo_flag() {
-        let mut state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+        let mut state = PropTableaux::parse_formula("a,b,c;d", Some(undo_opts())).unwrap();
 
         state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
 
@@ -534,7 +692,7 @@ mod tests {
 
     #[test]
     fn undo_expand_simple() {
-        let mut state = PropTableaux::parse_formula("a,b;c;!a", Some(opts())).unwrap();
+        let mut state = PropTableaux::parse_formula("a,b;c;!a", Some(undo_opts())).unwrap();
         state.used_backtracking = true;
 
         let info = state.info();
@@ -547,7 +705,7 @@ mod tests {
 
     #[test]
     fn undo_close_simple() {
-        let mut state = PropTableaux::parse_formula("a;!a", Some(opts())).unwrap();
+        let mut state = PropTableaux::parse_formula("a;!a", Some(undo_opts())).unwrap();
         state.used_backtracking = true;
 
         state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
@@ -573,7 +731,7 @@ mod tests {
 
     #[test]
     fn undo_complex() {
-        let mut state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", Some(opts())).unwrap();
+        let mut state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", Some(undo_opts())).unwrap();
         state.used_backtracking = true;
 
         let e6 = state.info();
@@ -597,5 +755,49 @@ mod tests {
         assert_eq!(e4, s4);
         assert_eq!(e5, s5);
         assert_eq!(e6, s6);
+    }
+
+    #[test]
+    fn expand_valid_a() {
+        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
+        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+
+        assert_eq!(4, state.nodes.len());
+        assert_eq!(3, state.nodes[0].children.len());
+
+        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
+    }
+
+    #[test]
+    fn expand_valid_b() {
+        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
+        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+
+        assert_eq!(2, state.nodes.len());
+        assert_eq!(1, state.nodes[0].children.len());
+
+        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,)|d;p;0;-;l;o;()]|[]", state.info());
+    }
+
+    #[test]
+    fn expand_valid_c() {
+        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
+        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 1)).unwrap();
+
+        assert_eq!(5, state.nodes.len());
+        assert_eq!(3, state.nodes[0].children.len());
+        assert_eq!(1, state.nodes[3].children.len());
+
+        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4,)|d;p;3;-;l;o;()]|[]", state.info());
+    }
+
+    #[test]
+    fn expand_leaf_index_invalid() {
+        let state = PropTableaux::parse_formula("a,b;c", Some(expand_opts())).unwrap();
+        let info = state.info();
+
+        let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap_err();
+        assert_eq!(PropTabError::InvalidNodeId(1), res);
     }
 }

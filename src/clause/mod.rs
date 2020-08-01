@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Atom<L: fmt::Display + Clone> {
     lit: L,
     negated: bool,
