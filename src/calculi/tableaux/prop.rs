@@ -25,10 +25,19 @@ pub enum PropTabError {
     IllegalMove,
     NotConnected,
     ExpectedLeaf(usize),
+    ExpectedClosed(usize),
     AlreadyClosed(usize),
     WouldMakeIrregular(String),
     WouldMakeUnconnected,
     WouldMakeNotStronglyConnected(String),
+    LemmaRoot(usize),
+    LemmaLeaf(usize),
+    ExpectedSiblings(usize, usize),
+    ExpectedSameSpelling(usize, usize),
+    CloseBothPos(usize, usize),
+    CloseBothNeg(usize, usize),
+    ExpectedParent(usize, usize),
+    CloseRoot,
 }
 
 pub struct PropTableauxParams {
@@ -49,7 +58,7 @@ impl Default for PropTableauxParams {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PropTableauxState {
     clause_set: ClauseSet<String>,
     ty: TableauxType,
@@ -101,14 +110,28 @@ impl PropTableauxState {
     pub fn node_is_closable(&self, id: usize) -> PropTabResult<bool> {
         let node = self.nodes.get(id);
         if let Some(node) = node {
-            todo!()
+            let atom: Atom<String> = node.into();
+            Ok(node.is_leaf() && self.node_ancestry_contains_atom(id, atom.not())?)
         } else {
             Err(PropTabError::InvalidNodeId(id))
         }
     }
 
-    pub fn node_is_directly_closable(&self, id: usize) -> bool {
-        todo!()
+    pub fn node_is_directly_closable(&self, id: usize) -> PropTabResult<bool> {
+        let node = self.nodes.get(id);
+        if let Some(node) = node {
+            let atom: Atom<String> = node.into();
+            if let Some(parent) = node.parent {
+                let parent = self.node(parent)?;
+                let pa: Atom<String> = parent.into();
+                let pa = pa.not();
+                Ok(node.is_leaf() && atom == pa)
+            } else {
+                Ok(false)
+            }
+        } else {
+            Err(PropTabError::InvalidNodeId(id))
+        }
     }
 
     pub fn clause_expand_preprocessing<'c>(
@@ -123,12 +146,16 @@ impl PropTableauxState {
         node_id: usize,
         atom: Atom<String>,
     ) -> PropTabResult<bool> {
-        let node = self.nodes.get(node_id);
-        if let Some(node) = node {
-            todo!()
-        } else {
-            Err(PropTabError::InvalidNodeId(node_id))
+        let mut node = self.node(node_id)?;
+
+        while let Some(parent) = node.parent {
+            node = self.node(parent)?;
+            if atom == node.into() {
+                return Ok(true);
+            }
         }
+
+        Ok(false)
     }
 
     pub fn mark_node_closed<'a>(&'a mut self, leaf: usize) {
@@ -167,6 +194,59 @@ impl PropTableauxState {
         }
     }
 
+    pub fn node_is_parent_of(&self, parent_id: usize, child: usize) -> PropTabResult<bool> {
+        let child = self.node(child)?;
+        if let Some(parent) = child.parent() {
+            if parent == parent_id {
+                Ok(true)
+            } else {
+                self.node_is_parent_of(parent_id, parent)
+            }
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> PropTabResult<Atom<String>> {
+        let leaf = self.node(leaf_id)?;
+        let lemma = self.node(lemma_id)?;
+
+        if !leaf.is_leaf() {
+            return Err(PropTabError::ExpectedLeaf(leaf_id));
+        }
+
+        if leaf.is_closed() {
+            return Err(PropTabError::AlreadyClosed(leaf_id));
+        }
+
+        if !lemma.is_closed() {
+            return Err(PropTabError::ExpectedClosed(lemma_id));
+        }
+
+        if lemma.parent().is_none() {
+            return Err(PropTabError::LemmaRoot(lemma_id));
+        }
+
+        if lemma.is_leaf() {
+            return Err(PropTabError::LemmaLeaf(lemma_id));
+        }
+
+        let common_parent = lemma.parent().unwrap();
+
+        if !self.node_is_parent_of(common_parent, leaf_id)? {
+            return Err(PropTabError::ExpectedSiblings(leaf_id, lemma_id));
+        }
+
+        let atom: Atom<String> = lemma.into();
+        let atom = atom.not();
+
+        if self.regular {
+            verify_expand_regularity(&self, leaf_id, &Clause::new(vec![atom.clone()]))?;
+        }
+
+        Ok(atom)
+    }
+
     pub fn info(&self) -> String {
         let opts = format!(
             "{}|{}|{}|{}",
@@ -198,7 +278,7 @@ impl PropTableauxState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PropTabNode {
     parent: Option<usize>,
     spelling: String,
@@ -308,7 +388,7 @@ impl fmt::Display for PropTabNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PropTableauxMove {
     Expand(usize, usize),
     AutoClose(usize, usize),
@@ -404,7 +484,8 @@ pub fn apply_close(
     leaf_id: usize,
     node_id: usize,
 ) -> PropTabResult<PropTableauxState> {
-    // ensure closability
+    ensure_basic_closeability(&state, leaf_id, node_id)?;
+
     let leaf = state.node_mut(leaf_id)?;
     leaf.close_ref = Some(node_id);
     state.mark_node_closed(leaf_id);
@@ -419,11 +500,29 @@ pub fn apply_close(
 }
 
 pub fn apply_lemma(
-    state: PropTableauxState,
+    mut state: PropTableauxState,
     leaf_id: usize,
-    node_id: usize,
+    lemma_id: usize,
 ) -> PropTabResult<PropTableauxState> {
-    todo!()
+    let atom = state.get_lemma(leaf_id, lemma_id)?;
+
+    let new_leaf = PropTabNode::new(
+        Some(leaf_id),
+        atom.lit().clone(),
+        atom.negated(),
+        Some(lemma_id),
+    );
+    let size = state.nodes.len();
+    state.nodes.push(new_leaf);
+    state.nodes.get_mut(leaf_id).unwrap().children.push(size);
+
+    verify_expand_connectedness(&state, leaf_id)?;
+
+    if state.backtracking {
+        state.moves.push(PropTableauxMove::Lemma(leaf_id, lemma_id));
+    }
+
+    Ok(state)
 }
 
 pub fn apply_undo(mut state: PropTableauxState) -> PropTabResult<PropTableauxState> {
@@ -454,7 +553,7 @@ pub fn apply_undo(mut state: PropTableauxState) -> PropTabResult<PropTableauxSta
 fn verify_expand_regularity(
     state: &PropTableauxState,
     leaf_id: usize,
-    clause_id: usize,
+    clause: &Clause<String>,
 ) -> PropTabResult<()> {
     let leaf = &state.nodes[leaf_id];
     let mut lst: Vec<Atom<String>> = vec![leaf.into()];
@@ -474,7 +573,7 @@ fn verify_expand_regularity(
         }
     }
 
-    let clause = state.clause_set.clauses()[clause_id].atoms();
+    let clause = clause.atoms();
 
     for atom in clause {
         if lst.contains(atom) {
@@ -502,9 +601,9 @@ fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> Pro
             Err(PropTabError::WouldMakeUnconnected)
         }
         TableauxType::StronglyConnected
-            if !children
-                .iter()
-                .fold(false, |acc, id| acc || state.node_is_directly_closable(*id)) =>
+            if !children.iter().fold(false, |acc, id| {
+                acc || state.node_is_directly_closable(*id).unwrap()
+            }) =>
         {
             Err(PropTabError::WouldMakeNotStronglyConnected(
                 leaf.to_string(),
@@ -585,10 +684,47 @@ fn ensure_expandable(
         return Err(PropTabError::AlreadyClosed(leaf_id));
     }
 
+    let clause = &state.clause_set.clauses()[clause_id];
+
     if state.regular {
-        verify_expand_regularity(state, leaf_id, clause_id)
+        verify_expand_regularity(state, leaf_id, clause)
     } else {
         Ok(())
+    }
+}
+
+fn ensure_basic_closeability(
+    state: &PropTableauxState,
+    leaf_id: usize,
+    node_id: usize,
+) -> PropTabResult<()> {
+    let leaf = state.node(leaf_id)?;
+    let node = state.node(node_id)?;
+
+    if !leaf.is_leaf() {
+        return Err(PropTabError::ExpectedLeaf(leaf_id));
+    }
+
+    if leaf.is_closed {
+        return Err(PropTabError::AlreadyClosed(leaf_id));
+    }
+
+    if leaf.spelling != node.spelling {
+        return Err(PropTabError::ExpectedSameSpelling(leaf_id, node_id));
+    }
+
+    if node_id == 0 {
+        return Err(PropTabError::CloseRoot);
+    }
+
+    if !state.node_is_parent_of(node_id, leaf_id)? {
+        return Err(PropTabError::ExpectedParent(node_id, leaf_id));
+    }
+
+    match (leaf.negated, node.negated) {
+        (true, true) => Err(PropTabError::CloseBothNeg(leaf_id, node_id)),
+        (false, false) => Err(PropTabError::CloseBothPos(leaf_id, node_id)),
+        _ => Ok(()),
     }
 }
 
@@ -634,170 +770,844 @@ fn undo_expand(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropT
 #[cfg(test)]
 mod tests {
     use super::{
-        PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
-        TableauxType,
+        PropTabError, PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams,
+        PropTableauxState, TableauxType,
     };
-    use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-    fn undo_opts() -> PropTableauxParams {
-        PropTableauxParams {
-            tab_type: TableauxType::Unconnected,
-            regular: false,
-            backtracking: true,
-            cnf_strategy: CNFStrategy::Optimal,
+    fn create_artificial_expand_state(
+        mut state: PropTableauxState,
+        nodes: Vec<PropTabNode>,
+    ) -> PropTableauxState {
+        state.nodes.append(&mut nodes.clone());
+
+        for (i, n) in nodes.iter().enumerate() {
+            let pn = n.parent.unwrap();
+            state.nodes.get_mut(pn).unwrap().children.push(i + 1);
+        }
+
+        state
+    }
+
+    mod undo {
+        use super::super::{
+            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
+            TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
+
+        fn opts() -> PropTableauxParams {
+            PropTableauxParams {
+                tab_type: TableauxType::Unconnected,
+                regular: false,
+                backtracking: true,
+                cnf_strategy: CNFStrategy::Optimal,
+            }
+        }
+
+        #[test]
+        fn disabled() {
+            let state = PropTableaux::parse_formula("a,b;c", None).unwrap();
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap_err();
+
+            assert_eq!(res, PropTabError::Backtracking);
+        }
+
+        #[test]
+        fn init() {
+            let state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap_err();
+
+            assert_eq!(res, PropTabError::BacktrackingEmpty);
+        }
+
+        #[test]
+        fn flag() {
+            let mut state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+
+            assert!(!state.used_backtracking);
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+
+            assert!(state.used_backtracking);
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+
+            assert!(state.used_backtracking);
+        }
+
+        #[test]
+        fn expand_simple() {
+            let mut state = PropTableaux::parse_formula("a,b;c;!a", Some(opts())).unwrap();
+            state.used_backtracking = true;
+
+            let info = state.info();
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+
+            assert_eq!(info, state.info());
+        }
+
+        #[test]
+        fn close_simple() {
+            let mut state = PropTableaux::parse_formula("a;!a", Some(opts())).unwrap();
+            state.used_backtracking = true;
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+
+            let info = state.info();
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+            state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+
+            assert_eq!(info, state.info());
+        }
+
+        fn move_and_info(
+            state: PropTableauxState,
+            r#move: PropTableauxMove,
+        ) -> (PropTableauxState, String) {
+            let msg = r#move.to_string();
+            let state = PropTableaux::apply_move(state, r#move).expect(&msg);
+            let info = state.info();
+            (state, info)
+        }
+
+        #[test]
+        fn complex() {
+            let mut state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", Some(opts())).unwrap();
+            state.used_backtracking = true;
+
+            let e6 = state.info();
+            let (state, e5) = move_and_info(state, PropTableauxMove::Expand(0, 0));
+            let (state, e4) = move_and_info(state, PropTableauxMove::Expand(1, 1));
+            let (state, e3) = move_and_info(state, PropTableauxMove::AutoClose(4, 1));
+            let (state, e2) = move_and_info(state, PropTableauxMove::Expand(3, 0));
+            let (state, e1) = move_and_info(state, PropTableauxMove::Expand(5, 1));
+            let (state, _) = move_and_info(state, PropTableauxMove::AutoClose(8, 5));
+
+            let (state, s1) = move_and_info(state, PropTableauxMove::Undo);
+            let (state, s2) = move_and_info(state, PropTableauxMove::Undo);
+            let (state, s3) = move_and_info(state, PropTableauxMove::Undo);
+            let (state, s4) = move_and_info(state, PropTableauxMove::Undo);
+            let (state, s5) = move_and_info(state, PropTableauxMove::Undo);
+            let (_, s6) = move_and_info(state, PropTableauxMove::Undo);
+
+            assert_eq!(e1, s1);
+            assert_eq!(e2, s2);
+            assert_eq!(e3, s3);
+            assert_eq!(e4, s4);
+            assert_eq!(e5, s5);
+            assert_eq!(e6, s6);
         }
     }
 
-    fn expand_opts() -> PropTableauxParams {
-        PropTableauxParams {
-            tab_type: TableauxType::Unconnected,
-            regular: false,
-            backtracking: false,
-            cnf_strategy: CNFStrategy::Optimal,
+    mod expand {
+        use super::super::{
+            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
+            TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
+
+        fn opts() -> PropTableauxParams {
+            PropTableauxParams {
+                tab_type: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            }
+        }
+
+        #[test]
+        fn valid_a() {
+            let state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+
+            assert_eq!(4, state.nodes.len());
+            assert_eq!(3, state.nodes[0].children.len());
+
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
+        }
+
+        #[test]
+        fn valid_b() {
+            let state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+
+            assert_eq!(2, state.nodes.len());
+            assert_eq!(1, state.nodes[0].children.len());
+
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,)|d;p;0;-;l;o;()]|[]", state.info());
+        }
+
+        #[test]
+        fn valid_c() {
+            let state = PropTableaux::parse_formula("a,b,c;d", Some(opts())).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 1)).unwrap();
+
+            assert_eq!(5, state.nodes.len());
+            assert_eq!(3, state.nodes[0].children.len());
+            assert_eq!(1, state.nodes[3].children.len());
+
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4,)|d;p;3;-;l;o;()]|[]", state.info());
+        }
+
+        #[test]
+        fn leaf_index_invalid() {
+            let state = PropTableaux::parse_formula("a,b;c", Some(opts())).unwrap();
+            let info = state.info();
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(1, 0))
+                .unwrap_err();
+            assert_eq!(PropTabError::InvalidNodeId(1), res);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(15, 0))
+                .unwrap_err();
+            assert_eq!(PropTabError::InvalidNodeId(15), res);
+
+            assert_eq!(info, state.info())
+        }
+
+        #[test]
+        fn clause_index_invalid() {
+            let state = PropTableaux::parse_formula("a,b;c", Some(opts())).unwrap();
+            let info = state.info();
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(0, 2))
+                .unwrap_err();
+            assert_eq!(PropTabError::InvalidClauseId(2), res);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(0, 15))
+                .unwrap_err();
+            assert_eq!(PropTabError::InvalidClauseId(15), res);
+
+            assert_eq!(info, state.info())
+        }
+
+        #[test]
+        fn non_leaf() {
+            let state = PropTableaux::parse_formula("a,b;c", Some(opts())).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+
+            let info = state.info();
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(0, 0))
+                .unwrap_err();
+            assert_eq!(PropTabError::ExpectedLeaf(0), res);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(1, 0))
+                .unwrap_err();
+            assert_eq!(PropTabError::ExpectedLeaf(1), res);
+
+            assert_eq!(info, state.info())
+        }
+
+        #[test]
+        fn closed_leaf() {
+            let state = PropTableaux::parse_formula("a;!a", Some(opts())).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+
+            let info = state.info();
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(2, 0))
+                .unwrap_err();
+            assert_eq!(PropTabError::AlreadyClosed(2), res);
+
+            assert_eq!(info, state.info())
         }
     }
 
-    #[test]
-    fn undo_disabled() {
-        let state = PropTableaux::parse_formula("a,b;c", None).unwrap();
-        let res = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap_err();
+    mod lemma {
+        use super::super::{
+            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
+            TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-        assert_eq!(res, PropTabError::Backtracking);
+        fn opts() -> PropTableauxParams {
+            PropTableauxParams {
+                tab_type: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            }
+        }
+
+        fn state(i: u8) -> PropTableauxState {
+            let formulas = vec!["a,a;!a,b;!b", "a;b,b;!a,!b", "!a,b;!b;a,b", "a,b;!b;!a,b"];
+
+            let formula = formulas[i as usize];
+
+            PropTableaux::parse_formula(formula, Some(opts())).unwrap()
+        }
+
+        #[test]
+        fn valid1() {
+            let state = state(0);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(4, 2)).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 4)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Lemma(2, 1)).unwrap();
+
+            assert_eq!(1, state.nodes[6].lemma_source.unwrap());
+            assert!(state.nodes[6].negated);
+            PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 2)).unwrap();
+        }
+
+        #[test]
+        fn valid2() {
+            let state = state(1);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(2, 2)).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 2)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Lemma(3, 2)).unwrap();
+
+            assert_eq!(2, state.nodes[6].lemma_source.unwrap());
+            assert!(state.nodes[6].negated);
+            PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 3)).unwrap();
+        }
+
+        #[test]
+        fn valid3() {
+            let state = state(2);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 2)).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 3)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Lemma(2, 1)).unwrap();
+
+            assert_eq!(1, state.nodes[6].lemma_source.unwrap());
+            assert!(!state.nodes[6].negated);
+        }
+
+        #[test]
+        fn invalid() {
+            let state = state(2);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 2)).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 3)).unwrap();
+
+            let res =
+                PropTableaux::apply_move(state.clone(), PropTableauxMove::Lemma(2, 3)).unwrap_err();
+            assert_eq!(PropTabError::ExpectedSiblings(2, 3), res);
+
+            let res =
+                PropTableaux::apply_move(state.clone(), PropTableauxMove::Lemma(2, 4)).unwrap_err();
+            assert_eq!(PropTabError::LemmaLeaf(4), res);
+
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Lemma(5, 3)).unwrap_err();
+            assert_eq!(PropTabError::AlreadyClosed(5), res);
+        }
+
+        #[test]
+        fn special_case() {
+            let state = state(0);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+
+            let res =
+                PropTableaux::apply_move(state.clone(), PropTableauxMove::Lemma(0, 0)).unwrap_err();
+            assert_eq!(PropTabError::ExpectedLeaf(0), res);
+
+            let res =
+                PropTableaux::apply_move(state.clone(), PropTableauxMove::Lemma(usize::MAX, 0))
+                    .unwrap_err();
+            assert_eq!(PropTabError::InvalidNodeId(usize::MAX), res);
+        }
     }
 
-    #[test]
-    fn undo_init() {
-        let state = PropTableaux::parse_formula("a,b,c;d", Some(undo_opts())).unwrap();
-        let res = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap_err();
+    mod close {
+        use super::super::{
+            PropTabError, PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams,
+            TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-        assert_eq!(res, PropTabError::BacktrackingEmpty);
+        fn opts() -> Option<PropTableauxParams> {
+            Some(PropTableauxParams {
+                tab_type: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            })
+        }
+
+        #[test]
+        fn valid_a() {
+            let state = PropTableaux::parse_formula("a,b;!b", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 2)).unwrap();
+
+            assert!(state.nodes[3].is_closed);
+            assert_eq!(2, state.nodes[3].close_ref.unwrap());
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b}, {!b}|[true;p;null;-;i;o;(1,2,)|a;p;0;-;l;o;()|b;p;0;-;i;c;(3,)|b;n;2;2;l;c;()]|[]", state.info());
+        }
+
+        #[test]
+        fn valid_b() {
+            let state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "b".to_string(), true, None),
+                PropTabNode::new(Some(1), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "b".to_string(), false, None),
+                PropTabNode::new(Some(1), "c".to_string(), false, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 1)).unwrap();
+
+            assert!(state.nodes[3].is_closed);
+            assert!(!state.nodes[2].is_closed);
+            assert!(!state.nodes[4].is_closed);
+
+            assert_eq!(1, state.nodes[3].close_ref.unwrap());
+            assert_eq!(
+                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,)|b;n;0;-;i;o;(2,3,4,)|a;p;1;-;l;o;()|b;p;1;1;l;c;()|c;p;1;-;l;o;()]|[]",
+                state.info()
+            );
+        }
+
+        #[test]
+        fn valid_c() {
+            let state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(0), "c".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), true, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 2)).unwrap();
+
+            assert!(!state.nodes[3].is_closed);
+            assert!(state.nodes[4].is_closed);
+            assert!(state.nodes[5].is_closed);
+
+            assert_eq!(1, state.nodes[4].close_ref.unwrap());
+            assert_eq!(2, state.nodes[5].close_ref.unwrap());
+            assert_eq!(
+                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;i;c;(4,)|b;p;0;-;i;c;(5,)|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;n;2;2;l;c;()]|[]",
+                state.info()
+            );
+        }
+
+        #[test]
+        fn invalid_leaf_idx() {
+            let state = PropTableaux::parse_formula("a,b;c", opts()).unwrap();
+
+            let res =
+                PropTableaux::apply_move(state, PropTableauxMove::AutoClose(42, 1)).unwrap_err();
+
+            assert_eq!(PropTabError::InvalidNodeId(42), res);
+        }
+
+        #[test]
+        fn invalid_idx() {
+            let state = PropTableaux::parse_formula("a,b;c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "b".to_string(), true, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let res =
+                PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 403)).unwrap_err();
+
+            assert_eq!(PropTabError::InvalidNodeId(403), res);
+        }
+
+        #[test]
+        fn non_leaf() {
+            let state = PropTableaux::parse_formula("a,b;c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "c".to_string(), false, None),
+                PropTabNode::new(Some(1), "c".to_string(), false, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(1, 2))
+                .unwrap_err();
+
+            assert_eq!(PropTabError::ExpectedLeaf(1), res);
+
+            let res =
+                PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap_err();
+            assert_eq!(PropTabError::CloseBothPos(2, 1), res);
+        }
+
+        #[test]
+        fn non_path() {
+            let state = PropTableaux::parse_formula("a,b;!b", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "b".to_string(), false, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(5), "a".to_string(), false, None),
+                PropTabNode::new(Some(5), "b".to_string(), false, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(4, 5))
+                .unwrap_err();
+
+            assert_eq!(PropTabError::ExpectedParent(5, 4), res);
+
+            let res =
+                PropTableaux::apply_move(state, PropTableauxMove::AutoClose(5, 4)).unwrap_err();
+            assert_eq!(PropTabError::ExpectedLeaf(5), res);
+        }
+
+        #[test]
+        fn closed_leaf() {
+            let state = PropTableaux::parse_formula("c;!c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "c".to_string(), false, None),
+                PropTabNode::new(Some(1), "c".to_string(), true, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(2, 1))
+                .unwrap_err();
+
+            assert_eq!(PropTabError::AlreadyClosed(2), res);
+        }
+
+        #[test]
+        fn wrong_var() {
+            let state = PropTableaux::parse_formula("a;!c", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "c".to_string(), true, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(2, 1))
+                .unwrap_err();
+
+            assert_eq!(PropTabError::ExpectedSameSpelling(2, 1), res);
+        }
+
+        #[test]
+        fn root() {
+            let state = PropTableaux::parse_formula("!true", opts()).unwrap();
+
+            let nodes = vec![PropTabNode::new(Some(0), "true".to_string(), true, None)];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+
+            let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(1, 0))
+                .unwrap_err();
+
+            assert_eq!(PropTabError::CloseRoot, res);
+        }
+
+        #[test]
+        fn close_marking() {
+            let state = PropTableaux::parse_formula("b,a;!b;!a,b", opts()).unwrap();
+
+            let nodes = vec![
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "b".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), false, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(5), "a".to_string(), true, None),
+                PropTabNode::new(Some(5), "b".to_string(), false, None),
+            ];
+
+            let state = super::create_artificial_expand_state(state, nodes);
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(7, 5)).unwrap();
+
+            assert!(state.nodes[7].is_closed);
+            assert!(!state.nodes[5].is_closed);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 2)).unwrap();
+
+            assert!(state.nodes[7].is_closed);
+            assert!(state.nodes[6].is_closed);
+            assert!(state.nodes[5].is_closed);
+            assert!(state.nodes[2].is_closed);
+            assert!(!state.nodes[0].is_closed);
+            assert!(state.nodes[5].close_ref.is_none());
+            assert!(state.nodes[2].close_ref.is_none());
+        }
     }
 
-    #[test]
-    fn undo_flag() {
-        let mut state = PropTableaux::parse_formula("a,b,c;d", Some(undo_opts())).unwrap();
+    mod check_close {
+        use super::super::{
+            PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams, TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+        fn opts() -> PropTableauxParams {
+            PropTableauxParams {
+                tab_type: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            }
+        }
 
-        assert!(!state.used_backtracking);
+        #[test]
+        fn simple() {
+            let mut state = PropTableaux::parse_formula("a,!a", Some(opts())).unwrap();
+            assert!(!PropTableaux::check_close(state.clone()).closed);
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+            let mut nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), true, None),
+            ];
 
-        assert!(state.used_backtracking);
+            state.nodes.append(&mut nodes);
+            state.nodes.get_mut(0).unwrap().children.push(1);
+            state.nodes.get_mut(1).unwrap().children.push(2);
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            assert!(!PropTableaux::check_close(state.clone()).closed);
 
-        assert!(state.used_backtracking);
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+            assert!(PropTableaux::check_close(state).closed)
+        }
+
+        #[test]
+        fn test() {
+            let mut state = PropTableaux::parse_formula("a,b;!a,!b", Some(opts())).unwrap();
+            assert!(!PropTableaux::check_close(state.clone()).closed);
+
+            let mut nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), true, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+            ];
+
+            state.nodes.append(&mut nodes);
+            state.nodes.get_mut(0).unwrap().children.push(1);
+            state.nodes.get_mut(0).unwrap().children.push(2);
+            state.nodes.get_mut(1).unwrap().children.push(3);
+            state.nodes.get_mut(2).unwrap().children.push(4);
+
+            assert!(!PropTableaux::check_close(state.clone()).closed);
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 1)).unwrap();
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 2)).unwrap();
+
+            assert!(PropTableaux::check_close(state).closed)
+        }
+
+        #[test]
+        fn complex() {
+            let state = PropTableaux::parse_formula("a,b;!b;!a", Some(opts())).unwrap();
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(2, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(4, 2)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(5, 1)).unwrap();
+
+            assert!(!PropTableaux::check_close(state.clone()).closed);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(3, 2)).unwrap();
+
+            assert!(!PropTableaux::check_close(state.clone()).closed);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(7, 5)).unwrap();
+
+            assert!(!PropTableaux::check_close(state.clone()).closed);
+
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 4)).unwrap();
+
+            assert!(PropTableaux::check_close(state.clone()).closed);
+        }
+
+        #[test]
+        fn negative() {
+            let mut state = PropTableaux::parse_formula("a,b;!b;!a", Some(opts())).unwrap();
+
+            let mut nodes = vec![
+                PropTabNode::new(Some(0), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".to_string(), false, None),
+                PropTabNode::new(Some(0), "c".to_string(), false, None),
+                PropTabNode::new(Some(1), "a".to_string(), true, None),
+                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(3), "c".to_string(), true, None),
+            ];
+
+            state.nodes.append(&mut nodes);
+            state
+                .nodes
+                .get_mut(0)
+                .unwrap()
+                .children
+                .append(&mut vec![1, 2, 3]);
+            state.nodes.get_mut(1).unwrap().children.push(4);
+            state.nodes.get_mut(2).unwrap().children.push(5);
+            state.nodes.get_mut(3).unwrap().children.push(6);
+
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 3)).unwrap();
+            state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+
+            assert!(!PropTableaux::check_close(state).closed)
+        }
     }
 
-    #[test]
-    fn undo_expand_simple() {
-        let mut state = PropTableaux::parse_formula("a,b;c;!a", Some(undo_opts())).unwrap();
-        state.used_backtracking = true;
+    mod connectedness {
+        use super::super::{
+            check_connectedness, PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams,
+            PropTableauxState, TableauxType,
+        };
+        use crate::{parse::clause_set::CNFStrategy, Calculus};
 
-        let info = state.info();
+        fn opts_weak() -> Option<PropTableauxParams> {
+            Some(PropTableauxParams {
+                tab_type: TableauxType::WeaklyConnected,
+                backtracking: false,
+                regular: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            })
+        }
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
-        state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+        fn opts_strong() -> Option<PropTableauxParams> {
+            Some(PropTableauxParams {
+                tab_type: TableauxType::StronglyConnected,
+                backtracking: false,
+                regular: false,
+                cnf_strategy: CNFStrategy::Optimal,
+            })
+        }
 
-        assert_eq!(info, state.info());
-    }
+        #[test]
+        fn valid_a() {
+            let state = PropTableaux::parse_formula("a,b,c;!a,b", opts_weak()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(5, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 1)).unwrap();
 
-    #[test]
-    fn undo_close_simple() {
-        let mut state = PropTableaux::parse_formula("a;!a", Some(undo_opts())).unwrap();
-        state.used_backtracking = true;
+            let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
+            assert!(is_connected);
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
-        state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{a, b, c}, {!a, b}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;i;o;(4,5,)|b;p;0;-;l;o;()|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;p;1;-;i;o;(6,7,)|a;n;5;1;l;c;()|b;p;5;-;l;o;()]|[]", state.info());
+        }
 
-        let info = state.info();
+        #[test]
+        fn valid_b() {
+            let state = PropTableaux::parse_formula("!a,b;a", opts_weak()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
 
-        state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
-        state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
+            let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
+            assert!(is_connected);
 
-        assert_eq!(info, state.info());
-    }
+            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{!a, b}, {a}|[true;p;null;-;i;o;(1,)|a;p;0;-;i;o;(2,3,)|a;n;1;1;l;c;()|b;p;1;-;i;o;(4,5,)|a;n;3;1;l;c;()|b;p;3;-;l;o;()]|[]", state.info());
+        }
 
-    fn move_and_info(
-        state: PropTableauxState,
-        r#move: PropTableauxMove,
-    ) -> (PropTableauxState, String) {
-        let msg = r#move.to_string();
-        let state = PropTableaux::apply_move(state, r#move).expect(&msg);
-        let info = state.info();
-        (state, info)
-    }
+        #[test]
+        fn invalid_a() {
+            let state = PropTableaux::parse_formula("a,b,c;!a,b", opts_strong()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(4, 1)).unwrap();
 
-    #[test]
-    fn undo_complex() {
-        let mut state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", Some(undo_opts())).unwrap();
-        state.used_backtracking = true;
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(5, 1)).unwrap_err();
 
-        let e6 = state.info();
-        let (state, e5) = move_and_info(state, PropTableauxMove::Expand(0, 0));
-        let (state, e4) = move_and_info(state, PropTableauxMove::Expand(1, 1));
-        let (state, e3) = move_and_info(state, PropTableauxMove::Expand(4, 1));
-        let (state, e2) = move_and_info(state, PropTableauxMove::Expand(3, 0));
-        let (state, e1) = move_and_info(state, PropTableauxMove::Expand(5, 1));
-        let (state, _) = move_and_info(state, PropTableauxMove::AutoClose(8, 5));
+            assert_eq!(
+                PropTabError::WouldMakeNotStronglyConnected("b".to_string()),
+                res
+            );
+        }
 
-        let (state, s1) = move_and_info(state, PropTableauxMove::Undo);
-        let (state, s2) = move_and_info(state, PropTableauxMove::Undo);
-        let (state, s3) = move_and_info(state, PropTableauxMove::Undo);
-        let (state, s4) = move_and_info(state, PropTableauxMove::Undo);
-        let (state, s5) = move_and_info(state, PropTableauxMove::Undo);
-        let (_, s6) = move_and_info(state, PropTableauxMove::Undo);
+        #[test]
+        fn invalid_b() {
+            let state = PropTableaux::parse_formula("!a,b;a", opts_strong()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
 
-        assert_eq!(e1, s1);
-        assert_eq!(e2, s2);
-        assert_eq!(e3, s3);
-        assert_eq!(e4, s4);
-        assert_eq!(e5, s5);
-        assert_eq!(e6, s6);
-    }
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 0)).unwrap_err();
 
-    #[test]
-    fn expand_valid_a() {
-        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
-        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
+            assert_eq!(
+                PropTabError::WouldMakeNotStronglyConnected("b".to_string()),
+                res
+            );
+        }
 
-        assert_eq!(4, state.nodes.len());
-        assert_eq!(3, state.nodes[0].children.len());
+        #[test]
+        fn weak_not_closing() {
+            let state = PropTableaux::parse_formula("!a,b;a", opts_weak()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 0)).unwrap();
 
-        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
-    }
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(5, 1)).unwrap_err();
 
-    #[test]
-    fn expand_valid_b() {
-        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
-        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 1)).unwrap();
+            assert_eq!(PropTabError::NotConnected, res);
+        }
 
-        assert_eq!(2, state.nodes.len());
-        assert_eq!(1, state.nodes[0].children.len());
+        #[test]
+        fn strong_wrong_expand() {
+            let state = PropTableaux::parse_formula("!a,b;a", opts_strong()).unwrap();
+            let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
 
-        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,)|d;p;0;-;l;o;()]|[]", state.info());
-    }
+            let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap_err();
 
-    #[test]
-    fn expand_valid_c() {
-        let state = PropTableaux::parse_formula("a,b,c;d", Some(expand_opts())).unwrap();
-        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
-        let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(3, 1)).unwrap();
-
-        assert_eq!(5, state.nodes.len());
-        assert_eq!(3, state.nodes[0].children.len());
-        assert_eq!(1, state.nodes[3].children.len());
-
-        assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4,)|d;p;3;-;l;o;()]|[]", state.info());
-    }
-
-    #[test]
-    fn expand_leaf_index_invalid() {
-        let state = PropTableaux::parse_formula("a,b;c", Some(expand_opts())).unwrap();
-        let info = state.info();
-
-        let res = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap_err();
-        assert_eq!(PropTabError::InvalidNodeId(1), res);
+            assert_eq!(
+                PropTabError::WouldMakeNotStronglyConnected("!a".to_string()),
+                res
+            );
+        }
     }
 }

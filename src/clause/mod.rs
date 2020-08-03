@@ -18,6 +18,13 @@ impl<L: fmt::Display + Clone> Atom<L> {
     pub fn negated(&self) -> bool {
         self.negated
     }
+
+    pub fn not(&self) -> Atom<L> {
+        Atom {
+            lit: self.lit.clone(),
+            negated: !self.negated,
+        }
+    }
 }
 
 impl<L: fmt::Display + Clone> fmt::Display for Atom<L> {
