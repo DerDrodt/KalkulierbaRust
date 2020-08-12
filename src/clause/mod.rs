@@ -1,6 +1,8 @@
 use std::fmt;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Atom<L: fmt::Display + Clone> {
     lit: L,
     negated: bool,
@@ -33,7 +35,7 @@ impl<L: fmt::Display + Clone> fmt::Display for Atom<L> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Clause<L: fmt::Display + Clone> {
     atoms: Vec<Atom<L>>,
 }
@@ -91,7 +93,7 @@ impl<L: fmt::Display + Clone> fmt::Display for Clause<L> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ClauseSet<L: fmt::Display + Clone> {
     clauses: Vec<Clause<L>>,
 }

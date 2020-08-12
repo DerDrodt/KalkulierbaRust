@@ -1,10 +1,13 @@
 use std::fmt;
 
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+
 use super::TableauxType;
 use crate::calculus::CloseMsg;
 use crate::clause::{Atom, Clause, ClauseSet};
 use crate::parse::clause_set::{parse_flexible, CNFStrategy};
 use crate::parse::ParseErr;
+use crate::tamper_protect::ProtectedState;
 use crate::Calculus;
 
 pub type PropTabResult<T> = Result<T, PropTabError>;
@@ -40,6 +43,7 @@ pub enum PropTabError {
     CloseRoot,
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct PropTableauxParams {
     pub tab_type: TableauxType,
     pub regular: bool,
@@ -67,6 +71,45 @@ pub struct PropTableauxState {
     nodes: Vec<PropTabNode>,
     moves: Vec<PropTableauxMove>,
     used_backtracking: bool,
+    seal: String,
+}
+
+impl ProtectedState for PropTableauxState {
+    fn info(&self) -> String {
+        let opts = format!(
+            "{}|{}|{}|{}",
+            self.ty, self.regular, self.backtracking, self.used_backtracking
+        );
+        let clause_set = self.clause_set.to_string();
+        let nodes = {
+            let mut ns = String::new();
+            for (i, n) in self.nodes.iter().enumerate() {
+                ns.push_str(&n.info());
+                if i < self.nodes.len() - 1 {
+                    ns.push_str("|");
+                }
+            }
+            ns
+        };
+        let history = {
+            let mut ms = String::new();
+            for m in self.moves.iter() {
+                ms.push_str(&m.to_string());
+                ms.push_str(",");
+            }
+            ms
+        };
+        format!(
+            "tableauxstate|{}|{}|[{}]|[{}]",
+            opts, clause_set, nodes, history
+        )
+    }
+    fn seal(&self) -> &String {
+        &self.seal
+    }
+    fn set_seal(&mut self, seal: String) {
+        self.seal = seal;
+    }
 }
 
 impl PropTableauxState {
@@ -84,6 +127,7 @@ impl PropTableauxState {
             nodes: vec![PropTabNode::new(None, "true".to_string(), false, None)],
             moves: vec![],
             used_backtracking: false,
+            seal: String::new(),
         }
     }
 
@@ -265,39 +309,10 @@ impl PropTableauxState {
 
         Ok(atom)
     }
-
-    pub fn info(&self) -> String {
-        let opts = format!(
-            "{}|{}|{}|{}",
-            self.ty, self.regular, self.backtracking, self.used_backtracking
-        );
-        let clause_set = self.clause_set.to_string();
-        let nodes = {
-            let mut ns = String::new();
-            for (i, n) in self.nodes.iter().enumerate() {
-                ns.push_str(&n.info());
-                if i < self.nodes.len() - 1 {
-                    ns.push_str("|");
-                }
-            }
-            ns
-        };
-        let history = {
-            let mut ms = String::new();
-            for m in self.moves.iter() {
-                ms.push_str(&m.to_string());
-                ms.push_str(",");
-            }
-            ms
-        };
-        format!(
-            "tableauxstate|{}|{}|[{}]|[{}]",
-            opts, clause_set, nodes, history
-        )
-    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PropTabNode {
     parent: Option<usize>,
     spelling: String,
@@ -443,22 +458,22 @@ impl Calculus for PropTableaux {
         } = params.unwrap_or_default();
 
         let clauses = parse_flexible(formula, cnf_strategy)?;
-        Ok(PropTableauxState::new(
-            clauses,
-            tab_type,
-            regular,
-            backtracking,
-        ))
+        let mut state = PropTableauxState::new(clauses, tab_type, regular, backtracking);
+        state.compute_seal();
+        Ok(state)
     }
 
     fn apply_move(state: Self::State, k_move: Self::Move) -> PropTabResult<Self::State> {
         use PropTableauxMove::*;
-        match k_move {
+        let r = match k_move {
             Expand(leaf, clause) => apply_expand(state, leaf, clause),
             AutoClose(leaf, node) => apply_close(state, leaf, node),
             Lemma(leaf, lemma) => apply_lemma(state, leaf, lemma),
             Undo => apply_undo(state),
-        }
+        };
+        let mut state = r?;
+        state.compute_seal();
+        Ok(state)
     }
 
     fn check_close(state: Self::State) -> CloseMsg {
@@ -814,6 +829,55 @@ fn undo_expand(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropT
     Ok(state)
 }
 
+impl Serialize for PropTableauxMove {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let is_undo = match self {
+            PropTableauxMove::Undo => true,
+            _ => false,
+        };
+        let mut state = serializer.serialize_struct("PropTabMove", if is_undo { 1 } else { 3 })?;
+        let ty = match self {
+            PropTableauxMove::Undo => "tableaux-undo",
+            PropTableauxMove::AutoClose(..) => "tableaux-close",
+            PropTableauxMove::Expand(..) => "tableaux-expand",
+            PropTableauxMove::Lemma(..) => "tableaux-lemma",
+        };
+        state.serialize_field("type", ty)?;
+        if !is_undo {
+            let (id1, id2) = match self {
+                PropTableauxMove::Undo => panic!(),
+                PropTableauxMove::AutoClose(id1, id2) => (id1, id2),
+                PropTableauxMove::Expand(id1, id2) => (id1, id2),
+                PropTableauxMove::Lemma(id1, id2) => (id1, id2),
+            };
+            state.serialize_field("id1", id1)?;
+            state.serialize_field("id2", id2)?;
+        }
+        state.end()
+    }
+}
+
+impl Serialize for PropTableauxState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("PropTableauxState", 8)?;
+        state.serialize_field("seal", &self.seal)?;
+        state.serialize_field("clauseSet", &self.clause_set)?;
+        state.serialize_field("nodes", &self.nodes)?;
+        state.serialize_field("type", &self.ty)?;
+        state.serialize_field("regular", &self.regular)?;
+        state.serialize_field("moveHistory", &self.moves)?;
+        state.serialize_field("usedBacktracking", &self.used_backtracking)?;
+
+        state.end()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{PropTabNode, PropTableauxState};
@@ -837,7 +901,7 @@ mod tests {
             PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
             TableauxType,
         };
-        use crate::{parse::clause_set::CNFStrategy, Calculus};
+        use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> PropTableauxParams {
             PropTableauxParams {
@@ -953,7 +1017,7 @@ mod tests {
         use super::super::{
             PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, TableauxType,
         };
-        use crate::{parse::clause_set::CNFStrategy, Calculus};
+        use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> PropTableauxParams {
             PropTableauxParams {
@@ -1188,7 +1252,7 @@ mod tests {
             PropTabError, PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams,
             TableauxType,
         };
-        use crate::{parse::clause_set::CNFStrategy, Calculus};
+        use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> Option<PropTableauxParams> {
             Some(PropTableauxParams {
@@ -1547,7 +1611,7 @@ mod tests {
             check_connectedness, PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams,
             TableauxType,
         };
-        use crate::{parse::clause_set::CNFStrategy, Calculus};
+        use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts_weak() -> Option<PropTableauxParams> {
             Some(PropTableauxParams {
@@ -1660,7 +1724,7 @@ mod tests {
             PropTableauxParams, TableauxType,
         };
         use super::create_artificial_expand_state;
-        use crate::{parse::clause_set::CNFStrategy, Calculus};
+        use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> Option<PropTableauxParams> {
             Some(PropTableauxParams {

@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::calculus::CloseMsg;
 use crate::clause::{Atom, Clause};
 use std::fmt;
 
-mod prop;
+pub mod prop;
 
 pub use prop::PropTableaux as Prop;
 
@@ -19,10 +21,13 @@ pub enum TableauxErr {
     ExpectedSiblings(usize, usize),
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum TableauxType {
+    #[serde(rename = "UNCONNECTED")]
     Unconnected,
+    #[serde(rename = "WEAKLYCONNECTED")]
     WeaklyConnected,
+    #[serde(rename = "STRONGLYCONNECTED")]
     StronglyConnected,
 }
 
