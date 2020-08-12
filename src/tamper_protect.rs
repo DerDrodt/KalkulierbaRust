@@ -26,7 +26,7 @@ pub fn seal(s: String) -> String {
     for b in res {
         s.push_str(&format!("{:02x}", b));
     }
-    s
+    s.to_uppercase()
 }
 
 pub fn verify(s: String, hash: &str) -> bool {

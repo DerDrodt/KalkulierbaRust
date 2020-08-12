@@ -78,7 +78,10 @@ impl ProtectedState for PropTableauxState {
     fn info(&self) -> String {
         let opts = format!(
             "{}|{}|{}|{}",
-            self.ty, self.regular, self.backtracking, self.used_backtracking
+            self.ty.to_string().to_uppercase(),
+            self.regular,
+            self.backtracking,
+            self.used_backtracking
         );
         let clause_set = self.clause_set.to_string();
         let nodes = {
@@ -93,9 +96,11 @@ impl ProtectedState for PropTableauxState {
         };
         let history = {
             let mut ms = String::new();
-            for m in self.moves.iter() {
+            for (i, m) in self.moves.iter().enumerate() {
                 ms.push_str(&m.to_string());
-                ms.push_str(",");
+                if i < self.moves.len() - 1 {
+                    ms.push_str(",");
+                }
             }
             ms
         };
@@ -391,9 +396,11 @@ impl PropTabNode {
         };
         let child_list = {
             let mut cs = String::new();
-            for c in self.children.iter() {
+            for (i, c) in self.children.iter().enumerate() {
                 cs.push_str(&c.to_string());
-                cs.push_str(",");
+                if i < self.children.len() - 1 {
+                    cs.push_str(",");
+                }
             }
             cs
         };
@@ -1036,7 +1043,7 @@ mod tests {
             assert_eq!(4, state.nodes.len());
             assert_eq!(3, state.nodes[0].children.len());
 
-            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
         }
 
         #[test]
@@ -1047,7 +1054,7 @@ mod tests {
             assert_eq!(2, state.nodes.len());
             assert_eq!(1, state.nodes[0].children.len());
 
-            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,)|d;p;0;-;l;o;()]|[]", state.info());
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1)|d;p;0;-;l;o;()]|[]", state.info());
         }
 
         #[test]
@@ -1060,7 +1067,7 @@ mod tests {
             assert_eq!(3, state.nodes[0].children.len());
             assert_eq!(1, state.nodes[3].children.len());
 
-            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4,)|d;p;3;-;l;o;()]|[]", state.info());
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4)|d;p;3;-;l;o;()]|[]", state.info());
         }
 
         #[test]
@@ -1278,7 +1285,7 @@ mod tests {
 
             assert!(state.nodes[3].is_closed);
             assert_eq!(2, state.nodes[3].close_ref.unwrap());
-            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b}, {!b}|[true;p;null;-;i;o;(1,2,)|a;p;0;-;l;o;()|b;p;0;-;i;c;(3,)|b;n;2;2;l;c;()]|[]", state.info());
+            assert_eq!("tableauxstate|Unconnected|false|false|false|{a, b}, {!b}|[true;p;null;-;i;o;(1,2)|a;p;0;-;l;o;()|b;p;0;-;i;c;(3)|b;n;2;2;l;c;()]|[]", state.info());
         }
 
         #[test]
@@ -1301,7 +1308,7 @@ mod tests {
 
             assert_eq!(1, state.nodes[3].close_ref.unwrap());
             assert_eq!(
-                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,)|b;n;0;-;i;o;(2,3,4,)|a;p;1;-;l;o;()|b;p;1;1;l;c;()|c;p;1;-;l;o;()]|[]",
+                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1)|b;n;0;-;i;o;(2,3,4)|a;p;1;-;l;o;()|b;p;1;1;l;c;()|c;p;1;-;l;o;()]|[]",
                 state.info()
             );
         }
@@ -1329,7 +1336,7 @@ mod tests {
             assert_eq!(1, state.nodes[4].close_ref.unwrap());
             assert_eq!(2, state.nodes[5].close_ref.unwrap());
             assert_eq!(
-                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;i;c;(4,)|b;p;0;-;i;c;(5,)|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;n;2;2;l;c;()]|[]",
+                "tableauxstate|Unconnected|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;i;c;(4)|b;p;0;-;i;c;(5)|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;n;2;2;l;c;()]|[]",
                 state.info()
             );
         }
@@ -1643,7 +1650,7 @@ mod tests {
             let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
             assert!(is_connected);
 
-            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{a, b, c}, {!a, b}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;i;o;(4,5,)|b;p;0;-;l;o;()|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;p;1;-;i;o;(6,7,)|a;n;5;1;l;c;()|b;p;5;-;l;o;()]|[]", state.info());
+            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{a, b, c}, {!a, b}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;i;o;(4,5)|b;p;0;-;l;o;()|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;p;1;-;i;o;(6,7)|a;n;5;1;l;c;()|b;p;5;-;l;o;()]|[]", state.info());
         }
 
         #[test]
@@ -1658,7 +1665,7 @@ mod tests {
             let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
             assert!(is_connected);
 
-            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{!a, b}, {a}|[true;p;null;-;i;o;(1,)|a;p;0;-;i;o;(2,3,)|a;n;1;1;l;c;()|b;p;1;-;i;o;(4,5,)|a;n;3;1;l;c;()|b;p;3;-;l;o;()]|[]", state.info());
+            assert_eq!("tableauxstate|WeaklyConnected|false|false|false|{!a, b}, {a}|[true;p;null;-;i;o;(1)|a;p;0;-;i;o;(2,3)|a;n;1;1;l;c;()|b;p;1;-;i;o;(4,5)|a;n;3;1;l;c;()|b;p;3;-;l;o;()]|[]", state.info());
         }
 
         #[test]
@@ -1868,7 +1875,7 @@ mod tests {
             let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
 
             assert_eq!(
-                "tableauxstate|Unconnected|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3,)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", 
+                "tableauxstate|Unconnected|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", 
                 state.info()
             );
         }
@@ -1880,7 +1887,7 @@ mod tests {
             let state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 0)).unwrap();
 
             assert_eq!(
-                "tableauxstate|Unconnected|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,)|a;n;0;-;i;o;(2,3,4,)|a;p;1;-;l;o;()|b;p;1;-;l;o;()|c;p;1;-;l;o;()]|[]", 
+                "tableauxstate|Unconnected|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1)|a;n;0;-;i;o;(2,3,4)|a;p;1;-;l;o;()|b;p;1;-;l;o;()|c;p;1;-;l;o;()]|[]", 
                 state.info()
             );
         }
