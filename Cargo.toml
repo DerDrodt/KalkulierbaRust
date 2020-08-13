@@ -1,13 +1,6 @@
-[package]
-name = "kalkulierbar"
-version = "0.1.0"
-authors = ["Daniel <d.drodt@gmx.de>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-regex = "1.3.9"
-lazy_static = "1.4.0"
-serde = { version = "1.0.57", features = ["derive"] }
-sha3 = "0.9.1"
+ 
+[workspace]
+members = [
+    "crates/kalkulierbar",
+    "crates/kalkulierbar_server"
+]
