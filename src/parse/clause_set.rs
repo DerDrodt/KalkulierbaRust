@@ -9,8 +9,11 @@ use crate::parse;
 
 #[derive(Deserialize, Serialize)]
 pub enum CNFStrategy {
+    #[serde(rename = "NAIVE")]
     Naive,
+    #[serde(rename = "TSEYTIN")]
     Tseytin,
+    #[serde(rename = "OPTIMAL")]
     Optimal,
 }
 

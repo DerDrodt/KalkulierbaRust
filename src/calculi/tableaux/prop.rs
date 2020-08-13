@@ -1,5 +1,6 @@
 use std::fmt;
 
+use serde::de::{self, MapAccess, Visitor};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use super::TableauxType;
@@ -33,7 +34,7 @@ pub enum PropTabError {
     WouldMakeIrregular(String),
     WouldMakeUnconnected,
     WouldMakeNotStronglyConnected(String),
-    LemmaRoot(usize),
+    LemmaRoot,
     LemmaLeaf(usize),
     ExpectedSiblings(usize, usize),
     ExpectedSameSpelling(usize, usize),
@@ -43,11 +44,41 @@ pub enum PropTabError {
     CloseRoot,
 }
 
+impl fmt::Display for PropTabError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PropTabError::ParseErr(e) => write!(f, "{}", e),
+            PropTabError::InvalidNodeId(id) => write!(f, "Node with ID {} does not exist", id),
+            PropTabError::InvalidClauseId(id) => write!(f, "Clause with ID {} does not exist", id),
+            PropTabError::Backtracking => write!(f, "Backtracking is not enabled for this proof"),
+            PropTabError::BacktrackingEmpty => write!(f, "Can't undo in initial state"),
+            PropTabError::IllegalMove => write!(f, "Illegal move"),
+            PropTabError::NotConnected => write!(f, "The proof tree is currently not sufficiently connected, please close branches first to restore connectedness before expanding more leaves"),
+            PropTabError::ExpectedLeaf(id) => write!(f, "Node {} is not a leaf", id),
+            PropTabError::ExpectedClosed(id) => write!(f, "Node '{}' is not the root of a closed subtree", id),
+            PropTabError::AlreadyClosed(id) => write!(f, "Node '{}' is already closed",id),
+            PropTabError::WouldMakeIrregular(msg) => write!(f, "Expanding this clause would introduce a duplicate node '{}' on the branch, making the tree irregular", msg),
+            PropTabError::WouldMakeUnconnected => write!(f, "No literal in this clause would be closeable, making the tree unconnected"),
+            PropTabError::WouldMakeNotStronglyConnected(msg) => write!(f, "No literal in this clause would be closeable with '{}', making the tree not strongly connected", msg),
+            PropTabError::LemmaRoot => write!(f, "Root node cannot be used for lemma creation"),
+            PropTabError::LemmaLeaf(id) => write!(f, "Cannot create lemma from a leaf: {}", id),
+            PropTabError::ExpectedSiblings(id1, id2) => write!(f, "Nodes '{}' and '{}' are not siblings", id1, id2),
+            PropTabError::ExpectedSameSpelling(id1, id2) => write!(f, "Leaf '{}' and node '{}' do not reference the same literal", id1, id2),
+            PropTabError::CloseBothPos(id1, id2) => write!(f, "Leaf '{}' and node '{}' reference the same literal, but neither of them are negated", id1, id2),
+            PropTabError::CloseBothNeg(id1, id2) => write!(f, "Leaf '{}' and node '{}' reference the same literal, but both of them are negated", id1, id2),
+            PropTabError::ExpectedParent(id1, id2) => write!(f, "Node '{}' is not an ancestor of leaf '{}'", id1, id2),
+            PropTabError::CloseRoot => write!(f, "The root node cannot be used for branch closure"),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct PropTableauxParams {
+    #[serde(rename = "type")]
     pub tab_type: TableauxType,
     pub regular: bool,
     pub backtracking: bool,
+    #[serde(rename = "cnfStrategy")]
     pub cnf_strategy: CNFStrategy,
 }
 
@@ -62,14 +93,18 @@ impl Default for PropTableauxParams {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PropTableauxState {
+    #[serde(rename = "clauseSet")]
     clause_set: ClauseSet<String>,
+    #[serde(rename = "type")]
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
     nodes: Vec<PropTabNode>,
+    #[serde(rename = "moveHistory")]
     moves: Vec<PropTableauxMove>,
+    #[serde(rename = "usedBacktracking")]
     used_backtracking: bool,
     seal: String,
 }
@@ -292,7 +327,7 @@ impl PropTableauxState {
         }
 
         if lemma.parent().is_none() {
-            return Err(PropTabError::LemmaRoot(lemma_id));
+            return Err(PropTabError::LemmaRoot);
         }
 
         if lemma.is_leaf() {
@@ -867,21 +902,81 @@ impl Serialize for PropTableauxMove {
     }
 }
 
-impl Serialize for PropTableauxState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+impl<'de> Deserialize<'de> for PropTableauxMove {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        S: serde::Serializer,
+        D: serde::Deserializer<'de>,
     {
-        let mut state = serializer.serialize_struct("PropTableauxState", 8)?;
-        state.serialize_field("seal", &self.seal)?;
-        state.serialize_field("clauseSet", &self.clause_set)?;
-        state.serialize_field("nodes", &self.nodes)?;
-        state.serialize_field("type", &self.ty)?;
-        state.serialize_field("regular", &self.regular)?;
-        state.serialize_field("moveHistory", &self.moves)?;
-        state.serialize_field("usedBacktracking", &self.used_backtracking)?;
+        #[derive(Deserialize)]
+        enum Field {
+            #[serde(rename = "type")]
+            Ty,
+            #[serde(rename = "id1")]
+            Id1,
+            #[serde(rename = "id2")]
+            Id2,
+        }
 
-        state.end()
+        struct MoveVisitor;
+
+        impl<'de> Visitor<'de> for MoveVisitor {
+            type Value = PropTableauxMove;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct PropTableauxMove")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PropTableauxMove, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut ty: Option<String> = None;
+                let mut id1: Option<usize> = None;
+                let mut id2: Option<usize> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Ty => {
+                            if ty.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            ty = Some(map.next_value()?);
+                        }
+                        Field::Id1 => {
+                            if id1.is_some() {
+                                return Err(de::Error::duplicate_field("id1"));
+                            }
+                            id1 = Some(map.next_value()?);
+                        }
+                        Field::Id2 => {
+                            if id2.is_some() {
+                                return Err(de::Error::duplicate_field("id2"));
+                            }
+                            id2 = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
+                Ok(if ty == "tableaux-undo" {
+                    PropTableauxMove::Undo
+                } else {
+                    let id1 = id1.ok_or_else(|| de::Error::missing_field("id1"))?;
+                    let id2 = id2.ok_or_else(|| de::Error::missing_field("id2"))?;
+
+                    let ty: &str = &ty;
+                    match ty {
+                        "tableaux-expand" => PropTableauxMove::Expand(id1, id2),
+                        "tableaux-close" => PropTableauxMove::AutoClose(id1, id2),
+                        "tableaux-lemma" => PropTableauxMove::Lemma(id1, id2),
+                        _ => todo!(),
+                    }
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["type", "id1", "id2"];
+        deserializer.deserialize_struct("PropTableauxMove", FIELDS, MoveVisitor)
     }
 }
 

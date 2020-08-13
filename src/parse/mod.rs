@@ -10,6 +10,17 @@ pub enum ParseErr {
     InvalidFormat,
     EmptyToken,
 }
+
+impl fmt::Display for ParseErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseErr::Expected(expected, got) => write!(f, "Expected {} but got {}", expected, got),
+            ParseErr::InvalidFormat => write!(f, "Please use alphanumeric variables only, separate atoms with ',' and clauses with ';'."),
+            ParseErr::EmptyToken => write!(f, "Encountered an empty token"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
