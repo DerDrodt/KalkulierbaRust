@@ -1,6 +1,9 @@
+pub mod fo;
 pub mod transform;
 
 use std::fmt;
+
+use fo::FOTerm;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {
@@ -10,6 +13,9 @@ pub enum LogicNode {
     Or(Box<LogicNode>, Box<LogicNode>),
     Impl(Box<LogicNode>, Box<LogicNode>),
     Equiv(Box<LogicNode>, Box<LogicNode>),
+    //Rel(String, Vec<FOTerm>),
+    //All(String, Box<LogicNode>, Vec<String>),
+    //Ex(String, Box<LogicNode>, Vec<String>),
 }
 
 impl LogicNode {
@@ -40,6 +46,9 @@ impl LogicNode {
             LogicNode::Or(l, r) => {
                 LogicNode::Or(Box::new(l.to_basic_ops()), Box::new(r.to_basic_ops()))
             }
+            //LogicNode::Rel(spelling, args) => todo!(),
+            //LogicNode::All(_, _, _) => todo!(),
+            //LogicNode::Ex(_, _, _) => todo!(),
         }
     }
 }
@@ -53,6 +62,8 @@ impl fmt::Display for LogicNode {
             LogicNode::Or(l, r) => write!(f, "({} ∨ {})", l, r),
             LogicNode::Impl(l, r) => write!(f, "({} -> {})", l, r),
             LogicNode::Equiv(l, r) => write!(f, "({} <=> {})", l, r),
+            //LogicNode::Rel(_, _) => todo!(), //LogicNode::All(_, _, _) => {}
+            //LogicNode::Ex(_, _, _) => {}
         }
     }
 }

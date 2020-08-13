@@ -1,4 +1,4 @@
-use super::LogicNode;
+use super::super::LogicNode;
 use crate::clause::{Atom, Clause, ClauseSet};
 
 #[derive(Debug)]

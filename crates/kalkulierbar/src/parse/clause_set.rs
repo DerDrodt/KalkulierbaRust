@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{ParseErr, ParseResult, Token, TokenKind};
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::logic::{transform, transform::FormulaConversionErr, LogicNode};
+use crate::logic::{transform, transform::cnf::FormulaConversionErr, LogicNode};
 use crate::parse;
 
 #[derive(Deserialize, Serialize)]

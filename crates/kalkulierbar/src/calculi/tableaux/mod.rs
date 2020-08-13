@@ -4,6 +4,7 @@ use crate::calculus::CloseMsg;
 use crate::clause::{Atom, Clause};
 use std::fmt;
 
+pub mod fo;
 pub mod prop;
 
 pub use prop::PropTableaux as Prop;
