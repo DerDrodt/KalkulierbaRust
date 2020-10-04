@@ -2,8 +2,8 @@ use super::super::LogicNode;
 use super::visitor::LogicNodeVisitor;
 
 enum Quantifier<'a> {
-    All(&'a LogicNode),
-    Ex(&'a LogicNode),
+    All(&'a LogicNode<'a>),
+    Ex(&'a LogicNode<'a>),
 }
 
 struct ToBasicOps<'a> {
@@ -11,9 +11,9 @@ struct ToBasicOps<'a> {
 }
 
 impl<'a> LogicNodeVisitor for ToBasicOps<'a> {
-    type Ret = LogicNode;
+    type Ret = LogicNode<'a>;
 
-    fn visit_var(&mut self, spelling: &String) -> Self::Ret {
+    fn visit_var(&mut self, spelling: &str) -> Self::Ret {
         todo!()
     }
     fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {

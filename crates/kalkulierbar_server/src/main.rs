@@ -1,5 +1,5 @@
 use actix_web::{error, web, App, HttpResponse, HttpServer, Responder, Result};
-use kalkulierbar::Calculus;
+use kalkulierbar::{Calculus, Lit};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -55,7 +55,7 @@ async fn prop_tableaux_validate(form: web::Form<StateForm>) -> Result<HttpRespon
 
     let StateForm { state } = form.0;
 
-    let state: prop::PropTableauxState = serde_json::from_str(&state)?;
+    let state: prop::PropTableauxState<Lit> = serde_json::from_str(&state)?;
     let res = prop::PropTableaux::validate(state);
 
     Ok(HttpResponse::Ok().json(res))
@@ -66,7 +66,7 @@ async fn prop_tableaux_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
 
     let MoveForm { state, r#move } = form.0;
 
-    let state: prop::PropTableauxState = serde_json::from_str(&state)?;
+    let state: prop::PropTableauxState<Lit> = serde_json::from_str(&state)?;
     let r#move: prop::PropTableauxMove = serde_json::from_str(&r#move)?;
 
     let state =
@@ -80,7 +80,7 @@ async fn prop_tableaux_close(form: web::Form<StateForm>) -> Result<HttpResponse>
 
     let StateForm { state } = form.0;
 
-    let state: prop::PropTableauxState = serde_json::from_str(&state)?;
+    let state: prop::PropTableauxState<Lit> = serde_json::from_str(&state)?;
 
     let res = prop::PropTableaux::check_close(state);
 

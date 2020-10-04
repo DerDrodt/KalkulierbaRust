@@ -1,10 +1,99 @@
+use std::fmt;
+
+use serde::{
+    de::{Error, Unexpected, Visitor},
+    Deserialize, Serialize,
+};
+
 use super::super::LogicNode;
 use crate::clause::{Atom, Clause, ClauseSet};
 
 #[derive(Debug)]
 pub struct FormulaConversionErr;
 
-pub fn naive_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversionErr> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lit<'l> {
+    Str(&'l str),
+    Indexed(&'l str, u32),
+    Appended(&'l str, &'l str),
+}
+
+impl<'l> fmt::Display for Lit<'l> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Lit::Str(s) => write!(f, "{}", s),
+            Lit::Indexed(s, i) => write!(f, "{}{}", s, i),
+            Lit::Appended(s1, s2) => write!(f, "{}{}", s1, s2),
+        }
+    }
+}
+
+impl<'l> From<&'l str> for Lit<'l> {
+    fn from(s: &'l str) -> Self {
+        Lit::Str(s)
+    }
+}
+
+impl<'l> From<(&'l str, u32)> for Lit<'l> {
+    fn from((s, i): (&'l str, u32)) -> Self {
+        Lit::Indexed(s, i)
+    }
+}
+
+impl<'l> From<(&'l str, &'l str)> for Lit<'l> {
+    fn from((s, i): (&'l str, &'l str)) -> Self {
+        Lit::Appended(s, i)
+    }
+}
+
+impl<'l> Serialize for Lit<'l> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de: 'l, 'l> Deserialize<'de> for Lit<'l> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct LitVisitor;
+
+        impl<'l> Visitor<'l> for LitVisitor {
+            type Value = Lit<'l>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a Lit")
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'l str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(v.into())
+            }
+
+            fn visit_borrowed_bytes<E>(self, v: &'l [u8]) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                use std::str;
+                let s = str::from_utf8(v)
+                    .map_err(|_| Error::invalid_value(Unexpected::Bytes(v), &self))?;
+                Ok(Lit::Str(s))
+            }
+        }
+
+        deserializer.deserialize_str(LitVisitor)
+    }
+}
+
+pub fn naive_cnf<'n, 'f>(
+    node: &'n LogicNode<'f>,
+) -> Result<ClauseSet<Lit<'f>>, FormulaConversionErr> {
     match node {
         LogicNode::Not(c) => match c.as_ref() {
             LogicNode::Not(i) => naive_cnf(i),
@@ -45,7 +134,7 @@ pub fn naive_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversio
                 naive_cnf(&node)
             }
             LogicNode::Var(spelling) => {
-                let atom = Atom::new(spelling.clone(), true);
+                let atom = Atom::new(Lit::Str(spelling), true);
                 let clause = Clause::new(vec![atom]);
                 Ok(ClauseSet::new(vec![clause]))
             }
@@ -56,8 +145,8 @@ pub fn naive_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversio
             Ok(c)
         }
         LogicNode::Or(left, right) => {
-            let left: Vec<Clause<String>> = naive_cnf(left)?.into();
-            let right: Vec<Clause<String>> = naive_cnf(right)?.into();
+            let left: Vec<Clause<Lit>> = naive_cnf(left)?.into();
+            let right: Vec<Clause<Lit>> = naive_cnf(right)?.into();
 
             if left.len() * right.len() > crate::CNF_BLOWUP_LIMIT as usize {
                 Err(FormulaConversionErr)
@@ -65,7 +154,7 @@ pub fn naive_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversio
                 let mut clauses = vec![];
                 for lc in left.into_iter() {
                     for rc in right.clone().into_iter() {
-                        let mut atoms: Vec<Atom<String>> = lc.clone().into();
+                        let mut atoms: Vec<Atom<Lit>> = lc.clone().into();
                         atoms.append(&mut rc.into());
                         let clause = Clause::new(atoms);
                         clauses.push(clause);
@@ -78,18 +167,18 @@ pub fn naive_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversio
         LogicNode::Impl(..) => naive_cnf(&node.clone().to_basic_ops()),
         LogicNode::Equiv(..) => naive_cnf(&node.clone().to_basic_ops()),
         LogicNode::Var(spelling) => Ok(ClauseSet::new(vec![Clause::new(vec![Atom::new(
-            spelling.clone(),
+            Lit::Str(spelling),
             false,
         )])])),
     }
 }
 
-struct TseytinCNF {
+struct TseytinCNF<'c> {
     index: u32,
-    cs: ClauseSet<String>,
+    cs: ClauseSet<Lit<'c>>,
 }
 
-impl TseytinCNF {
+impl<'c> TseytinCNF<'c> {
     pub fn new() -> Self {
         TseytinCNF {
             index: 0,
@@ -97,18 +186,20 @@ impl TseytinCNF {
         }
     }
 
-    pub fn get_name(&self, node: &LogicNode) -> String {
-        match node {
-            LogicNode::Not(_) => format!("not{}", self.index),
-            LogicNode::And(..) => format!("and{}", self.index),
-            LogicNode::Or(..) => format!("or{}", self.index),
-            LogicNode::Impl(..) => format!("impl{}", self.index),
-            LogicNode::Equiv(..) => format!("equiv{}", self.index),
-            LogicNode::Var(spelling) => format!("var{}", spelling),
-        }
+    pub fn get_name<'n>(&mut self, node: &'n LogicNode<'c>) -> Lit<'c> {
+        let name = match node {
+            LogicNode::Not(_) => "not",
+            LogicNode::And(..) => "and",
+            LogicNode::Or(..) => "or",
+            LogicNode::Impl(..) => "impl",
+            LogicNode::Equiv(..) => "equiv",
+            LogicNode::Var(spelling) => return Lit::Appended("var", spelling),
+        };
+
+        Lit::Indexed(name, self.index)
     }
 
-    pub fn visit(&mut self, node: &LogicNode) {
+    pub fn visit<'n>(&mut self, node: &'n LogicNode<'c>) {
         match node {
             LogicNode::Var(_) => self.index += 1,
             LogicNode::Not(c) => {
@@ -117,10 +208,9 @@ impl TseytinCNF {
                 let child_var = self.get_name(c);
                 self.visit(c);
 
-                let clause_a = Clause::new(vec![
-                    Atom::new(child_var.clone(), true),
-                    Atom::new(self_var.clone(), true),
-                ]);
+                let clause_a: Clause<Lit> =
+                    Clause::new(vec![Atom::new(child_var, true), Atom::new(self_var, true)]);
+
                 let clause_b = Clause::new(vec![
                     Atom::new(child_var, false),
                     Atom::new(self_var, false),
@@ -240,7 +330,9 @@ impl TseytinCNF {
     }
 }
 
-pub fn tseytin_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConversionErr> {
+pub fn tseytin_cnf<'n, 'f>(
+    node: &'n LogicNode<'f>,
+) -> Result<ClauseSet<Lit<'f>>, FormulaConversionErr> {
     let mut t = TseytinCNF::new();
     let mut res = ClauseSet::new(vec![]);
     let root = Clause::new(vec![Atom::new(t.get_name(node), false)]);
@@ -256,12 +348,12 @@ pub fn tseytin_cnf(node: &LogicNode) -> Result<ClauseSet<String>, FormulaConvers
 mod tests {
     use super::naive_cnf as naive;
     use super::tseytin_cnf as tseytin;
-    use crate::parse::clause_set::PropParser;
+    use crate::parse;
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
             $(
-                let parsed = PropParser::parse($f).unwrap();
+                let parsed = parse::parse_prop_formula($f).unwrap();
                 assert_eq!($e, $func(&parsed).unwrap().to_string(), "Parsed: {}", parsed.to_string());
             )*
         }};
@@ -279,8 +371,11 @@ mod tests {
             "a | !b -> !a <-> b & !a | b", "{!a, !a, a, !b}, {!a, !a, a}, {!a, !a, !b, a}, {!a, !a, !b}, {b, !a, a, !b}, {b, !a, a}, {b, !a, !b, a}, {b, !a, !b}, {b, b, a, !b}, {b, b, a}, {b, b, !b, a}, {b, b, !b}, {!a, b, a, !b}, {!a, b, a}, {!a, b, !b, a}, {!a, b, !b}"
         );
     }
+
     #[test]
     fn tysetin_cnf() {
+        let mut v: Vec<String> = vec![];
+
         test_map!(
             tseytin,
             "a -> b", "{impl0}, {vara, impl0}, {!varb, impl0}, {!vara, varb, !impl0}";

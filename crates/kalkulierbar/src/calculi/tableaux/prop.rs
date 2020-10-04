@@ -4,12 +4,12 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use super::TableauxType;
-use crate::calculus::CloseMsg;
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::parse::clause_set::{parse_flexible, CNFStrategy};
 use crate::parse::ParseErr;
+use crate::parse::{parse_flexible, CNFStrategy};
 use crate::tamper_protect::ProtectedState;
 use crate::Calculus;
+use crate::{calculus::CloseMsg, logic::transform::Lit};
 
 pub type PropTabResult<T> = Result<T, PropTabError>;
 
@@ -94,14 +94,14 @@ impl Default for PropTableauxParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PropTableauxState {
+pub struct PropTableauxState<L: fmt::Display + Clone> {
     #[serde(rename = "clauseSet")]
-    clause_set: ClauseSet<String>,
+    clause_set: ClauseSet<L>,
     #[serde(rename = "type")]
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
-    nodes: Vec<PropTabNode>,
+    nodes: Vec<PropTabNode<L>>,
     #[serde(rename = "moveHistory")]
     moves: Vec<PropTableauxMove>,
     #[serde(rename = "usedBacktracking")]
@@ -109,7 +109,7 @@ pub struct PropTableauxState {
     seal: String,
 }
 
-impl ProtectedState for PropTableauxState {
+impl<'l> ProtectedState for PropTableauxState<Lit<'l>> {
     fn info(&self) -> String {
         let opts = format!(
             "{}|{}|{}|{}",
@@ -152,9 +152,9 @@ impl ProtectedState for PropTableauxState {
     }
 }
 
-impl PropTableauxState {
+impl<'l> PropTableauxState<Lit<'l>> {
     pub fn new(
-        clause_set: ClauseSet<String>,
+        clause_set: ClauseSet<Lit<'l>>,
         ty: TableauxType,
         regular: bool,
         backtracking: bool,
@@ -164,18 +164,18 @@ impl PropTableauxState {
             ty,
             regular,
             backtracking,
-            nodes: vec![PropTabNode::new(None, "true".to_string(), false, None)],
+            nodes: vec![PropTabNode::new(None, "true".into(), false, None)],
             moves: vec![],
             used_backtracking: false,
             seal: String::new(),
         }
     }
 
-    pub fn root(&self) -> &PropTabNode {
+    pub fn root(&self) -> &PropTabNode<Lit<'l>> {
         &self.nodes[0]
     }
 
-    pub fn node(&self, id: usize) -> PropTabResult<&PropTabNode> {
+    pub fn node(&self, id: usize) -> PropTabResult<&PropTabNode<Lit<'l>>> {
         if let Some(node) = self.nodes.get(id) {
             Ok(node)
         } else {
@@ -183,7 +183,7 @@ impl PropTableauxState {
         }
     }
 
-    pub fn node_mut(&mut self, id: usize) -> PropTabResult<&mut PropTabNode> {
+    pub fn node_mut(&mut self, id: usize) -> PropTabResult<&mut PropTabNode<Lit<'l>>> {
         if let Some(node) = self.nodes.get_mut(id) {
             Ok(node)
         } else {
@@ -194,7 +194,7 @@ impl PropTableauxState {
     pub fn node_is_closable(&self, id: usize) -> PropTabResult<bool> {
         let node = self.nodes.get(id);
         if let Some(node) = node {
-            let atom: Atom<String> = node.into();
+            let atom: Atom<Lit<'l>> = node.into();
             Ok(node.is_leaf() && self.node_ancestry_contains_atom(id, atom.not())?)
         } else {
             Err(PropTabError::InvalidNodeId(id))
@@ -204,10 +204,10 @@ impl PropTableauxState {
     pub fn node_is_directly_closable(&self, id: usize) -> PropTabResult<bool> {
         let node = self.nodes.get(id);
         if let Some(node) = node {
-            let atom: Atom<String> = node.into();
+            let atom: Atom<Lit<'l>> = node.into();
             if let Some(parent) = node.parent {
                 let parent = self.node(parent)?;
-                let pa: Atom<String> = parent.into();
+                let pa: Atom<Lit<'l>> = parent.into();
                 let pa = pa.not();
                 Ok(node.is_leaf() && atom == pa)
             } else {
@@ -220,15 +220,15 @@ impl PropTableauxState {
 
     pub fn clause_expand_preprocessing<'c>(
         &self,
-        clause: &'c Clause<String>,
-    ) -> &'c Vec<Atom<String>> {
+        clause: &'c Clause<Lit<'l>>,
+    ) -> &'c Vec<Atom<Lit<'l>>> {
         &clause.atoms()
     }
 
     pub fn node_ancestry_contains_atom(
         &self,
         node_id: usize,
-        atom: Atom<String>,
+        atom: Atom<Lit<'l>>,
     ) -> PropTabResult<bool> {
         let mut node = self.node(node_id)?;
 
@@ -310,7 +310,7 @@ impl PropTableauxState {
         }
     }
 
-    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> PropTabResult<Atom<String>> {
+    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> PropTabResult<Atom<Lit<'l>>> {
         let leaf = self.node(leaf_id)?;
         let lemma = self.node(lemma_id)?;
 
@@ -340,7 +340,7 @@ impl PropTableauxState {
             return Err(PropTabError::ExpectedSiblings(leaf_id, lemma_id));
         }
 
-        let atom: Atom<String> = lemma.into();
+        let atom: Atom<Lit<'l>> = lemma.into();
         let atom = atom.not();
 
         if self.regular {
@@ -353,9 +353,9 @@ impl PropTableauxState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PropTabNode {
+pub struct PropTabNode<L: fmt::Display + Clone> {
     parent: Option<usize>,
-    spelling: String,
+    spelling: L,
     negated: bool,
     lemma_source: Option<usize>,
     is_closed: bool,
@@ -363,10 +363,10 @@ pub struct PropTabNode {
     children: Vec<usize>,
 }
 
-impl PropTabNode {
+impl<'l> PropTabNode<Lit<'l>> {
     pub fn new(
         parent: Option<usize>,
-        spelling: String,
+        spelling: Lit<'l>,
         negated: bool,
         lemma_source: Option<usize>,
     ) -> Self {
@@ -385,8 +385,8 @@ impl PropTabNode {
         self.parent
     }
 
-    pub fn spelling(&self) -> &String {
-        &self.spelling
+    pub fn spelling(&self) -> Lit<'l> {
+        self.spelling
     }
 
     pub fn negated(&self) -> bool {
@@ -447,13 +447,13 @@ impl PropTabNode {
     }
 }
 
-impl From<&PropTabNode> for Atom<String> {
-    fn from(node: &PropTabNode) -> Self {
-        Atom::new(node.spelling.clone(), node.negated)
+impl<'l> From<&PropTabNode<Lit<'l>>> for Atom<Lit<'l>> {
+    fn from(node: &PropTabNode<Lit<'l>>) -> Self {
+        Atom::new(node.spelling, node.negated)
     }
 }
 
-impl fmt::Display for PropTabNode {
+impl<'l> fmt::Display for PropTabNode<Lit<'l>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -483,15 +483,17 @@ impl fmt::Display for PropTableauxMove {
     }
 }
 
-pub struct PropTableaux {}
+pub struct PropTableaux<'l> {
+    _f: &'l str,
+}
 
-impl Calculus for PropTableaux {
+impl<'l> Calculus<'l> for PropTableaux<'l> {
     type Params = PropTableauxParams;
-    type State = PropTableauxState;
+    type State = PropTableauxState<Lit<'l>>;
     type Move = PropTableauxMove;
     type Error = PropTabError;
 
-    fn parse_formula(formula: &str, params: Option<Self::Params>) -> PropTabResult<Self::State> {
+    fn parse_formula(formula: &'l str, params: Option<Self::Params>) -> PropTabResult<Self::State> {
         let Self::Params {
             tab_type,
             backtracking,
@@ -527,11 +529,11 @@ impl Calculus for PropTableaux {
     }
 }
 
-pub fn apply_expand(
-    mut state: PropTableauxState,
+pub fn apply_expand<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
     leaf_id: usize,
     clause_id: usize,
-) -> PropTabResult<PropTableauxState> {
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     ensure_expandable(&state, leaf_id, clause_id)?;
 
     let clause = &state.clause_set.clauses()[clause_id];
@@ -555,11 +557,11 @@ pub fn apply_expand(
     Ok(state)
 }
 
-pub fn apply_close(
-    mut state: PropTableauxState,
+pub fn apply_close<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
     leaf_id: usize,
     node_id: usize,
-) -> PropTabResult<PropTableauxState> {
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
     let leaf = state.node_mut(leaf_id)?;
@@ -575,11 +577,11 @@ pub fn apply_close(
     Ok(state)
 }
 
-pub fn apply_lemma(
-    mut state: PropTableauxState,
+pub fn apply_lemma<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
     leaf_id: usize,
     lemma_id: usize,
-) -> PropTabResult<PropTableauxState> {
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     let atom = state.get_lemma(leaf_id, lemma_id)?;
 
     let new_leaf = PropTabNode::new(
@@ -601,7 +603,9 @@ pub fn apply_lemma(
     Ok(state)
 }
 
-pub fn apply_undo(mut state: PropTableauxState) -> PropTabResult<PropTableauxState> {
+pub fn apply_undo<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     if !state.backtracking {
         return Err(PropTabError::Backtracking);
     }
@@ -626,13 +630,13 @@ pub fn apply_undo(mut state: PropTableauxState) -> PropTabResult<PropTableauxSta
     }
 }
 
-fn verify_expand_regularity(
-    state: &PropTableauxState,
+fn verify_expand_regularity<'l>(
+    state: &PropTableauxState<Lit<'l>>,
     leaf_id: usize,
-    clause: &Clause<String>,
+    clause: &Clause<Lit<'l>>,
 ) -> PropTabResult<()> {
     let leaf = &state.nodes[leaf_id];
-    let mut lst: Vec<Atom<String>> = vec![leaf.into()];
+    let mut lst: Vec<Atom<Lit<'l>>> = vec![leaf.into()];
 
     let mut pred = None;
 
@@ -660,7 +664,10 @@ fn verify_expand_regularity(
     Ok(())
 }
 
-fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> PropTabResult<()> {
+fn verify_expand_connectedness<'l>(
+    state: &PropTableauxState<Lit<'l>>,
+    leaf_id: usize,
+) -> PropTabResult<()> {
     let leaf = &state.nodes[leaf_id];
     let children = &leaf.children;
 
@@ -689,7 +696,7 @@ fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> Pro
     }
 }
 
-fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
+fn check_connectedness<'l>(state: &PropTableauxState<Lit<'l>>, ty: TableauxType) -> bool {
     let start = &state.root().children;
     if ty == TableauxType::Unconnected {
         true
@@ -701,7 +708,11 @@ fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
     }
 }
 
-fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: bool) -> bool {
+fn check_connectedness_subtree<'l>(
+    state: &PropTableauxState<Lit<'l>>,
+    root: usize,
+    strong: bool,
+) -> bool {
     let node = &state.nodes[root];
 
     // A subtree is weakly/strongly connected iff:
@@ -735,7 +746,7 @@ fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: b
     has_directly_closed_child && all_children_connected
 }
 
-fn check_regularity(state: &PropTableauxState) -> bool {
+fn check_regularity<'l>(state: &PropTableauxState<Lit<'l>>) -> bool {
     let start = &state.root().children;
 
     start.iter().fold(true, |acc, id| {
@@ -743,10 +754,10 @@ fn check_regularity(state: &PropTableauxState) -> bool {
     })
 }
 
-fn check_regularity_subtree(
-    state: &PropTableauxState,
+fn check_regularity_subtree<'l>(
+    state: &PropTableauxState<Lit<'l>>,
     root: usize,
-    mut lst: Vec<Atom<String>>,
+    mut lst: Vec<Atom<Lit<'l>>>,
 ) -> bool {
     let node = &state.nodes[root];
     let atom = node.into();
@@ -763,8 +774,8 @@ fn check_regularity_subtree(
     }
 }
 
-fn ensure_expandable(
-    state: &PropTableauxState,
+fn ensure_expandable<'l>(
+    state: &PropTableauxState<Lit<'l>>,
     leaf_id: usize,
     clause_id: usize,
 ) -> PropTabResult<()> {
@@ -797,8 +808,8 @@ fn ensure_expandable(
     }
 }
 
-fn ensure_basic_closeability(
-    state: &PropTableauxState,
+fn ensure_basic_closeability<'l>(
+    state: &PropTableauxState<Lit<'l>>,
     leaf_id: usize,
     node_id: usize,
 ) -> PropTabResult<()> {
@@ -832,7 +843,10 @@ fn ensure_basic_closeability(
     }
 }
 
-fn undo_close(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropTableauxState> {
+fn undo_close<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
+    leaf: usize,
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     let mut nodes = state.nodes;
 
     let mut id = leaf;
@@ -855,7 +869,10 @@ fn undo_close(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropTa
     Ok(state)
 }
 
-fn undo_expand(mut state: PropTableauxState, leaf: usize) -> PropTabResult<PropTableauxState> {
+fn undo_expand<'l>(
+    mut state: PropTableauxState<Lit<'l>>,
+    leaf: usize,
+) -> PropTabResult<PropTableauxState<Lit<'l>>> {
     let leaf = state.node_mut(leaf)?;
 
     let children = leaf.children().len();
@@ -982,12 +999,12 @@ impl<'de> Deserialize<'de> for PropTableauxMove {
 
 #[cfg(test)]
 mod tests {
-    use super::{PropTabNode, PropTableauxState};
+    use super::*;
 
-    fn create_artificial_expand_state(
-        mut state: PropTableauxState,
-        nodes: Vec<PropTabNode>,
-    ) -> PropTableauxState {
+    fn create_artificial_expand_state<'l>(
+        mut state: PropTableauxState<Lit<'l>>,
+        nodes: Vec<PropTabNode<Lit<'l>>>,
+    ) -> PropTableauxState<Lit<'l>> {
         state.nodes.append(&mut nodes.clone());
 
         for (i, n) in nodes.iter().enumerate() {
@@ -999,10 +1016,7 @@ mod tests {
     }
 
     mod undo {
-        use super::super::{
-            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
-            TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> PropTableauxParams {
@@ -1076,10 +1090,10 @@ mod tests {
             assert_eq!(info, state.info());
         }
 
-        fn move_and_info(
-            state: PropTableauxState,
+        fn move_and_info<'l>(
+            state: PropTableauxState<Lit<'l>>,
             r#move: PropTableauxMove,
-        ) -> (PropTableauxState, String) {
+        ) -> (PropTableauxState<Lit<'l>>, String) {
             let msg = r#move.to_string();
             let state = PropTableaux::apply_move(state, r#move).expect(&msg);
             let info = state.info();
@@ -1116,9 +1130,7 @@ mod tests {
     }
 
     mod expand {
-        use super::super::{
-            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> PropTableauxParams {
@@ -1236,10 +1248,7 @@ mod tests {
     }
 
     mod lemma {
-        use super::super::{
-            PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams, PropTableauxState,
-            TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, Calculus};
 
         fn opts() -> PropTableauxParams {
@@ -1251,7 +1260,7 @@ mod tests {
             }
         }
 
-        fn state(i: u8) -> PropTableauxState {
+        fn state(i: u8) -> PropTableauxState<Lit<'static>> {
             let formulas = vec!["a,a;!a,b;!b", "a;b,b;!a,!b", "!a,b;!b;a,b", "a,b;!b;!a,b"];
 
             let formula = formulas[i as usize];
@@ -1350,10 +1359,7 @@ mod tests {
     }
 
     mod close {
-        use super::super::{
-            PropTabError, PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams,
-            TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> Option<PropTableauxParams> {
@@ -1370,9 +1376,9 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;!b", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1388,10 +1394,10 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "b".to_string(), true, None),
-                PropTabNode::new(Some(1), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "c".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".into(), true, None),
+                PropTabNode::new(Some(1), "a".into(), false, None),
+                PropTabNode::new(Some(1), "b".into(), false, None),
+                PropTabNode::new(Some(1), "c".into(), false, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1413,11 +1419,11 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b,c;!a;!b;!c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(0), "c".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(0), "c".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1451,10 +1457,10 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "b".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), false, None),
+                PropTabNode::new(Some(1), "b".into(), true, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1469,8 +1475,8 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "c".to_string(), false, None),
-                PropTabNode::new(Some(1), "c".to_string(), false, None),
+                PropTabNode::new(Some(0), "c".into(), false, None),
+                PropTabNode::new(Some(1), "c".into(), false, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1489,13 +1495,13 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;!b", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "b".to_string(), false, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
-                PropTabNode::new(Some(5), "a".to_string(), false, None),
-                PropTabNode::new(Some(5), "b".to_string(), false, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), false, None),
+                PropTabNode::new(Some(1), "b".into(), false, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
+                PropTabNode::new(Some(5), "a".into(), false, None),
+                PropTabNode::new(Some(5), "b".into(), false, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1515,8 +1521,8 @@ mod tests {
             let state = PropTableaux::parse_formula("c;!c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "c".to_string(), false, None),
-                PropTabNode::new(Some(1), "c".to_string(), true, None),
+                PropTabNode::new(Some(0), "c".into(), false, None),
+                PropTabNode::new(Some(1), "c".into(), true, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1533,8 +1539,8 @@ mod tests {
             let state = PropTableaux::parse_formula("a;!c", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "c".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(1), "c".into(), true, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1549,7 +1555,7 @@ mod tests {
         fn root() {
             let state = PropTableaux::parse_formula("!true", opts()).unwrap();
 
-            let nodes = vec![PropTabNode::new(Some(0), "true".to_string(), true, None)];
+            let nodes = vec![PropTabNode::new(Some(0), "true".into(), true, None)];
 
             let state = super::create_artificial_expand_state(state, nodes);
 
@@ -1564,13 +1570,13 @@ mod tests {
             let state = PropTableaux::parse_formula("b,a;!b;!a,b", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), false, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
-                PropTabNode::new(Some(5), "a".to_string(), true, None),
-                PropTabNode::new(Some(5), "b".to_string(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(1), "b".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), false, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
+                PropTabNode::new(Some(5), "a".into(), true, None),
+                PropTabNode::new(Some(5), "b".into(), false, None),
             ];
 
             let state = super::create_artificial_expand_state(state, nodes);
@@ -1592,9 +1598,7 @@ mod tests {
     }
 
     mod check_close {
-        use super::super::{
-            PropTabNode, PropTableaux, PropTableauxMove, PropTableauxParams, TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, Calculus};
 
         fn opts() -> PropTableauxParams {
@@ -1612,8 +1616,8 @@ mod tests {
             assert!(!PropTableaux::check_close(state.clone()).closed);
 
             let mut nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
             ];
 
             state.nodes.append(&mut nodes);
@@ -1632,10 +1636,10 @@ mod tests {
             assert!(!PropTableaux::check_close(state.clone()).closed);
 
             let mut nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
             ];
 
             state.nodes.append(&mut nodes);
@@ -1682,12 +1686,12 @@ mod tests {
             let mut state = PropTableaux::parse_formula("a,b;!b;!a", Some(opts())).unwrap();
 
             let mut nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(0), "c".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
-                PropTabNode::new(Some(3), "c".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(0), "c".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
+                PropTabNode::new(Some(3), "c".into(), true, None),
             ];
 
             state.nodes.append(&mut nodes);
@@ -1709,10 +1713,7 @@ mod tests {
     }
 
     mod connectedness {
-        use super::super::{
-            check_connectedness, PropTabError, PropTableaux, PropTableauxMove, PropTableauxParams,
-            TableauxType,
-        };
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts_weak() -> Option<PropTableauxParams> {
@@ -1821,11 +1822,7 @@ mod tests {
     }
 
     mod regularity {
-        use super::super::{
-            check_regularity, PropTabError, PropTabNode, PropTableaux, PropTableauxMove,
-            PropTableauxParams, TableauxType,
-        };
-        use super::create_artificial_expand_state;
+        use super::*;
         use crate::{parse::clause_set::CNFStrategy, tamper_protect::ProtectedState, Calculus};
 
         fn opts() -> Option<PropTableauxParams> {
@@ -1842,10 +1839,10 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;!a;!b", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
             ];
 
             let state = create_artificial_expand_state(state, nodes);
@@ -1858,11 +1855,11 @@ mod tests {
             let state = PropTableaux::parse_formula("a,b;!a;!b;a", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "a".to_string(), false, None),
-                PropTabNode::new(Some(0), "b".to_string(), false, None),
-                PropTabNode::new(Some(1), "a".to_string(), true, None),
-                PropTabNode::new(Some(2), "b".to_string(), true, None),
-                PropTabNode::new(Some(4), "a".to_string(), false, None),
+                PropTabNode::new(Some(0), "a".into(), false, None),
+                PropTabNode::new(Some(0), "b".into(), false, None),
+                PropTabNode::new(Some(1), "a".into(), true, None),
+                PropTabNode::new(Some(2), "b".into(), true, None),
+                PropTabNode::new(Some(4), "a".into(), false, None),
             ];
 
             let state = create_artificial_expand_state(state, nodes);
@@ -1875,9 +1872,9 @@ mod tests {
             let state = PropTableaux::parse_formula("true,false;!true", opts()).unwrap();
 
             let nodes = vec![
-                PropTabNode::new(Some(0), "true".to_string(), false, None),
-                PropTabNode::new(Some(0), "false".to_string(), false, None),
-                PropTabNode::new(Some(1), "true".to_string(), true, None),
+                PropTabNode::new(Some(0), "true".into(), false, None),
+                PropTabNode::new(Some(0), "false".into(), false, None),
+                PropTabNode::new(Some(1), "true".into(), true, None),
             ];
 
             let state = create_artificial_expand_state(state, nodes);
@@ -1897,7 +1894,7 @@ mod tests {
             let state = PropTableaux::parse_formula("a", opts()).unwrap();
             let state = create_artificial_expand_state(
                 state,
-                vec![PropTabNode::new(Some(0), "a".to_string(), false, None)],
+                vec![PropTabNode::new(Some(0), "a".into(), false, None)],
             );
             assert!(check_regularity(&state));
         }
@@ -1908,8 +1905,8 @@ mod tests {
             let state = create_artificial_expand_state(
                 state,
                 vec![
-                    PropTabNode::new(Some(0), "a".to_string(), false, None),
-                    PropTabNode::new(Some(1), "a".to_string(), false, None),
+                    PropTabNode::new(Some(0), "a".into(), false, None),
+                    PropTabNode::new(Some(1), "a".into(), false, None),
                 ],
             );
 
@@ -1922,10 +1919,10 @@ mod tests {
             let state = create_artificial_expand_state(
                 state,
                 vec![
-                    PropTabNode::new(Some(0), "a".to_string(), false, None),
-                    PropTabNode::new(Some(1), "a".to_string(), true, None),
-                    PropTabNode::new(Some(2), "b".to_string(), false, None),
-                    PropTabNode::new(Some(3), "a".to_string(), false, None),
+                    PropTabNode::new(Some(0), "a".into(), false, None),
+                    PropTabNode::new(Some(1), "a".into(), true, None),
+                    PropTabNode::new(Some(2), "b".into(), false, None),
+                    PropTabNode::new(Some(3), "a".into(), false, None),
                 ],
             );
 
@@ -1938,11 +1935,11 @@ mod tests {
             let state = create_artificial_expand_state(
                 state,
                 vec![
-                    PropTabNode::new(Some(0), "a".to_string(), false, None),
-                    PropTabNode::new(Some(0), "b".to_string(), false, None),
-                    PropTabNode::new(Some(1), "b".to_string(), false, None),
-                    PropTabNode::new(Some(2), "a".to_string(), false, None),
-                    PropTabNode::new(Some(2), "b".to_string(), false, None),
+                    PropTabNode::new(Some(0), "a".into(), false, None),
+                    PropTabNode::new(Some(0), "b".into(), false, None),
+                    PropTabNode::new(Some(1), "b".into(), false, None),
+                    PropTabNode::new(Some(2), "a".into(), false, None),
+                    PropTabNode::new(Some(2), "b".into(), false, None),
                 ],
             );
 
@@ -1955,9 +1952,9 @@ mod tests {
             let state = create_artificial_expand_state(
                 state,
                 vec![
-                    PropTabNode::new(Some(0), "true".to_string(), false, None),
-                    PropTabNode::new(Some(1), "true".to_string(), true, None),
-                    PropTabNode::new(Some(2), "true".to_string(), false, None),
+                    PropTabNode::new(Some(0), "true".into(), false, None),
+                    PropTabNode::new(Some(1), "true".into(), true, None),
+                    PropTabNode::new(Some(2), "true".into(), false, None),
                 ],
             );
 

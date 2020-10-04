@@ -1,8 +1,72 @@
 use std::fmt;
 
+pub use clause_set::{parse_clause_set, CNFStrategy};
+pub use prop::parse_prop_formula;
+use transform::Lit;
+
+use crate::{
+    clause::ClauseSet,
+    logic::transform::{self, FormulaConversionErr},
+    logic::LogicNode,
+};
+
 pub mod clause_set;
+pub mod prop;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
+
+pub fn parse_flexible<'f>(
+    formula: &'f str,
+    strategy: CNFStrategy,
+) -> ParseResult<ClauseSet<Lit<'f>>> {
+    let likely_formula = formula.contains(|c| match c {
+        '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
+        _ => false,
+    });
+    /* let likely_clause_set = formula.contains(|c| match c {
+        ';' | ',' => true,
+        _ => false,
+    }); */
+
+    // TODO: Dimacs
+
+    let clause_parse = match parse_clause_set(formula) {
+        Ok(res) => {
+            return Ok(res);
+        }
+        Err(e) => e,
+    };
+
+    let formula_parse = match parse_prop_formula(formula) {
+        Ok(res) => {
+            return Ok(to_cnf(&res, strategy).unwrap());
+        }
+        Err(e) => e,
+    };
+
+    Err(if likely_formula {
+        formula_parse
+    } else {
+        clause_parse
+    })
+}
+
+fn to_cnf<'f>(
+    node: &LogicNode<'f>,
+    strategy: CNFStrategy,
+) -> Result<ClauseSet<Lit<'f>>, FormulaConversionErr> {
+    match strategy {
+        CNFStrategy::Naive => transform::naive_cnf(&node),
+        CNFStrategy::Tseytin => transform::tseytin_cnf(&node),
+        CNFStrategy::Optimal => {
+            if let Ok(res) = transform::naive_cnf(&node) {
+                Ok(res)
+            } else {
+                transform::tseytin_cnf(&node)
+            }
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ParseErr {
@@ -22,13 +86,13 @@ impl fmt::Display for ParseErr {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Token {
+pub struct Token<'t> {
     pub kind: TokenKind,
-    pub spelling: String,
+    pub spelling: &'t str,
     pub src_pos: usize,
 }
 
-impl fmt::Display for Token {
+impl<'t> fmt::Display for Token<'t> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.spelling)
     }
@@ -92,7 +156,7 @@ pub fn tokenize(formula: &str) -> ParseResult<Vec<Token>> {
 
 fn extract_token<'a>(
     formula: &'a str,
-    tokens: &mut Vec<Token>,
+    tokens: &mut Vec<Token<'a>>,
     pos: usize,
 ) -> ParseResult<&'a str> {
     Ok(
@@ -112,61 +176,61 @@ fn extract_token<'a>(
             };
             tokens.push(Token {
                 kind: tt,
-                spelling: formula[0..1].to_string(),
+                spelling: &formula[0..1],
                 src_pos: pos,
             });
             &formula[1..]
         } else if formula.starts_with("->") {
             tokens.push(Token {
                 kind: TokenKind::Impl,
-                spelling: "->".to_string(),
+                spelling: "->",
                 src_pos: pos + 2,
             });
             &formula[2..]
         } else if formula.starts_with("<->") {
             tokens.push(Token {
                 kind: TokenKind::Equiv,
-                spelling: "<->".to_string(),
+                spelling: "<->",
                 src_pos: pos + 3,
             });
             &formula[3..]
         } else if formula.starts_with("<=>") {
             tokens.push(Token {
                 kind: TokenKind::Equiv,
-                spelling: "<=>".to_string(),
+                spelling: "<=>",
                 src_pos: pos + 3,
             });
             &formula[3..]
         } else if formula.starts_with("\\ex") {
             tokens.push(Token {
                 kind: TokenKind::Equiv,
-                spelling: "\\ex".to_string(),
+                spelling: "\\ex",
                 src_pos: pos + 3,
             });
             &formula[3..]
         } else if formula.starts_with("\\all") {
             tokens.push(Token {
                 kind: TokenKind::Equiv,
-                spelling: "\\all".to_string(),
+                spelling: "\\all",
                 src_pos: pos + 4,
             });
             &formula[pos + 4..]
         } else if formula.starts_with(|c: char| c.is_whitespace()) {
             &formula[1..]
         } else {
-            let mut spelling = String::new();
             let mut i = 0;
 
             for c in formula.chars() {
                 match c {
                     'a'..='z' | 'A'..='Z' | '0'..='9' => {
                         i += 1;
-                        spelling.push(c);
                     }
                     '_' | '-' => break,
                     _ => break,
                 }
             }
+
+            let spelling = &formula[0..i];
 
             if spelling.is_empty() {
                 return Err(ParseErr::EmptyToken);

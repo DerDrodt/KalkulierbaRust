@@ -17,7 +17,7 @@ pub trait LogicNodeVisitor {
         }
     }
 
-    fn visit_var(&mut self, spelling: &String) -> Self::Ret;
+    fn visit_var(&mut self, spelling: &str) -> Self::Ret;
 
     fn visit_not(&mut self, child: &LogicNode) -> Self::Ret;
 

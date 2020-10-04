@@ -6,14 +6,15 @@ pub struct CloseMsg {
     pub msg: String,
 }
 
-pub trait Calculus {
+pub trait Calculus<'f> {
     type Params;
     type State;
     type Move;
     type Error;
 
     fn parse_formula(
-        formula: &str,
+        formula: &'f str,
+
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error>;
 

@@ -1,11 +1,11 @@
-use lazy_static::lazy_static;
-use regex::Regex;
-use serde::{Deserialize, Serialize};
+use std::{fmt, iter::Peekable};
 
-use super::{ParseErr, ParseResult, Token, TokenKind};
+use serde::{Deserialize, Serialize};
+use transform::Lit;
+
+use super::{ParseErr, ParseResult};
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::logic::{transform, transform::cnf::FormulaConversionErr, LogicNode};
-use crate::parse;
+use crate::logic::transform;
 
 #[derive(Deserialize, Serialize)]
 pub enum CNFStrategy {
@@ -17,241 +17,191 @@ pub enum CNFStrategy {
     Optimal,
 }
 
-pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<ClauseSet<String>> {
-    let likely_formula = formula.contains(|c| match c {
-        '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
-        _ => false,
-    });
-    /* let likely_clause_set = formula.contains(|c| match c {
-        ';' | ',' => true,
-        _ => false,
-    }); */
-
-    // TODO: Dimacs
-
-    let clause_parse = match parse_clause_set(formula) {
-        Ok(res) => {
-            return Ok(res);
-        }
-        Err(e) => e,
-    };
-
-    let formula_parse = match PropParser::parse(formula) {
-        Ok(res) => {
-            return Ok(to_cnf(res, strategy).unwrap());
-        }
-        Err(e) => e,
-    };
-
-    Err(if likely_formula {
-        formula_parse
-    } else {
-        clause_parse
-    })
+pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<Lit<'f>>> {
+    ClauseSetParser::parse(formula)
 }
 
-pub fn parse_clause_set(formula: &str) -> ParseResult<ClauseSet<String>> {
-    let pf = formula.replace("\n", ";");
+#[derive(Debug, PartialEq, Eq)]
+struct Token<'t> {
+    pub kind: TokenKind,
+    pub spelling: &'t str,
+    pub src_pos: usize,
+}
 
-    lazy_static! {
-        static ref WHITESPACE: Regex = Regex::new(r"\s").unwrap();
-        static ref TRAILING_SEMI: Regex = Regex::new(r";$").unwrap();
-        static ref RE: Regex =
-            Regex::new(r"^!?[a-zA-Z0-9]+(,!?[a-zA-Z0-9]+)*(;!?[a-zA-Z0-9]+(,!?[a-zA-Z0-9]+)*)*$")
-                .unwrap();
+impl<'t> fmt::Display for Token<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.spelling)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum TokenKind {
+    Comma,
+    Semi,
+    Not,
+    Ident,
+}
+
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TokenKind::Comma => write!(f, ","),
+            TokenKind::Semi => write!(f, ";"),
+            TokenKind::Not => write!(f, "!"),
+            TokenKind::Ident => write!(f, "identifier"),
+        }
+    }
+}
+
+struct ClauseSetTokenizer<'f> {
+    formula: &'f str,
+    pos: usize,
+}
+
+impl<'f> ClauseSetTokenizer<'f> {
+    pub fn new(formula: &'f str) -> Self {
+        Self { formula, pos: 0 }
     }
 
-    let pf = WHITESPACE.replace_all(&pf, "");
-    let pf = TRAILING_SEMI.replace(&pf, "");
-
-    if !RE.is_match(&pf) {
-        return Err(ParseErr::InvalidFormat);
-    }
-
-    let mut parsed = vec![];
-
-    for clause in pf.split(";") {
-        let mut parsed_clause = vec![];
-
-        for member in clause.split(',') {
-            let negated = member.starts_with('!');
-            let lit = if negated { &member[1..] } else { member };
-
-            parsed_clause.push(Atom::new(lit.to_string(), negated))
+    fn next_token(&mut self) -> ParseResult<Token<'f>> {
+        if self.formula.is_empty() {
+            return Err(ParseErr::EmptyToken);
         }
 
-        parsed.push(Clause::new(parsed_clause));
-    }
+        let (kind, spelling, size) = match self.formula.chars().next().unwrap() {
+            ';' => (TokenKind::Semi, ";", 1),
+            ',' => (TokenKind::Comma, ",", 1),
+            '!' => (TokenKind::Not, "!", 1),
+            _ => {
+                let mut i = 0;
+                for c in self.formula.chars() {
+                    match c {
+                        'a'..='z' | 'A'..='Z' | '0'..='9' => i += 1,
+                        _ => break,
+                    }
+                }
+                let spelling = &self.formula[0..i];
 
-    Ok(ClauseSet::new(parsed))
-}
+                if spelling.is_empty() {
+                    return Err(ParseErr::EmptyToken);
+                }
 
-pub fn parse_prop_formula(formula: &str) -> ParseResult<LogicNode> {
-    PropParser::parse(formula)
-}
-
-pub struct PropParser {
-    tokens: Vec<Token>,
-}
-
-impl PropParser {
-    pub fn parse(formula: &str) -> ParseResult<LogicNode> {
-        let mut parser = PropParser {
-            tokens: parse::tokenize(formula)?,
+                (TokenKind::Ident, spelling, i)
+            }
         };
-        parser.tokens.reverse();
-        let node = parser.parse_equiv()?;
-        if !parser.tokens.is_empty() {
-            Err(ParseErr::Expected(
-                "end of input".to_string(),
-                parser.got_msg(),
-            ))
+
+        let t = Token {
+            kind,
+            spelling,
+            src_pos: self.pos + size,
+        };
+        self.pos += size;
+        self.formula = &self.formula[self.pos..];
+        Ok(t)
+    }
+}
+
+impl<'f> Iterator for ClauseSetTokenizer<'f> {
+    type Item = ParseResult<Token<'f>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.formula.is_empty() {
+            None
         } else {
-            Ok(*node)
+            Some(self.next_token())
         }
     }
+}
 
-    fn parse_equiv(&mut self) -> ParseResult<Box<LogicNode>> {
-        let mut stub = self.parse_impl()?;
+impl<'f> From<&'f str> for ClauseSetTokenizer<'f> {
+    fn from(f: &'f str) -> Self {
+        ClauseSetTokenizer::new(f)
+    }
+}
 
-        while self.next_is(TokenKind::Equiv) {
-            self.bump()?;
-            let right = self.parse_impl()?;
-            stub = Box::new(LogicNode::Equiv(stub, right));
+pub struct ClauseSetParser<'f> {
+    tokens: Peekable<ClauseSetTokenizer<'f>>,
+}
+
+impl<'f> ClauseSetParser<'f> {
+    pub fn parse(formula: &'f str) -> ParseResult<ClauseSet<Lit<'f>>> {
+        let tokens: ClauseSetTokenizer = formula.into();
+        let p = tokens.peekable();
+        let mut parser = ClauseSetParser { tokens: p };
+        parser.parse_cs()
+    }
+
+    fn parse_cs(&mut self) -> ParseResult<ClauseSet<Lit<'f>>> {
+        let mut cs = vec![self.parse_c()?];
+
+        while self.semi() {
+            cs.push(self.parse_c()?);
         }
 
-        Ok(stub)
+        Ok(ClauseSet::new(cs))
     }
 
-    fn parse_impl(&mut self) -> ParseResult<Box<LogicNode>> {
-        let mut stub = self.parse_or()?;
+    fn parse_c(&mut self) -> ParseResult<Clause<Lit<'f>>> {
+        let mut c = vec![self.parse_atom()?];
 
-        while self.next_is(TokenKind::Impl) {
-            self.bump()?;
-            let right = self.parse_or()?;
-            stub = Box::new(LogicNode::Impl(stub, right));
+        while self.comma() {
+            c.push(self.parse_atom()?)
         }
 
-        Ok(stub)
+        Ok(Clause::new(c))
     }
 
-    fn parse_or(&mut self) -> ParseResult<Box<LogicNode>> {
-        let mut stub = self.parse_and()?;
-
-        while self.next_is(TokenKind::Or) {
-            self.bump()?;
-            let right = self.parse_and()?;
-            stub = Box::new(LogicNode::Or(stub, right));
-        }
-
-        Ok(stub)
+    fn parse_atom(&mut self) -> ParseResult<Atom<Lit<'f>>> {
+        let negated = self.em();
+        Ok(Atom::new(self.parse_spelling()?, negated))
     }
 
-    fn parse_and(&mut self) -> ParseResult<Box<LogicNode>> {
-        let mut stub = self.parse_not()?;
-
-        while self.next_is(TokenKind::And) {
-            self.bump()?;
-            let right = self.parse_not()?;
-            stub = Box::new(LogicNode::And(stub, right));
-        }
-
-        Ok(stub)
-    }
-
-    fn parse_not(&mut self) -> ParseResult<Box<LogicNode>> {
-        if self.next_is(TokenKind::Not) {
-            self.bump()?;
-            Ok(Box::new(LogicNode::Not(self.parse_paren()?)))
-        } else {
-            self.parse_paren()
-        }
-    }
-
-    fn parse_paren(&mut self) -> ParseResult<Box<LogicNode>> {
-        if self.next_is(TokenKind::LParen) {
-            self.bump()?;
-            let exp = self.parse_equiv()?;
-            self.eat(TokenKind::RParen)?;
-            Ok(exp)
-        } else {
-            self.parse_var()
-        }
-    }
-
-    fn parse_var(&mut self) -> ParseResult<Box<LogicNode>> {
-        if !self.next_is_id() {
-            return Err(ParseErr::Expected("identifier".to_string(), self.got_msg()));
-        }
-
-        let exp = Box::new(LogicNode::Var(self.cur_token()?.spelling.clone()));
-        self.bump()?;
-        Ok(exp)
-    }
-
-    fn next_is(&self, expected: TokenKind) -> bool {
-        return self.tokens.len() > 0 && self.cur_token().unwrap().kind == expected;
-    }
-
-    fn next_is_id(&self) -> bool {
-        self.next_is(TokenKind::CapIdent) || self.next_is(TokenKind::LowIdent)
-    }
-
-    fn bump(&mut self) -> ParseResult<()> {
-        match self.tokens.pop() {
-            Some(_) => Ok(()),
+    fn parse_spelling(&mut self) -> ParseResult<Lit<'f>> {
+        match self.tokens.next() {
+            Some(Err(e)) => Err(e),
+            Some(Ok(Token {
+                spelling,
+                kind: TokenKind::Ident,
+                ..
+            })) => Ok(Lit::Str(spelling)),
+            Some(Ok(t)) => Err(ParseErr::Expected("identifier".to_string(), t.to_string())),
             None => Err(ParseErr::Expected(
-                "token".to_string(),
+                "identifier".to_string(),
                 "end of input".to_string(),
             )),
         }
     }
 
-    fn eat(&mut self, expected: TokenKind) -> ParseResult<()> {
-        if self.tokens.is_empty() || !self.next_is(expected.clone()) {
-            Err(ParseErr::Expected(expected.to_string(), self.got_msg()))
-        } else {
-            self.bump()
-        }
-    }
-
-    fn got_msg(&self) -> String {
-        if self.tokens.is_empty() {
-            "end of input".to_string()
-        } else {
-            let t = self.cur_token().unwrap();
-            format!("{} at position {}", t, t.src_pos)
-        }
-    }
-
-    fn cur_token(&self) -> ParseResult<&Token> {
-        self.tokens.last().ok_or(ParseErr::Expected(
-            "token".to_string(),
-            "end of input".to_string(),
-        ))
-    }
-}
-
-fn to_cnf(
-    node: LogicNode,
-    strategy: CNFStrategy,
-) -> Result<ClauseSet<String>, FormulaConversionErr> {
-    match strategy {
-        CNFStrategy::Naive => transform::naive_cnf(&node),
-        CNFStrategy::Tseytin => transform::tseytin_cnf(&node),
-        CNFStrategy::Optimal => {
-            if let Ok(res) = transform::naive_cnf(&node) {
-                Ok(res)
-            } else {
-                transform::tseytin_cnf(&node)
+    fn eat_if_kind(&mut self, expected: TokenKind) -> bool {
+        match self.tokens.peek() {
+            Some(Ok(Token { kind, .. })) => {
+                if *kind == expected {
+                    self.tokens.next();
+                    true
+                } else {
+                    false
+                }
             }
+            _ => return false,
         }
+    }
+
+    fn semi(&mut self) -> bool {
+        self.eat_if_kind(TokenKind::Semi)
+    }
+
+    fn comma(&mut self) -> bool {
+        self.eat_if_kind(TokenKind::Comma)
+    }
+
+    fn em(&mut self) -> bool {
+        self.eat_if_kind(TokenKind::Not)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_clause_set, parse_prop_formula};
+    use super::parse_clause_set;
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
@@ -303,40 +253,6 @@ mod tests {
             "a\n;",
             "a\n\n",
             "a;;"
-        );
-    }
-
-    #[test]
-    fn prop_valid() {
-        test_map!(
-            parse_prop_formula,
-            "a", "a";
-            "!a", "¬a";
-            "a -> b", "(a -> b)";
-            "a-> b", "(a -> b)";
-            "a    ->b", "(a -> b)";
-            "a->b", "(a -> b)";
-            "a<->(b -> (!(c)))", "(a <=> (b -> ¬c))";
-            "(b & a <-> (a) | !b)", "((b ∧ a) <=> (a ∨ ¬b))"
-        );
-    }
-
-    #[test]
-    fn prop_invalid() {
-        test_list_invalid!(
-            parse_prop_formula,
-            "",
-            "-->a",
-            "<--",
-            "--><=>",
-            "!->",
-            "a!",
-            "a-->",
-            "b<=>",
-            "<->a",
-            "<->",
-            "(a&b v2",
-            "(a|b"
         );
     }
 }

@@ -5,20 +5,22 @@ use std::fmt;
 
 use fo::FOTerm;
 
+pub use transform::Lit;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum LogicNode {
-    Var(String),
-    Not(Box<LogicNode>),
-    And(Box<LogicNode>, Box<LogicNode>),
-    Or(Box<LogicNode>, Box<LogicNode>),
-    Impl(Box<LogicNode>, Box<LogicNode>),
-    Equiv(Box<LogicNode>, Box<LogicNode>),
+pub enum LogicNode<'l> {
+    Var(&'l str),
+    Not(Box<LogicNode<'l>>),
+    And(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
+    Or(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
+    Impl(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
+    Equiv(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
     //Rel(String, Vec<FOTerm>),
     //All(String, Box<LogicNode>, Vec<String>),
     //Ex(String, Box<LogicNode>, Vec<String>),
 }
 
-impl LogicNode {
+impl<'l> LogicNode<'l> {
     pub fn to_basic_ops(self) -> Self {
         match self {
             LogicNode::Impl(left, right) => LogicNode::Or(
@@ -53,7 +55,7 @@ impl LogicNode {
     }
 }
 
-impl fmt::Display for LogicNode {
+impl<'l> fmt::Display for LogicNode<'l> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LogicNode::Var(s) => write!(f, "{}", s),
@@ -74,30 +76,21 @@ mod tests {
 
     #[test]
     fn var_to_basic_ops() {
-        assert_eq!(Var("a".to_string()), Var("a".to_string()).to_basic_ops());
-        assert_eq!(
-            Var("MyTestVar".to_string()),
-            Var("MyTestVar".to_string()).to_basic_ops()
-        );
-        assert_eq!(
-            Var("MyT35tV4r".to_string()),
-            Var("MyT35tV4r".to_string()).to_basic_ops()
-        );
+        assert_eq!(Var("a"), Var("a").to_basic_ops());
+        assert_eq!(Var("MyTestVar"), Var("MyTestVar").to_basic_ops());
+        assert_eq!(Var("MyT35tV4r"), Var("MyT35tV4r").to_basic_ops());
     }
 
     #[test]
     fn not_to_basic_ops() {
-        let n1 = Not(Box::new(Var("a".to_string())));
+        let n1 = Not(Box::new(Var("a")));
         let n2 = Not(Box::new(Equiv(
-            Box::new(Not(Box::new(Not(Box::new(Var("b".to_string())))))),
-            Box::new(Var("a".to_string())),
+            Box::new(Not(Box::new(Not(Box::new(Var("b")))))),
+            Box::new(Var("a")),
         )));
         let n3 = Not(Box::new(And(
-            Box::new(Or(
-                Box::new(Var("a".to_string())),
-                Box::new(Not(Box::new(Var("a".to_string())))),
-            )),
-            Box::new(Not(Box::new(Var("c".to_string())))),
+            Box::new(Or(Box::new(Var("a")), Box::new(Not(Box::new(Var("a")))))),
+            Box::new(Not(Box::new(Var("c")))),
         )));
 
         assert_eq!("¬a".to_string(), n1.to_basic_ops().to_string());
@@ -114,25 +107,16 @@ mod tests {
     #[test]
     fn and_to_basic_ops() {
         let a1 = And(
-            Box::new(Not(Box::new(Var("a".to_string())))),
+            Box::new(Not(Box::new(Var("a")))),
             Box::new(And(
-                Box::new(Var("b".to_string())),
-                Box::new(Impl(
-                    Box::new(Var("b".to_string())),
-                    Box::new(Var("a".to_string())),
-                )),
+                Box::new(Var("b")),
+                Box::new(Impl(Box::new(Var("b")), Box::new(Var("a")))),
             )),
         );
-        let a2 = And(
-            Box::new(Var("a".to_string())),
-            Box::new(Not(Box::new(Var("a".to_string())))),
-        );
+        let a2 = And(Box::new(Var("a")), Box::new(Not(Box::new(Var("a")))));
         let a3 = And(
-            Box::new(Or(
-                Box::new(Var("a".to_string())),
-                Box::new(Not(Box::new(Var("a".to_string())))),
-            )),
-            Box::new(Var("b".to_string())),
+            Box::new(Or(Box::new(Var("a")), Box::new(Not(Box::new(Var("a")))))),
+            Box::new(Var("b")),
         );
 
         assert_eq!(
@@ -145,28 +129,16 @@ mod tests {
 
     #[test]
     fn or_to_basic_ops() {
-        let o1 = Or(
-            Box::new(Var("a".to_string())),
-            Box::new(Var("b".to_string())),
-        );
+        let o1 = Or(Box::new(Var("a")), Box::new(Var("b")));
         let o2 = Or(
-            Box::new(Or(
-                Box::new(Var("a".to_string())),
-                Box::new(Not(Box::new(Var("b".to_string())))),
-            )),
-            Box::new(Equiv(
-                Box::new(Var("a".to_string())),
-                Box::new(Var("b".to_string())),
-            )),
+            Box::new(Or(Box::new(Var("a")), Box::new(Not(Box::new(Var("b")))))),
+            Box::new(Equiv(Box::new(Var("a")), Box::new(Var("b")))),
         );
         let o3 = Or(
-            Box::new(Not(Box::new(And(
-                Box::new(Var("a".to_string())),
-                Box::new(Var("b".to_string())),
-            )))),
+            Box::new(Not(Box::new(And(Box::new(Var("a")), Box::new(Var("b")))))),
             Box::new(Not(Box::new(Impl(
-                Box::new(Var("b".to_string())),
-                Box::new(Not(Box::new(Var("b".to_string())))),
+                Box::new(Var("b")),
+                Box::new(Not(Box::new(Var("b")))),
             )))),
         );
 

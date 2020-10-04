@@ -7,6 +7,7 @@ pub mod parse;
 pub mod tamper_protect;
 
 pub use consts::CNF_BLOWUP_LIMIT;
+pub use logic::Lit;
 
 pub use calculi::tableaux;
 pub use calculi::CalculusKind;
