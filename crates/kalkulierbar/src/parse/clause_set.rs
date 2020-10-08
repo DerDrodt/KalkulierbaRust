@@ -63,15 +63,20 @@ impl<'f> ClauseSetTokenizer<'f> {
         Self { formula, pos: 0 }
     }
 
-    fn next_token(&mut self) -> ParseResult<Token<'f>> {
+    fn next_token(&mut self) -> Option<ParseResult<Token<'f>>> {
         if self.formula.is_empty() {
-            return Err(ParseErr::EmptyToken);
+            return None;
         }
 
         let (kind, spelling, size) = match self.formula.chars().next().unwrap() {
-            ';' => (TokenKind::Semi, ";", 1),
+            ';' | '\n' => (TokenKind::Semi, ";", 1),
             ',' => (TokenKind::Comma, ",", 1),
             '!' => (TokenKind::Not, "!", 1),
+            c if c.is_whitespace() => {
+                self.pos += 1;
+                self.formula = &self.formula[1..];
+                return self.next_token();
+            }
             _ => {
                 let mut i = 0;
                 for c in self.formula.chars() {
@@ -83,7 +88,7 @@ impl<'f> ClauseSetTokenizer<'f> {
                 let spelling = &self.formula[0..i];
 
                 if spelling.is_empty() {
-                    return Err(ParseErr::EmptyToken);
+                    return None;
                 }
 
                 (TokenKind::Ident, spelling, i)
@@ -96,8 +101,8 @@ impl<'f> ClauseSetTokenizer<'f> {
             src_pos: self.pos + size,
         };
         self.pos += size;
-        self.formula = &self.formula[self.pos..];
-        Ok(t)
+        self.formula = &self.formula[size..];
+        Some(Ok(t))
     }
 }
 
@@ -108,7 +113,7 @@ impl<'f> Iterator for ClauseSetTokenizer<'f> {
         if self.formula.is_empty() {
             None
         } else {
-            Some(self.next_token())
+            self.next_token()
         }
     }
 }
@@ -134,7 +139,7 @@ impl<'f> ClauseSetParser<'f> {
     fn parse_cs(&mut self) -> ParseResult<ClauseSet<Lit<'f>>> {
         let mut cs = vec![self.parse_c()?];
 
-        while self.semi() {
+        while self.semi() && self.tokens.peek().is_some() {
             cs.push(self.parse_c()?);
         }
 
@@ -201,7 +206,7 @@ impl<'f> ClauseSetParser<'f> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_clause_set;
+    use super::*;
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
@@ -222,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn clause_set_valid() {
+    fn valid() {
         test_map!(
             parse_clause_set,
             "a", "{a}";
@@ -238,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn clause_set_invalid() {
+    fn invalid() {
         test_list_invalid!(
             parse_clause_set,
             "",
