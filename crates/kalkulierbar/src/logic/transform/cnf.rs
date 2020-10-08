@@ -139,6 +139,9 @@ where
                 let clause = Clause::new(vec![atom]);
                 Ok(ClauseSet::new(vec![clause]))
             }
+            LogicNode::Rel(_, _) => todo!(),
+            LogicNode::All(_, _, _) => todo!(),
+            LogicNode::Ex(_, _, _) => todo!(),
         },
         LogicNode::And(left, right) => {
             let mut c = naive_cnf(left)?;
@@ -171,6 +174,9 @@ where
             (*spelling).into(),
             false,
         )])])),
+        LogicNode::Rel(_, _) => todo!(),
+        LogicNode::All(_, _, _) => todo!(),
+        LogicNode::Ex(_, _, _) => todo!(),
     }
 }
 
@@ -201,6 +207,9 @@ where
             LogicNode::Impl(..) => "impl",
             LogicNode::Equiv(..) => "equiv",
             LogicNode::Var(spelling) => return ("var", *spelling).into(),
+            LogicNode::Rel(_, _) => todo!(),
+            LogicNode::All(_, _, _) => todo!(),
+            LogicNode::Ex(_, _, _) => todo!(),
         };
 
         (name, self.index).into()
@@ -333,6 +342,9 @@ where
                 self.cs.add(clause_c);
                 self.cs.add(clause_d);
             }
+            LogicNode::Rel(_, _) => todo!(),
+            LogicNode::All(_, _, _) => todo!(),
+            LogicNode::Ex(_, _, _) => todo!(),
         }
     }
 }

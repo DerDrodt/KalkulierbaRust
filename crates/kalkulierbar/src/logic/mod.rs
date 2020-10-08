@@ -15,9 +15,9 @@ pub enum LogicNode<'l> {
     Or(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
     Impl(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
     Equiv(Box<LogicNode<'l>>, Box<LogicNode<'l>>),
-    //Rel(String, Vec<FOTerm>),
-    //All(String, Box<LogicNode>, Vec<String>),
-    //Ex(String, Box<LogicNode>, Vec<String>),
+    Rel(&'l str, Vec<FOTerm<'l>>),
+    All(&'l str, Box<LogicNode<'l>>, Vec<&'l str>),
+    Ex(&'l str, Box<LogicNode<'l>>, Vec<&'l str>),
 }
 
 impl<'l> LogicNode<'l> {
@@ -48,9 +48,9 @@ impl<'l> LogicNode<'l> {
             LogicNode::Or(l, r) => {
                 LogicNode::Or(Box::new(l.to_basic_ops()), Box::new(r.to_basic_ops()))
             }
-            //LogicNode::Rel(spelling, args) => todo!(),
-            //LogicNode::All(_, _, _) => todo!(),
-            //LogicNode::Ex(_, _, _) => todo!(),
+            LogicNode::Rel(spelling, args) => todo!(),
+            LogicNode::All(_, _, _) => todo!(),
+            LogicNode::Ex(_, _, _) => todo!(),
         }
     }
 }
@@ -64,8 +64,20 @@ impl<'l> fmt::Display for LogicNode<'l> {
             LogicNode::Or(l, r) => write!(f, "({} ∨ {})", l, r),
             LogicNode::Impl(l, r) => write!(f, "({} -> {})", l, r),
             LogicNode::Equiv(l, r) => write!(f, "({} <=> {})", l, r),
-            //LogicNode::Rel(_, _) => todo!(), //LogicNode::All(_, _, _) => {}
-            //LogicNode::Ex(_, _, _) => {}
+            LogicNode::Rel(name, args) => {
+                let mut arg_str = String::new();
+
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        arg_str.push_str(", ");
+                    }
+                    arg_str.push_str(&a.to_string());
+                }
+
+                write!(f, "{}({})", name, arg_str)
+            }
+            LogicNode::All(var, child, _) => write!(f, "(∀{}: {})", var, child),
+            LogicNode::Ex(var, child, _) => write!(f, "(∃{}: {})", var, child),
         }
     }
 }
