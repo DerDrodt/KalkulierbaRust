@@ -94,7 +94,7 @@ impl Default for PropTableauxParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PropTableauxState<L: fmt::Display + Clone> {
+pub struct PropTableauxState<L: fmt::Display + Clone + Copy> {
     #[serde(rename = "clauseSet")]
     clause_set: ClauseSet<L>,
     #[serde(rename = "type")]
@@ -109,7 +109,10 @@ pub struct PropTableauxState<L: fmt::Display + Clone> {
     seal: String,
 }
 
-impl<'l> ProtectedState for PropTableauxState<Lit<'l>> {
+impl<L> ProtectedState for PropTableauxState<L>
+where
+    L: Copy + fmt::Display,
+{
     fn info(&self) -> String {
         let opts = format!(
             "{}|{}|{}|{}",
@@ -152,9 +155,12 @@ impl<'l> ProtectedState for PropTableauxState<Lit<'l>> {
     }
 }
 
-impl<'l> PropTableauxState<Lit<'l>> {
+impl<'f, L> PropTableauxState<L>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     pub fn new(
-        clause_set: ClauseSet<Lit<'l>>,
+        clause_set: ClauseSet<L>,
         ty: TableauxType,
         regular: bool,
         backtracking: bool,
@@ -171,11 +177,11 @@ impl<'l> PropTableauxState<Lit<'l>> {
         }
     }
 
-    pub fn root(&self) -> &PropTabNode<Lit<'l>> {
+    pub fn root(&self) -> &PropTabNode<L> {
         &self.nodes[0]
     }
 
-    pub fn node(&self, id: usize) -> PropTabResult<&PropTabNode<Lit<'l>>> {
+    pub fn node(&self, id: usize) -> PropTabResult<&PropTabNode<L>> {
         if let Some(node) = self.nodes.get(id) {
             Ok(node)
         } else {
@@ -183,7 +189,7 @@ impl<'l> PropTableauxState<Lit<'l>> {
         }
     }
 
-    pub fn node_mut(&mut self, id: usize) -> PropTabResult<&mut PropTabNode<Lit<'l>>> {
+    pub fn node_mut(&mut self, id: usize) -> PropTabResult<&mut PropTabNode<L>> {
         if let Some(node) = self.nodes.get_mut(id) {
             Ok(node)
         } else {
@@ -194,7 +200,7 @@ impl<'l> PropTableauxState<Lit<'l>> {
     pub fn node_is_closable(&self, id: usize) -> PropTabResult<bool> {
         let node = self.nodes.get(id);
         if let Some(node) = node {
-            let atom: Atom<Lit<'l>> = node.into();
+            let atom: Atom<L> = node.into();
             Ok(node.is_leaf() && self.node_ancestry_contains_atom(id, atom.not())?)
         } else {
             Err(PropTabError::InvalidNodeId(id))
@@ -204,10 +210,10 @@ impl<'l> PropTableauxState<Lit<'l>> {
     pub fn node_is_directly_closable(&self, id: usize) -> PropTabResult<bool> {
         let node = self.nodes.get(id);
         if let Some(node) = node {
-            let atom: Atom<Lit<'l>> = node.into();
+            let atom: Atom<L> = node.into();
             if let Some(parent) = node.parent {
                 let parent = self.node(parent)?;
-                let pa: Atom<Lit<'l>> = parent.into();
+                let pa: Atom<L> = parent.into();
                 let pa = pa.not();
                 Ok(node.is_leaf() && atom == pa)
             } else {
@@ -218,17 +224,14 @@ impl<'l> PropTableauxState<Lit<'l>> {
         }
     }
 
-    pub fn clause_expand_preprocessing<'c>(
-        &self,
-        clause: &'c Clause<Lit<'l>>,
-    ) -> &'c Vec<Atom<Lit<'l>>> {
+    pub fn clause_expand_preprocessing<'c>(&self, clause: &'c Clause<L>) -> &'c Vec<Atom<L>> {
         &clause.atoms()
     }
 
     pub fn node_ancestry_contains_atom(
         &self,
         node_id: usize,
-        atom: Atom<Lit<'l>>,
+        atom: Atom<L>,
     ) -> PropTabResult<bool> {
         let mut node = self.node(node_id)?;
 
@@ -310,7 +313,7 @@ impl<'l> PropTableauxState<Lit<'l>> {
         }
     }
 
-    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> PropTabResult<Atom<Lit<'l>>> {
+    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> PropTabResult<Atom<L>> {
         let leaf = self.node(leaf_id)?;
         let lemma = self.node(lemma_id)?;
 
@@ -340,7 +343,7 @@ impl<'l> PropTableauxState<Lit<'l>> {
             return Err(PropTabError::ExpectedSiblings(leaf_id, lemma_id));
         }
 
-        let atom: Atom<Lit<'l>> = lemma.into();
+        let atom: Atom<L> = lemma.into();
         let atom = atom.not();
 
         if self.regular {
@@ -363,10 +366,13 @@ pub struct PropTabNode<L: fmt::Display + Clone> {
     children: Vec<usize>,
 }
 
-impl<'l> PropTabNode<Lit<'l>> {
+impl<L> PropTabNode<L>
+where
+    L: Copy + fmt::Display,
+{
     pub fn new(
         parent: Option<usize>,
-        spelling: Lit<'l>,
+        spelling: L,
         negated: bool,
         lemma_source: Option<usize>,
     ) -> Self {
@@ -385,7 +391,7 @@ impl<'l> PropTabNode<Lit<'l>> {
         self.parent
     }
 
-    pub fn spelling(&self) -> Lit<'l> {
+    pub fn spelling(&self) -> L {
         self.spelling
     }
 
@@ -447,13 +453,19 @@ impl<'l> PropTabNode<Lit<'l>> {
     }
 }
 
-impl<'l> From<&PropTabNode<Lit<'l>>> for Atom<Lit<'l>> {
-    fn from(node: &PropTabNode<Lit<'l>>) -> Self {
+impl<L> From<&PropTabNode<L>> for Atom<L>
+where
+    L: Copy + fmt::Display,
+{
+    fn from(node: &PropTabNode<L>) -> Self {
         Atom::new(node.spelling, node.negated)
     }
 }
 
-impl<'l> fmt::Display for PropTabNode<Lit<'l>> {
+impl<L> fmt::Display for PropTabNode<L>
+where
+    L: Copy + fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -529,18 +541,21 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
     }
 }
 
-pub fn apply_expand<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
+pub fn apply_expand<'f, L>(
+    mut state: PropTableauxState<L>,
     leaf_id: usize,
     clause_id: usize,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     ensure_expandable(&state, leaf_id, clause_id)?;
 
     let clause = &state.clause_set.clauses()[clause_id];
     let len = state.nodes.len();
 
     for (i, atom) in clause.atoms().iter().enumerate() {
-        let new_leaf = PropTabNode::new(Some(leaf_id), atom.lit().clone(), atom.negated(), None);
+        let new_leaf = PropTabNode::new(Some(leaf_id), *atom.lit(), atom.negated(), None);
         state.nodes.push(new_leaf);
         let leaf = &mut state.nodes[leaf_id];
         leaf.children.push(len + i);
@@ -557,11 +572,14 @@ pub fn apply_expand<'l>(
     Ok(state)
 }
 
-pub fn apply_close<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
+pub fn apply_close<'f, L>(
+    mut state: PropTableauxState<L>,
     leaf_id: usize,
     node_id: usize,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
     let leaf = state.node_mut(leaf_id)?;
@@ -577,19 +595,17 @@ pub fn apply_close<'l>(
     Ok(state)
 }
 
-pub fn apply_lemma<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
+pub fn apply_lemma<'f, L>(
+    mut state: PropTableauxState<L>,
     leaf_id: usize,
     lemma_id: usize,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let atom = state.get_lemma(leaf_id, lemma_id)?;
 
-    let new_leaf = PropTabNode::new(
-        Some(leaf_id),
-        atom.lit().clone(),
-        atom.negated(),
-        Some(lemma_id),
-    );
+    let new_leaf = PropTabNode::new(Some(leaf_id), *atom.lit(), atom.negated(), Some(lemma_id));
     let size = state.nodes.len();
     state.nodes.push(new_leaf);
     state.nodes.get_mut(leaf_id).unwrap().children.push(size);
@@ -603,9 +619,10 @@ pub fn apply_lemma<'l>(
     Ok(state)
 }
 
-pub fn apply_undo<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+pub fn apply_undo<'f, L>(mut state: PropTableauxState<L>) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     if !state.backtracking {
         return Err(PropTabError::Backtracking);
     }
@@ -630,13 +647,16 @@ pub fn apply_undo<'l>(
     }
 }
 
-fn verify_expand_regularity<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn verify_expand_regularity<L>(
+    state: &PropTableauxState<L>,
     leaf_id: usize,
-    clause: &Clause<Lit<'l>>,
-) -> PropTabResult<()> {
+    clause: &Clause<L>,
+) -> PropTabResult<()>
+where
+    L: Copy + fmt::Display + PartialEq + Eq,
+{
     let leaf = &state.nodes[leaf_id];
-    let mut lst: Vec<Atom<Lit<'l>>> = vec![leaf.into()];
+    let mut lst: Vec<Atom<L>> = vec![leaf.into()];
 
     let mut pred = None;
 
@@ -664,10 +684,13 @@ fn verify_expand_regularity<'l>(
     Ok(())
 }
 
-fn verify_expand_connectedness<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn verify_expand_connectedness<'f, L>(
+    state: &PropTableauxState<L>,
     leaf_id: usize,
-) -> PropTabResult<()> {
+) -> PropTabResult<()>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let leaf = &state.nodes[leaf_id];
     let children = &leaf.children;
 
@@ -696,7 +719,10 @@ fn verify_expand_connectedness<'l>(
     }
 }
 
-fn check_connectedness<'l>(state: &PropTableauxState<Lit<'l>>, ty: TableauxType) -> bool {
+fn check_connectedness<'f, L>(state: &PropTableauxState<L>, ty: TableauxType) -> bool
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let start = &state.root().children;
     if ty == TableauxType::Unconnected {
         true
@@ -708,11 +734,14 @@ fn check_connectedness<'l>(state: &PropTableauxState<Lit<'l>>, ty: TableauxType)
     }
 }
 
-fn check_connectedness_subtree<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn check_connectedness_subtree<'f, L>(
+    state: &PropTableauxState<L>,
     root: usize,
     strong: bool,
-) -> bool {
+) -> bool
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let node = &state.nodes[root];
 
     // A subtree is weakly/strongly connected iff:
@@ -746,7 +775,10 @@ fn check_connectedness_subtree<'l>(
     has_directly_closed_child && all_children_connected
 }
 
-fn check_regularity<'l>(state: &PropTableauxState<Lit<'l>>) -> bool {
+fn check_regularity<'f, L>(state: &PropTableauxState<L>) -> bool
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let start = &state.root().children;
 
     start.iter().fold(true, |acc, id| {
@@ -754,11 +786,14 @@ fn check_regularity<'l>(state: &PropTableauxState<Lit<'l>>) -> bool {
     })
 }
 
-fn check_regularity_subtree<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn check_regularity_subtree<'f, L>(
+    state: &PropTableauxState<L>,
     root: usize,
-    mut lst: Vec<Atom<Lit<'l>>>,
-) -> bool {
+    mut lst: Vec<Atom<L>>,
+) -> bool
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let node = &state.nodes[root];
     let atom = node.into();
 
@@ -774,11 +809,14 @@ fn check_regularity_subtree<'l>(
     }
 }
 
-fn ensure_expandable<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn ensure_expandable<'f, L>(
+    state: &PropTableauxState<L>,
     leaf_id: usize,
     clause_id: usize,
-) -> PropTabResult<()> {
+) -> PropTabResult<()>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     if !check_connectedness(state, state.ty) {
         return Err(PropTabError::NotConnected);
     }
@@ -808,11 +846,14 @@ fn ensure_expandable<'l>(
     }
 }
 
-fn ensure_basic_closeability<'l>(
-    state: &PropTableauxState<Lit<'l>>,
+fn ensure_basic_closeability<'f, L>(
+    state: &PropTableauxState<L>,
     leaf_id: usize,
     node_id: usize,
-) -> PropTabResult<()> {
+) -> PropTabResult<()>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let leaf = state.node(leaf_id)?;
     let node = state.node(node_id)?;
 
@@ -843,10 +884,13 @@ fn ensure_basic_closeability<'l>(
     }
 }
 
-fn undo_close<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
+fn undo_close<'f, L>(
+    mut state: PropTableauxState<L>,
     leaf: usize,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let mut nodes = state.nodes;
 
     let mut id = leaf;
@@ -869,10 +913,13 @@ fn undo_close<'l>(
     Ok(state)
 }
 
-fn undo_expand<'l>(
-    mut state: PropTableauxState<Lit<'l>>,
+fn undo_expand<'f, L>(
+    mut state: PropTableauxState<L>,
     leaf: usize,
-) -> PropTabResult<PropTableauxState<Lit<'l>>> {
+) -> PropTabResult<PropTableauxState<L>>
+where
+    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+{
     let leaf = state.node_mut(leaf)?;
 
     let children = leaf.children().len();
