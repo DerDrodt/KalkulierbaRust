@@ -6,10 +6,10 @@ use serde::{
 };
 
 use super::super::LogicNode;
+use super::naive_cnf::{FormulaConversionErr, NaiveCNF};
+use super::tseytin_cnf::TseytinCNF;
+use super::visitor::LogicNodeVisitor;
 use crate::clause::{Atom, Clause, ClauseSet};
-
-#[derive(Debug)]
-pub struct FormulaConversionErr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lit<'l> {
@@ -91,283 +91,32 @@ impl<'de: 'l, 'l> Deserialize<'de> for Lit<'l> {
     }
 }
 
-pub fn naive_cnf<'n, 'f, L>(node: &'n LogicNode<'f>) -> Result<ClauseSet<L>, FormulaConversionErr>
-where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
-{
-    match node {
-        LogicNode::Not(c) => match c.as_ref() {
-            LogicNode::Not(i) => naive_cnf(i),
-            LogicNode::Or(left, right) => {
-                // TODO: optimize
-                let left = left.clone();
-                let right = right.clone();
-                let and = LogicNode::And(
-                    Box::new(LogicNode::Not(left)),
-                    Box::new(LogicNode::Not(right)),
-                );
-                naive_cnf(&and)
-            }
-            LogicNode::And(left, right) => {
-                // TODO: optimize
-                let left = left.clone();
-                let right = right.clone();
-                let or = LogicNode::Or(
-                    Box::new(LogicNode::Not(left)),
-                    Box::new(LogicNode::Not(right)),
-                );
-                naive_cnf(&or)
-            }
-            LogicNode::Impl(left, right) => {
-                // TODO: optimize
-                let left = left.clone();
-                let right = right.clone();
-                let node = LogicNode::And(left, Box::new(LogicNode::Not(right)));
-                naive_cnf(&node)
-            }
-            LogicNode::Equiv(left, right) => {
-                // TODO: optimize
-                let left = left.clone();
-                let right = right.clone();
-                let left_impl = Box::new(LogicNode::Impl(left.clone(), right.clone()));
-                let right_impl = Box::new(LogicNode::Impl(right, left));
-                let node = LogicNode::Not(Box::new(LogicNode::And(left_impl, right_impl)));
-                naive_cnf(&node)
-            }
-            LogicNode::Var(spelling) => {
-                let atom = Atom::new((*spelling).into(), true);
-                let clause = Clause::new(vec![atom]);
-                Ok(ClauseSet::new(vec![clause]))
-            }
-            LogicNode::Rel(_, _) => todo!(),
-            LogicNode::All(_, _, _) => todo!(),
-            LogicNode::Ex(_, _, _) => todo!(),
-        },
-        LogicNode::And(left, right) => {
-            let mut c = naive_cnf(left)?;
-            c.unite(&naive_cnf(right)?);
-            Ok(c)
-        }
-        LogicNode::Or(left, right) => {
-            let left: Vec<Clause<L>> = naive_cnf(left)?.into();
-            let right: Vec<Clause<L>> = naive_cnf(right)?.into();
-
-            if left.len() * right.len() > crate::CNF_BLOWUP_LIMIT as usize {
-                Err(FormulaConversionErr)
-            } else {
-                let mut clauses = vec![];
-                for lc in left.into_iter() {
-                    for rc in right.clone().into_iter() {
-                        let mut atoms: Vec<Atom<L>> = lc.clone().into();
-                        atoms.append(&mut rc.into());
-                        let clause = Clause::new(atoms);
-                        clauses.push(clause);
-                    }
-                }
-
-                Ok(ClauseSet::new(clauses))
-            }
-        }
-        LogicNode::Impl(..) => naive_cnf(&node.clone().to_basic_ops()),
-        LogicNode::Equiv(..) => naive_cnf(&node.clone().to_basic_ops()),
-        LogicNode::Var(spelling) => Ok(ClauseSet::new(vec![Clause::new(vec![Atom::new(
-            (*spelling).into(),
-            false,
-        )])])),
-        LogicNode::Rel(_, _) => todo!(),
-        LogicNode::All(_, _, _) => todo!(),
-        LogicNode::Ex(_, _, _) => todo!(),
-    }
-}
-
-struct TseytinCNF<L>
-where
-    L: fmt::Display + Copy,
-{
-    index: u32,
-    cs: ClauseSet<L>,
-}
-
-impl<'f, L> TseytinCNF<L>
-where
-    L: fmt::Display + Copy + From<(&'f str, &'f str)> + From<(&'f str, u32)>,
-{
-    pub fn new() -> Self {
-        TseytinCNF {
-            index: 0,
-            cs: ClauseSet::new(vec![]),
-        }
+impl<'f> LogicNode<'f> {
+    pub fn naive_cnf<L>(&self) -> Result<ClauseSet<L>, FormulaConversionErr>
+    where
+        L: fmt::Display + Clone + From<&'f str>,
+    {
+        NaiveCNF::new().visit(self)
     }
 
-    pub fn get_name<'n>(&mut self, node: &'n LogicNode<'f>) -> L {
-        let name = match node {
-            LogicNode::Not(_) => "not",
-            LogicNode::And(..) => "and",
-            LogicNode::Or(..) => "or",
-            LogicNode::Impl(..) => "impl",
-            LogicNode::Equiv(..) => "equiv",
-            LogicNode::Var(spelling) => return ("var", *spelling).into(),
-            LogicNode::Rel(_, _) => todo!(),
-            LogicNode::All(_, _, _) => todo!(),
-            LogicNode::Ex(_, _, _) => todo!(),
-        };
+    pub fn tseytin_cnf<L>(&self) -> Result<ClauseSet<L>, FormulaConversionErr>
+    where
+        L: Copy + fmt::Display + From<(&'f str, &'f str)> + From<(&'f str, u32)>,
+    {
+        let mut t = TseytinCNF::new();
+        let mut res = ClauseSet::new(vec![]);
+        let root = Clause::new(vec![Atom::new(t.node_name(self), false)]);
+        res.add(root);
 
-        (name, self.index).into()
+        t.visit(self);
+
+        res.unite(&t.clause_set);
+        Ok(res)
     }
-
-    pub fn visit<'n>(&mut self, node: &'n LogicNode<'f>) {
-        match node {
-            LogicNode::Var(_) => self.index += 1,
-            LogicNode::Not(c) => {
-                let self_var = self.get_name(node);
-                self.index += 1;
-                let child_var = self.get_name(c);
-                self.visit(c);
-
-                let clause_a: Clause<L> =
-                    Clause::new(vec![Atom::new(child_var, true), Atom::new(self_var, true)]);
-
-                let clause_b = Clause::new(vec![
-                    Atom::new(child_var, false),
-                    Atom::new(self_var, false),
-                ]);
-                self.cs.add(clause_a);
-                self.cs.add(clause_b);
-            }
-            LogicNode::And(left, right) => {
-                let self_var = self.get_name(node);
-                self.index += 1;
-                let left_var = self.get_name(left);
-                self.visit(left);
-                let right_var = self.get_name(right);
-                self.visit(right);
-
-                let clause_a = Clause::new(vec![
-                    Atom::new(left_var.clone(), false),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                let clause_b = Clause::new(vec![
-                    Atom::new(right_var.clone(), false),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                let clause_c = Clause::new(vec![
-                    Atom::new(left_var.clone(), true),
-                    Atom::new(right_var.clone(), true),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                self.cs.add(clause_a);
-                self.cs.add(clause_b);
-                self.cs.add(clause_c);
-            }
-            LogicNode::Or(left, right) => {
-                let self_var = self.get_name(node);
-                self.index += 1;
-                let left_var = self.get_name(left);
-                self.visit(left);
-                let right_var = self.get_name(right);
-                self.visit(right);
-
-                let clause_a = Clause::new(vec![
-                    Atom::new(left_var.clone(), true),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                let clause_b = Clause::new(vec![
-                    Atom::new(right_var.clone(), true),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                let clause_c = Clause::new(vec![
-                    Atom::new(left_var.clone(), false),
-                    Atom::new(right_var.clone(), false),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                self.cs.add(clause_a);
-                self.cs.add(clause_b);
-                self.cs.add(clause_c);
-            }
-            LogicNode::Impl(left, right) => {
-                let self_var = self.get_name(node);
-                self.index += 1;
-                let left_var = self.get_name(left);
-                self.visit(left);
-                let right_var = self.get_name(right);
-                self.visit(right);
-
-                let clause_a = Clause::new(vec![
-                    Atom::new(left_var.clone(), false),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                let clause_b = Clause::new(vec![
-                    Atom::new(right_var.clone(), true),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                let clause_c = Clause::new(vec![
-                    Atom::new(left_var.clone(), true),
-                    Atom::new(right_var.clone(), false),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                self.cs.add(clause_a);
-                self.cs.add(clause_b);
-                self.cs.add(clause_c);
-            }
-            LogicNode::Equiv(left, right) => {
-                let self_var = self.get_name(node);
-                self.index += 1;
-                let left_var = self.get_name(left);
-                self.visit(left);
-                let right_var = self.get_name(right);
-                self.visit(right);
-
-                let clause_a = Clause::new(vec![
-                    Atom::new(left_var.clone(), false),
-                    Atom::new(right_var.clone(), true),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                let clause_b = Clause::new(vec![
-                    Atom::new(left_var.clone(), true),
-                    Atom::new(right_var.clone(), false),
-                    Atom::new(self_var.clone(), true),
-                ]);
-                let clause_c = Clause::new(vec![
-                    Atom::new(left_var.clone(), true),
-                    Atom::new(right_var.clone(), true),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                let clause_d = Clause::new(vec![
-                    Atom::new(left_var.clone(), false),
-                    Atom::new(right_var.clone(), false),
-                    Atom::new(self_var.clone(), false),
-                ]);
-                self.cs.add(clause_a);
-                self.cs.add(clause_b);
-                self.cs.add(clause_c);
-                self.cs.add(clause_d);
-            }
-            LogicNode::Rel(_, _) => todo!(),
-            LogicNode::All(_, _, _) => todo!(),
-            LogicNode::Ex(_, _, _) => todo!(),
-        }
-    }
-}
-
-pub fn tseytin_cnf<'n, 'f, L>(node: &'n LogicNode<'f>) -> Result<ClauseSet<L>, FormulaConversionErr>
-where
-    L: Copy + fmt::Display + From<(&'f str, &'f str)> + From<(&'f str, u32)>,
-{
-    let mut t = TseytinCNF::new();
-    let mut res = ClauseSet::new(vec![]);
-    let root = Clause::new(vec![Atom::new(t.get_name(node), false)]);
-    res.add(root);
-
-    t.visit(node);
-
-    res.unite(&t.cs);
-    Ok(res)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::naive_cnf as naive;
-    use super::tseytin_cnf as tseytin;
     use super::{ClauseSet, Lit};
     use crate::parse;
 
@@ -375,7 +124,7 @@ mod tests {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
             $(
                 let parsed = parse::parse_prop_formula($f).unwrap();
-                let res: ClauseSet<Lit> = $func(&parsed).unwrap();
+                let res: ClauseSet<Lit> = parsed.$func().unwrap();
                 assert_eq!($e, res.to_string(), "Parsed: {}", parsed.to_string());
             )*
         }};
@@ -384,7 +133,7 @@ mod tests {
     #[test]
     fn naive_cnf() {
         test_map!(
-            naive,
+            naive_cnf,
             "a -> b", "{!a, b}";
             "!(a | b)", "{!a}, {!b}";
             "!(a & b)", "{!a, !b}";
@@ -397,7 +146,7 @@ mod tests {
     #[test]
     fn tysetin_cnf() {
         test_map!(
-            tseytin,
+            tseytin_cnf,
             "a -> b", "{impl0}, {vara, impl0}, {!varb, impl0}, {!vara, varb, !impl0}";
             "!(a | b)", "{not0}, {!vara, or1}, {!varb, or1}, {vara, varb, !or1}, {!or1, !not0}, {or1, not0}";
             "!(a & b)", "{not0}, {vara, !and1}, {varb, !and1}, {!vara, !varb, and1}, {!and1, !not0}, {and1, not0}";

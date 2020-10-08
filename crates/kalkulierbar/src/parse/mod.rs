@@ -56,13 +56,13 @@ fn to_cnf<'f>(
     strategy: CNFStrategy,
 ) -> Result<ClauseSet<Lit<'f>>, FormulaConversionErr> {
     match strategy {
-        CNFStrategy::Naive => transform::naive_cnf(&node),
-        CNFStrategy::Tseytin => transform::tseytin_cnf(&node),
+        CNFStrategy::Naive => node.naive_cnf(),
+        CNFStrategy::Tseytin => node.tseytin_cnf(),
         CNFStrategy::Optimal => {
-            if let Ok(res) = transform::naive_cnf(&node) {
+            if let Ok(res) = node.naive_cnf() {
                 Ok(res)
             } else {
-                transform::tseytin_cnf(&node)
+                node.tseytin_cnf()
             }
         }
     }
