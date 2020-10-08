@@ -7,6 +7,8 @@ use fo::FOTerm;
 
 pub use transform::Lit;
 
+use self::transform::{to_basic::ToBasicOps, visitor::LogicNodeVisitor};
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode<'l> {
     Var(&'l str),
@@ -22,36 +24,7 @@ pub enum LogicNode<'l> {
 
 impl<'l> LogicNode<'l> {
     pub fn to_basic_ops(self) -> Self {
-        match self {
-            LogicNode::Impl(left, right) => LogicNode::Or(
-                Box::new(LogicNode::Not(Box::new(left.to_basic_ops()))),
-                Box::new(right.to_basic_ops()),
-            ),
-            LogicNode::Equiv(left, right) => {
-                let left = left.to_basic_ops();
-                let right = right.to_basic_ops();
-
-                let both_true = LogicNode::And(Box::new(left.clone()), Box::new(right.clone()));
-                let both_false = LogicNode::And(
-                    Box::new(LogicNode::Not(Box::new(left))),
-                    Box::new(LogicNode::Not(Box::new(right))),
-                );
-
-                LogicNode::Or(Box::new(both_true), Box::new(both_false))
-            }
-
-            LogicNode::Var(_) => self,
-            LogicNode::Not(c) => LogicNode::Not(Box::new(c.to_basic_ops())),
-            LogicNode::And(l, r) => {
-                LogicNode::And(Box::new(l.to_basic_ops()), Box::new(r.to_basic_ops()))
-            }
-            LogicNode::Or(l, r) => {
-                LogicNode::Or(Box::new(l.to_basic_ops()), Box::new(r.to_basic_ops()))
-            }
-            LogicNode::Rel(spelling, args) => todo!(),
-            LogicNode::All(_, _, _) => todo!(),
-            LogicNode::Ex(_, _, _) => todo!(),
-        }
+        ToBasicOps::new().visit(&self)
     }
 }
 

@@ -3,8 +3,16 @@ use std::collections::HashMap;
 use super::visitor::{FOTermVisitor, LogicNodeVisitor};
 use super::{super::LogicNode, term_manipulator::QuantifierLinker};
 
-struct ToBasicOps<'a> {
+pub struct ToBasicOps<'a> {
     quantifiers: HashMap<&'a str, Vec<&'a str>>,
+}
+
+impl<'a> ToBasicOps<'a> {
+    pub fn new() -> Self {
+        Self {
+            quantifiers: HashMap::new(),
+        }
+    }
 }
 
 impl<'a> LogicNodeVisitor<'a> for ToBasicOps<'a> {
@@ -35,9 +43,11 @@ impl<'a> LogicNodeVisitor<'a> for ToBasicOps<'a> {
     fn visit_equiv(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret {
         let left = self.visit(left);
         let right = self.visit(right);
+        let not_left = LogicNode::Not(left.clone().into()).into();
+        let not_right = LogicNode::Not(right.clone().into()).into();
 
-        let both_t = LogicNode::And(left.clone().into(), right.clone().into()).into();
-        let both_f = LogicNode::And(left.into(), right.into()).into();
+        let both_t = LogicNode::And(left.into(), right.into()).into();
+        let both_f = LogicNode::And(not_left, not_right).into();
 
         LogicNode::Or(both_t, both_f)
     }
