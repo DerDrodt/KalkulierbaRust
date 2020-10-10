@@ -43,11 +43,15 @@ impl fmt::Display for TableauxType {
     }
 }
 
-pub trait TableauxState {
-    type AtomType: fmt::Display + Clone;
-    type Node: TableauxNode<Self::AtomType> + Into<Atom<Self::AtomType>>;
+pub trait TableauxState<L>
+where
+    L: fmt::Display + Clone,
+{
+    type Node: TableauxNode<L> + Into<Atom<L>>;
 
-    fn root(&self) -> &Self::Node;
+    fn root(&self) -> &Self::Node {
+        self.node(0).unwrap()
+    }
 
     fn regular(&self) -> bool;
 
@@ -55,7 +59,7 @@ pub trait TableauxState {
 
     fn node(&self, id: usize) -> TableauxResult<&Self::Node>;
 
-    fn node_mut(&self, id: usize) -> TableauxResult<&mut Self::Node>;
+    fn node_mut(&mut self, id: usize) -> TableauxResult<&mut Self::Node>;
 
     fn node_is_parent_of(&self, parent_id: usize, child: usize) -> TableauxResult<bool> {
         let child = self.node(child)?;
@@ -70,24 +74,32 @@ pub trait TableauxState {
         }
     }
 
-    fn mark_node_closed<'a>(&'a mut self, leaf: &mut Self::Node) {
-        let mut node = leaf;
-
-        while node.is_leaf()
-            || node
-                .children()
-                .iter()
-                .fold(true, |acc, e| acc && self.nodes()[*e].is_closed())
-        {
+    fn mark_node_closed<'a>(&'a mut self, leaf: usize) {
+        let mut id = leaf;
+        while self.is_leaf(id) || self.all_children_closed(id) {
+            let node = &mut self.node_mut(id).unwrap();
             node.mark_closed();
             if node.parent().is_none() {
                 break;
             }
-            if let Ok(n) = self.node_mut(node.parent().unwrap()) {
-                node = n;
-            } else {
-                break;
-            }
+            id = node.parent().unwrap();
+        }
+    }
+
+    fn is_leaf(&self, id: usize) -> bool {
+        match self.node(id) {
+            Ok(n) => n.is_leaf(),
+            Err(_) => false,
+        }
+    }
+
+    fn all_children_closed(&self, id: usize) -> bool {
+        match self.node(id) {
+            Ok(n) => n
+                .children()
+                .iter()
+                .fold(true, |acc, e| acc && self.nodes()[*e].is_closed()),
+            Err(_) => false,
         }
     }
 
@@ -104,7 +116,7 @@ pub trait TableauxState {
         }
     }
 
-    fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> TableauxResult<Atom<Self::AtomType>> {
+    fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> TableauxResult<Atom<L>> {
         let leaf = self.node(leaf_id)?;
         let lemma = self.node(lemma_id)?;
 
@@ -134,7 +146,7 @@ pub trait TableauxState {
             return Err(TableauxErr::ExpectedSiblings(leaf_id, lemma_id));
         }
 
-        let atom: Atom<Self::AtomType> = (*lemma).into();
+        let atom: Atom<L> = lemma.to_atom();
 
         if self.regular() {}
 
@@ -145,13 +157,10 @@ pub trait TableauxState {
 
     fn node_is_directly_closable(&self, id: usize) -> bool;
 
-    fn clause_expand_preprocessing<'c>(
-        &self,
-        clause: &'c Clause<Self::AtomType>,
-    ) -> &'c Vec<Atom<String>>;
+    fn clause_expand_preprocessing<'c>(&self, clause: &'c Clause<L>) -> Vec<Atom<L>>;
 }
 
-pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> + Copy {
+pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> {
     fn parent(&self) -> Option<usize>;
 
     fn spelling(&self) -> String;
@@ -171,4 +180,6 @@ pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> + Copy {
     fn is_leaf(&self) -> bool;
 
     fn mark_closed(&mut self);
+
+    fn to_atom(&self) -> Atom<L>;
 }

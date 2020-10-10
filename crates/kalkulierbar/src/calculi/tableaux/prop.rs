@@ -258,7 +258,7 @@ where
     }
 
     pub fn is_leaf(&self, leaf: usize) -> bool {
-        self.nodes[leaf].is_closed
+        self.nodes[leaf].children.len() == 0
     }
 
     pub fn all_children_closed(&self, node_id: usize) -> bool {
