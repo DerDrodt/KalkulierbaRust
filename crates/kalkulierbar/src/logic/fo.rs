@@ -3,18 +3,18 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
-pub struct Relation<L> {
-    pub spelling: L,
-    pub args: Vec<FOTerm<L>>,
+pub struct Relation<'f> {
+    pub spelling: &'f str,
+    pub args: Vec<FOTerm<'f>>,
 }
 
-impl<'l, L> Relation<L> {
-    pub fn new(spelling: L, args: Vec<FOTerm<L>>) -> Self {
+impl<'l> Relation<'l> {
+    pub fn new(spelling: &'l str, args: Vec<FOTerm<'l>>) -> Self {
         Self { spelling, args }
     }
 }
 
-impl<'de: 'l, 'l, L> Deserialize<'de> for Relation<L> {
+impl<'de: 'l, 'l> Deserialize<'de> for Relation<'l> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -23,26 +23,20 @@ impl<'de: 'l, 'l, L> Deserialize<'de> for Relation<L> {
     }
 }
 
-impl<'l, L> fmt::Display for Relation<L>
-where
-    L: fmt::Display,
-{
+impl<'l> fmt::Display for Relation<'l> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub enum FOTerm<L> {
-    QuantifiedVar(L),
-    Const(L),
-    Function(L, Vec<FOTerm<L>>),
+pub enum FOTerm<'l> {
+    QuantifiedVar(&'l str),
+    Const(&'l str),
+    Function(&'l str, Vec<FOTerm<'l>>),
 }
 
-impl<L> fmt::Display for FOTerm<L>
-where
-    L: fmt::Display,
-{
+impl<'l> fmt::Display for FOTerm<'l> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FOTerm::QuantifiedVar(name) => write!(f, "{}", name),

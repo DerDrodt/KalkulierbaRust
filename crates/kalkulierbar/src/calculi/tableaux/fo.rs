@@ -12,27 +12,21 @@ use super::{TableauxErr, TableauxNode, TableauxState, TableauxType};
 pub enum FOTabMove {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct FOTabState<'f, L>
-where
-    L: fmt::Display + Clone,
-{
-    clause_set: ClauseSet<Relation<L>>,
+pub struct FOTabState<'f> {
+    clause_set: ClauseSet<Relation<'f>>,
     formula: &'f str,
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
     manual_var_assign: bool,
-    nodes: Vec<FOTabNode<L>>,
+    nodes: Vec<FOTabNode<'f>>,
     moves: Vec<FOTabMove>,
     used_backtracking: bool,
     expansion_counter: u32,
 }
 
-impl<'f, L> FOTabState<'f, L>
-where
-    L: fmt::Display + Clone + Copy + Eq,
-{
-    fn node_ancestry_contains_unifiable(&self, id: usize, atom: Atom<Relation<L>>) -> bool {
+impl<'f> FOTabState<'f> {
+    fn node_ancestry_contains_unifiable(&self, id: usize, atom: Atom<Relation<'f>>) -> bool {
         let mut node = match self.node(id) {
             Ok(n) => n,
             _ => {
@@ -54,14 +48,11 @@ where
         false
     }
 
-    fn apply_var_instantiation(&mut self, var_assign: HashMap<&'f str, FOTerm<L>>) {}
+    fn apply_var_instantiation(&mut self, var_assign: HashMap<&'f str, FOTerm<'f>>) {}
 }
 
-impl<'f, L> TableauxState<Relation<L>> for FOTabState<'f, L>
-where
-    L: fmt::Display + Clone + Copy + Eq,
-{
-    type Node = FOTabNode<L>;
+impl<'f> TableauxState<Relation<'f>> for FOTabState<'f> {
+    type Node = FOTabNode<'f>;
 
     fn regular(&self) -> bool {
         self.regular
@@ -117,8 +108,8 @@ where
 
     fn clause_expand_preprocessing<'c>(
         &self,
-        clause: &'c crate::clause::Clause<Relation<L>>,
-    ) -> Vec<crate::clause::Atom<Relation<L>>> {
+        clause: &'c crate::clause::Clause<Relation<'f>>,
+    ) -> Vec<crate::clause::Atom<Relation<'f>>> {
         let suffix_appender = ();
         let mut atom_list = Vec::new();
 
@@ -133,12 +124,9 @@ where
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct FOTabNode<L>
-where
-    L: Clone + fmt::Display,
-{
+pub struct FOTabNode<'f> {
     parent: Option<usize>,
-    pub relation: Relation<L>,
+    pub relation: Relation<'f>,
     negated: bool,
     lemma_source: Option<usize>,
     is_closed: bool,
@@ -146,10 +134,7 @@ where
     children: Vec<usize>,
 }
 
-impl<'de: 'f, 'f, L> Deserialize<'de> for FOTabNode<L>
-where
-    L: Clone + fmt::Display,
-{
+impl<'de: 'f, 'f> Deserialize<'de> for FOTabNode<'f> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -158,13 +143,10 @@ where
     }
 }
 
-impl<'f, L> FOTabNode<L>
-where
-    L: Clone + fmt::Display,
-{
+impl<'f> FOTabNode<'f> {
     pub fn new(
         parent: Option<usize>,
-        relation: Relation<L>,
+        relation: Relation<'f>,
         negated: bool,
         lemma_source: Option<usize>,
     ) -> Self {
@@ -180,28 +162,19 @@ where
     }
 }
 
-impl<'f, L> From<FOTabNode<L>> for Atom<Relation<L>>
-where
-    L: Clone + fmt::Display,
-{
-    fn from(n: FOTabNode<L>) -> Self {
+impl<'f> From<FOTabNode<'f>> for Atom<Relation<'f>> {
+    fn from(n: FOTabNode<'f>) -> Self {
         Atom::new(n.relation, n.negated)
     }
 }
 
-impl<'f, L> From<&FOTabNode<L>> for Atom<Relation<L>>
-where
-    L: Clone + fmt::Display,
-{
-    fn from(n: &FOTabNode<L>) -> Self {
+impl<'f> From<&FOTabNode<'f>> for Atom<Relation<'f>> {
+    fn from(n: &FOTabNode<'f>) -> Self {
         Atom::new(n.relation.clone(), n.negated)
     }
 }
 
-impl<'f, L> TableauxNode<Relation<L>> for FOTabNode<L>
-where
-    L: Clone + fmt::Display,
-{
+impl<'f> TableauxNode<Relation<'f>> for FOTabNode<'f> {
     fn parent(&self) -> Option<usize> {
         self.parent
     }
@@ -246,7 +219,7 @@ where
         self.is_closed = true;
     }
 
-    fn to_atom(&self) -> Atom<Relation<L>> {
+    fn to_atom(&self) -> Atom<Relation<'f>> {
         self.into()
     }
 }
