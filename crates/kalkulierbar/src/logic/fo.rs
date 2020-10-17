@@ -2,14 +2,16 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::KStr;
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Relation<'f> {
     pub spelling: &'f str,
-    pub args: Vec<FOTerm<'f>>,
+    pub args: Vec<FOTerm>,
 }
 
 impl<'l> Relation<'l> {
-    pub fn new(spelling: &'l str, args: Vec<FOTerm<'l>>) -> Self {
+    pub fn new(spelling: &'l str, args: Vec<FOTerm>) -> Self {
         Self { spelling, args }
     }
 }
@@ -29,14 +31,32 @@ impl<'l> fmt::Display for Relation<'l> {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub enum FOTerm<'l> {
-    QuantifiedVar(&'l str),
-    Const(&'l str),
-    Function(&'l str, Vec<FOTerm<'l>>),
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum FOTerm {
+    QuantifiedVar(KStr),
+    Const(KStr),
+    Function(KStr, Vec<FOTerm>),
 }
 
-impl<'l> fmt::Display for FOTerm<'l> {
+impl Serialize for FOTerm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> Deserialize<'de> for FOTerm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
+
+impl<'l> fmt::Display for FOTerm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FOTerm::QuantifiedVar(name) => write!(f, "{}", name),

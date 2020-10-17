@@ -9,7 +9,7 @@ use crate::parse::ParseErr;
 use crate::parse::{parse_flexible, CNFStrategy};
 use crate::tamper_protect::ProtectedState;
 use crate::Calculus;
-use crate::{calculus::CloseMsg, logic::transform::Lit};
+use crate::{calculus::CloseMsg, KStr};
 
 pub type PropTabResult<T> = Result<T, PropTabError>;
 
@@ -94,7 +94,7 @@ impl Default for PropTableauxParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PropTableauxState<L: fmt::Display + Clone + Copy> {
+pub struct PropTableauxState<L: fmt::Display + Clone> {
     #[serde(rename = "clauseSet")]
     clause_set: ClauseSet<L>,
     #[serde(rename = "type")]
@@ -111,7 +111,7 @@ pub struct PropTableauxState<L: fmt::Display + Clone + Copy> {
 
 impl<L> ProtectedState for PropTableauxState<L>
 where
-    L: Copy + fmt::Display,
+    L: Clone + fmt::Display,
 {
     fn info(&self) -> String {
         let opts = format!(
@@ -157,7 +157,7 @@ where
 
 impl<'f, L> PropTableauxState<L>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     pub fn new(
         clause_set: ClauseSet<L>,
@@ -368,7 +368,7 @@ pub struct PropTabNode<L: fmt::Display + Clone> {
 
 impl<L> PropTabNode<L>
 where
-    L: Copy + fmt::Display,
+    L: Clone + fmt::Display,
 {
     pub fn new(
         parent: Option<usize>,
@@ -392,7 +392,7 @@ where
     }
 
     pub fn spelling(&self) -> L {
-        self.spelling
+        self.spelling.clone()
     }
 
     pub fn negated(&self) -> bool {
@@ -455,16 +455,16 @@ where
 
 impl<L> From<&PropTabNode<L>> for Atom<L>
 where
-    L: Copy + fmt::Display,
+    L: Clone + fmt::Display,
 {
     fn from(node: &PropTabNode<L>) -> Self {
-        Atom::new(node.spelling, node.negated)
+        Atom::new(node.spelling.clone(), node.negated)
     }
 }
 
 impl<L> fmt::Display for PropTabNode<L>
 where
-    L: Copy + fmt::Display,
+    L: Clone + fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -501,7 +501,7 @@ pub struct PropTableaux<'l> {
 
 impl<'l> Calculus<'l> for PropTableaux<'l> {
     type Params = PropTableauxParams;
-    type State = PropTableauxState<Lit<'l>>;
+    type State = PropTableauxState<KStr>;
     type Move = PropTableauxMove;
     type Error = PropTabError;
 
@@ -547,7 +547,7 @@ pub fn apply_expand<'f, L>(
     clause_id: usize,
 ) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     ensure_expandable(&state, leaf_id, clause_id)?;
 
@@ -555,7 +555,7 @@ where
     let len = state.nodes.len();
 
     for (i, atom) in clause.atoms().iter().enumerate() {
-        let new_leaf = PropTabNode::new(Some(leaf_id), *atom.lit(), atom.negated(), None);
+        let new_leaf = PropTabNode::new(Some(leaf_id), atom.lit().clone(), atom.negated(), None);
         state.nodes.push(new_leaf);
         let leaf = &mut state.nodes[leaf_id];
         leaf.children.push(len + i);
@@ -578,7 +578,7 @@ pub fn apply_close<'f, L>(
     node_id: usize,
 ) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
@@ -601,11 +601,16 @@ pub fn apply_lemma<'f, L>(
     lemma_id: usize,
 ) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let atom = state.get_lemma(leaf_id, lemma_id)?;
 
-    let new_leaf = PropTabNode::new(Some(leaf_id), *atom.lit(), atom.negated(), Some(lemma_id));
+    let new_leaf = PropTabNode::new(
+        Some(leaf_id),
+        atom.lit().clone(),
+        atom.negated(),
+        Some(lemma_id),
+    );
     let size = state.nodes.len();
     state.nodes.push(new_leaf);
     state.nodes.get_mut(leaf_id).unwrap().children.push(size);
@@ -621,7 +626,7 @@ where
 
 pub fn apply_undo<'f, L>(mut state: PropTableauxState<L>) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     if !state.backtracking {
         return Err(PropTabError::Backtracking);
@@ -653,7 +658,7 @@ fn verify_expand_regularity<L>(
     clause: &Clause<L>,
 ) -> PropTabResult<()>
 where
-    L: Copy + fmt::Display + PartialEq + Eq,
+    L: Clone + fmt::Display + PartialEq + Eq,
 {
     let leaf = &state.nodes[leaf_id];
     let mut lst: Vec<Atom<L>> = vec![leaf.into()];
@@ -689,7 +694,7 @@ fn verify_expand_connectedness<'f, L>(
     leaf_id: usize,
 ) -> PropTabResult<()>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let leaf = &state.nodes[leaf_id];
     let children = &leaf.children;
@@ -721,7 +726,7 @@ where
 
 fn check_connectedness<'f, L>(state: &PropTableauxState<L>, ty: TableauxType) -> bool
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let start = &state.root().children;
     if ty == TableauxType::Unconnected {
@@ -740,7 +745,7 @@ fn check_connectedness_subtree<'f, L>(
     strong: bool,
 ) -> bool
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let node = &state.nodes[root];
 
@@ -777,7 +782,7 @@ where
 
 fn check_regularity<'f, L>(state: &PropTableauxState<L>) -> bool
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let start = &state.root().children;
 
@@ -792,7 +797,7 @@ fn check_regularity_subtree<'f, L>(
     mut lst: Vec<Atom<L>>,
 ) -> bool
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let node = &state.nodes[root];
     let atom = node.into();
@@ -815,7 +820,7 @@ fn ensure_expandable<'f, L>(
     clause_id: usize,
 ) -> PropTabResult<()>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     if !check_connectedness(state, state.ty) {
         return Err(PropTabError::NotConnected);
@@ -852,7 +857,7 @@ fn ensure_basic_closeability<'f, L>(
     node_id: usize,
 ) -> PropTabResult<()>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let leaf = state.node(leaf_id)?;
     let node = state.node(node_id)?;
@@ -889,7 +894,7 @@ fn undo_close<'f, L>(
     leaf: usize,
 ) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let mut nodes = state.nodes;
 
@@ -918,7 +923,7 @@ fn undo_expand<'f, L>(
     leaf: usize,
 ) -> PropTabResult<PropTableauxState<L>>
 where
-    L: Copy + fmt::Display + From<&'f str> + PartialEq + Eq,
+    L: Clone + fmt::Display + From<&'f str> + PartialEq + Eq,
 {
     let leaf = state.node_mut(leaf)?;
 
@@ -1049,9 +1054,9 @@ mod tests {
     use super::*;
 
     fn create_artificial_expand_state<'l>(
-        mut state: PropTableauxState<Lit<'l>>,
-        nodes: Vec<PropTabNode<Lit<'l>>>,
-    ) -> PropTableauxState<Lit<'l>> {
+        mut state: PropTableauxState<KStr>,
+        nodes: Vec<PropTabNode<KStr>>,
+    ) -> PropTableauxState<KStr> {
         state.nodes.append(&mut nodes.clone());
 
         for (i, n) in nodes.iter().enumerate() {
@@ -1138,9 +1143,9 @@ mod tests {
         }
 
         fn move_and_info<'l>(
-            state: PropTableauxState<Lit<'l>>,
+            state: PropTableauxState<KStr>,
             r#move: PropTableauxMove,
-        ) -> (PropTableauxState<Lit<'l>>, String) {
+        ) -> (PropTableauxState<KStr>, String) {
             let msg = r#move.to_string();
             let state = PropTableaux::apply_move(state, r#move).expect(&msg);
             let info = state.info();
@@ -1307,7 +1312,7 @@ mod tests {
             }
         }
 
-        fn state(i: u8) -> PropTableauxState<Lit<'static>> {
+        fn state(i: u8) -> PropTableauxState<KStr> {
             let formulas = vec!["a,a;!a,b;!b", "a;b,b;!a,!b", "!a,b;!b;a,b", "a,b;!b;!a,b"];
 
             let formula = formulas[i as usize];

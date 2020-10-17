@@ -10,6 +10,7 @@ use super::naive_cnf::{FormulaConversionErr, NaiveCNF};
 use super::tseytin_cnf::TseytinCNF;
 use super::visitor::LogicNodeVisitor;
 use crate::clause::{Atom, Clause, ClauseSet};
+use crate::KStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lit<'l> {
@@ -91,18 +92,12 @@ impl<'de: 'l, 'l> Deserialize<'de> for Lit<'l> {
     }
 }
 
-impl<'f> LogicNode<'f> {
-    pub fn naive_cnf<L>(&self) -> Result<ClauseSet<L>, FormulaConversionErr>
-    where
-        L: fmt::Display + Clone + From<&'f str>,
-    {
+impl LogicNode {
+    pub fn naive_cnf(&self) -> Result<ClauseSet<KStr>, FormulaConversionErr> {
         NaiveCNF::new().visit(self)
     }
 
-    pub fn tseytin_cnf<L>(&self) -> Result<ClauseSet<L>, FormulaConversionErr>
-    where
-        L: Copy + fmt::Display + From<(&'f str, &'f str)> + From<(&'f str, u32)>,
-    {
+    pub fn tseytin_cnf(&self) -> Result<ClauseSet<KStr>, FormulaConversionErr> {
         let mut t = TseytinCNF::new();
         let mut res = ClauseSet::new(vec![]);
         let root = Clause::new(vec![Atom::new(t.node_name(self), false)]);
@@ -117,14 +112,14 @@ impl<'f> LogicNode<'f> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClauseSet, Lit};
-    use crate::parse;
+    use super::ClauseSet;
+    use crate::{parse, KStr};
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
             $(
                 let parsed = parse::parse_prop_formula($f).unwrap();
-                let res: ClauseSet<Lit> = parsed.$func().unwrap();
+                let res: ClauseSet<KStr> = parsed.$func().unwrap();
                 assert_eq!($e, res.to_string(), "Parsed: {}", parsed.to_string());
             )*
         }};

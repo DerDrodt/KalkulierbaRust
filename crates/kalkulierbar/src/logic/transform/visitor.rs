@@ -1,9 +1,11 @@
 use super::super::{FOTerm, LogicNode};
 
-pub trait LogicNodeVisitor<'a> {
+use crate::KStr;
+
+pub trait LogicNodeVisitor {
     type Ret;
 
-    fn visit(&mut self, node: &LogicNode<'a>) -> Self::Ret {
+    fn visit(&mut self, node: &LogicNode) -> Self::Ret {
         match node {
             LogicNode::Var(s) => self.visit_var(s),
             LogicNode::Not(c) => self.visit_not(&c),
@@ -17,39 +19,29 @@ pub trait LogicNodeVisitor<'a> {
         }
     }
 
-    fn visit_var(&mut self, spelling: &'a str) -> Self::Ret;
+    fn visit_var(&mut self, spelling: &KStr) -> Self::Ret;
 
-    fn visit_not(&mut self, child: &LogicNode<'a>) -> Self::Ret;
+    fn visit_not(&mut self, child: &LogicNode) -> Self::Ret;
 
-    fn visit_and(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret;
+    fn visit_and(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_or(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret;
+    fn visit_or(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_impl(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret;
+    fn visit_impl(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_equiv(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret;
+    fn visit_equiv(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_rel(&mut self, spelling: &'a str, args: &Vec<FOTerm<'a>>) -> Self::Ret;
+    fn visit_rel(&mut self, spelling: &KStr, args: &Vec<FOTerm>) -> Self::Ret;
 
-    fn visit_all(
-        &mut self,
-        var: &'a str,
-        child: &LogicNode<'a>,
-        bound_vars: &Vec<&'a str>,
-    ) -> Self::Ret;
+    fn visit_all(&mut self, var: &KStr, child: &LogicNode, bound_vars: &Vec<KStr>) -> Self::Ret;
 
-    fn visit_ex(
-        &mut self,
-        var: &'a str,
-        child: &LogicNode<'a>,
-        bound_vars: &Vec<&'a str>,
-    ) -> Self::Ret;
+    fn visit_ex(&mut self, var: &KStr, child: &LogicNode, bound_vars: &Vec<KStr>) -> Self::Ret;
 }
 
-pub trait FOTermVisitor<'a> {
+pub trait FOTermVisitor {
     type Ret;
 
-    fn visit(&mut self, term: &FOTerm<'a>) -> Self::Ret {
+    fn visit(&mut self, term: &FOTerm) -> Self::Ret {
         match term {
             FOTerm::QuantifiedVar(s) => self.visit_quantified_var(s),
             FOTerm::Const(s) => self.visit_const(s),
@@ -57,9 +49,9 @@ pub trait FOTermVisitor<'a> {
         }
     }
 
-    fn visit_quantified_var(&mut self, s: &'a str) -> Self::Ret;
+    fn visit_quantified_var(&mut self, s: &KStr) -> Self::Ret;
 
-    fn visit_const(&mut self, s: &'a str) -> Self::Ret;
+    fn visit_const(&mut self, s: &KStr) -> Self::Ret;
 
-    fn visit_fn(&mut self, name: &'a str, args: &Vec<FOTerm<'a>>) -> Self::Ret;
+    fn visit_fn(&mut self, name: &KStr, args: &Vec<FOTerm>) -> Self::Ret;
 }

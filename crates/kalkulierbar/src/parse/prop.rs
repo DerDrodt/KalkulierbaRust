@@ -3,7 +3,7 @@ use crate::{
     parse::{self, ParseErr, ParseResult, Token, TokenKind},
 };
 
-pub fn parse_prop_formula<'f>(formula: &'f str) -> ParseResult<LogicNode<'f>> {
+pub fn parse_prop_formula<'f>(formula: &'f str) -> ParseResult<LogicNode> {
     PropParser::parse(formula)
 }
 
@@ -12,7 +12,7 @@ pub struct PropParser<'t> {
 }
 
 impl<'f> PropParser<'f> {
-    pub fn parse(formula: &'f str) -> ParseResult<LogicNode<'f>> {
+    pub fn parse(formula: &'f str) -> ParseResult<LogicNode> {
         let mut parser = PropParser {
             tokens: parse::tokenize(formula)?,
         };
@@ -28,7 +28,7 @@ impl<'f> PropParser<'f> {
         }
     }
 
-    fn parse_equiv(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_equiv(&mut self) -> ParseResult<Box<LogicNode>> {
         let mut stub = self.parse_impl()?;
 
         while self.next_is(TokenKind::Equiv) {
@@ -40,7 +40,7 @@ impl<'f> PropParser<'f> {
         Ok(stub)
     }
 
-    fn parse_impl(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_impl(&mut self) -> ParseResult<Box<LogicNode>> {
         let mut stub = self.parse_or()?;
 
         while self.next_is(TokenKind::Impl) {
@@ -52,7 +52,7 @@ impl<'f> PropParser<'f> {
         Ok(stub)
     }
 
-    fn parse_or(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_or(&mut self) -> ParseResult<Box<LogicNode>> {
         let mut stub = self.parse_and()?;
 
         while self.next_is(TokenKind::Or) {
@@ -64,7 +64,7 @@ impl<'f> PropParser<'f> {
         Ok(stub)
     }
 
-    fn parse_and(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_and(&mut self) -> ParseResult<Box<LogicNode>> {
         let mut stub = self.parse_not()?;
 
         while self.next_is(TokenKind::And) {
@@ -76,7 +76,7 @@ impl<'f> PropParser<'f> {
         Ok(stub)
     }
 
-    fn parse_not(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_not(&mut self) -> ParseResult<Box<LogicNode>> {
         if self.next_is(TokenKind::Not) {
             self.bump()?;
             Ok(Box::new(LogicNode::Not(self.parse_paren()?)))
@@ -85,7 +85,7 @@ impl<'f> PropParser<'f> {
         }
     }
 
-    fn parse_paren(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_paren(&mut self) -> ParseResult<Box<LogicNode>> {
         if self.next_is(TokenKind::LParen) {
             self.bump()?;
             let exp = self.parse_equiv()?;
@@ -96,12 +96,12 @@ impl<'f> PropParser<'f> {
         }
     }
 
-    fn parse_var(&mut self) -> ParseResult<Box<LogicNode<'f>>> {
+    fn parse_var(&mut self) -> ParseResult<Box<LogicNode>> {
         if !self.next_is_id() {
             return Err(ParseErr::Expected("identifier".to_string(), self.got_msg()));
         }
 
-        let exp = Box::new(LogicNode::Var(self.cur_token()?.spelling));
+        let exp = Box::new(LogicNode::Var(self.cur_token()?.spelling.into()));
         self.bump()?;
         Ok(exp)
     }

@@ -2,36 +2,38 @@ use std::collections::HashMap;
 
 use super::visitor::FOTermVisitor;
 
-pub struct QuantifierLinker<'a, 'h> {
-    quantifiers: &'h mut HashMap<&'a str, Vec<&'a str>>,
+use crate::KStr;
+
+pub struct QuantifierLinker<'h> {
+    quantifiers: &'h mut HashMap<KStr, Vec<KStr>>,
 }
 
-impl<'a, 'h> QuantifierLinker<'a, 'h> {
-    pub fn new(quantifiers: &'h mut HashMap<&'a str, Vec<&'a str>>) -> Self {
+impl<'a, 'h> QuantifierLinker<'h> {
+    pub fn new(quantifiers: &'h mut HashMap<KStr, Vec<KStr>>) -> Self {
         Self { quantifiers }
     }
 }
 
-impl<'a, 'h> FOTermVisitor<'a> for QuantifierLinker<'a, 'h> {
-    type Ret = Result<(), &'a str>;
+impl<'a, 'h> FOTermVisitor for QuantifierLinker<'h> {
+    type Ret = Result<(), KStr>;
 
-    fn visit_quantified_var(&mut self, s: &'a str) -> Self::Ret {
+    fn visit_quantified_var(&mut self, s: &KStr) -> Self::Ret {
         let quant = self.quantifiers.get_mut(s);
 
         match quant {
             Some(quant) => {
-                quant.push(s);
+                quant.push(s.clone());
                 Ok(())
             }
-            None => Err(s),
+            None => Err(s.clone()),
         }
     }
 
-    fn visit_const(&mut self, _: &'a str) -> Self::Ret {
+    fn visit_const(&mut self, _: &KStr) -> Self::Ret {
         Ok(())
     }
 
-    fn visit_fn(&mut self, _: &'a str, args: &Vec<crate::logic::fo::FOTerm<'a>>) -> Self::Ret {
+    fn visit_fn(&mut self, _: &KStr, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         for arg in args {
             self.visit(arg)?;
         }

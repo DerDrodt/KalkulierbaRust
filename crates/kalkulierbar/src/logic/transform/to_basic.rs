@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
+use crate::KStr;
+
 use super::visitor::{FOTermVisitor, LogicNodeVisitor};
 use super::{super::LogicNode, term_manipulator::QuantifierLinker};
 
-pub struct ToBasicOps<'a> {
-    quantifiers: HashMap<&'a str, Vec<&'a str>>,
+pub struct ToBasicOps {
+    quantifiers: HashMap<KStr, Vec<KStr>>,
 }
 
-impl<'a> ToBasicOps<'a> {
+impl ToBasicOps {
     pub fn new() -> Self {
         Self {
             quantifiers: HashMap::new(),
@@ -15,32 +17,32 @@ impl<'a> ToBasicOps<'a> {
     }
 }
 
-impl<'a> LogicNodeVisitor<'a> for ToBasicOps<'a> {
-    type Ret = LogicNode<'a>;
+impl<'a> LogicNodeVisitor for ToBasicOps {
+    type Ret = LogicNode;
 
-    fn visit_var(&mut self, spelling: &'a str) -> Self::Ret {
-        LogicNode::Var(spelling)
+    fn visit_var(&mut self, spelling: &KStr) -> Self::Ret {
+        LogicNode::Var(spelling.clone())
     }
 
-    fn visit_not(&mut self, child: &LogicNode<'a>) -> Self::Ret {
+    fn visit_not(&mut self, child: &LogicNode) -> Self::Ret {
         LogicNode::Not(self.visit(child).into())
     }
 
-    fn visit_and(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret {
+    fn visit_and(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
         LogicNode::And(self.visit(left).into(), self.visit(right).into())
     }
 
-    fn visit_or(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret {
+    fn visit_or(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
         LogicNode::Or(self.visit(left).into(), self.visit(right).into())
     }
 
-    fn visit_impl(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret {
+    fn visit_impl(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
         let left = self.visit(left).into();
         let right = self.visit(right).into();
         LogicNode::Or(LogicNode::Not(left).into(), right)
     }
 
-    fn visit_equiv(&mut self, left: &LogicNode<'a>, right: &LogicNode<'a>) -> Self::Ret {
+    fn visit_equiv(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
         let left = self.visit(left);
         let right = self.visit(right);
         let not_left = LogicNode::Not(left.clone().into()).into();
@@ -52,31 +54,27 @@ impl<'a> LogicNodeVisitor<'a> for ToBasicOps<'a> {
         LogicNode::Or(both_t, both_f)
     }
 
-    fn visit_rel(
-        &mut self,
-        spelling: &'a str,
-        args: &Vec<crate::logic::fo::FOTerm<'a>>,
-    ) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: &KStr, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         let mut linker = QuantifierLinker::new(&mut self.quantifiers);
 
         for arg in args {
             linker.visit(arg).unwrap();
         }
 
-        LogicNode::Rel(spelling, args.clone())
+        LogicNode::Rel(spelling.clone(), args.clone())
     }
 
-    fn visit_all(&mut self, var: &'a str, child: &LogicNode<'a>, _: &Vec<&'a str>) -> Self::Ret {
-        self.quantifiers.insert(var, Vec::new());
+    fn visit_all(&mut self, var: &KStr, child: &LogicNode, _: &Vec<KStr>) -> Self::Ret {
+        self.quantifiers.insert(var.clone(), Vec::new());
         let child = self.visit(child).into();
         let bound = self.quantifiers.remove(var).unwrap();
-        LogicNode::All(var, child, bound)
+        LogicNode::All(var.clone(), child, bound)
     }
 
-    fn visit_ex(&mut self, var: &'a str, child: &LogicNode<'a>, _: &Vec<&'a str>) -> Self::Ret {
-        self.quantifiers.insert(var, Vec::new());
+    fn visit_ex(&mut self, var: &KStr, child: &LogicNode, _: &Vec<KStr>) -> Self::Ret {
+        self.quantifiers.insert(var.clone(), Vec::new());
         let child = self.visit(child).into();
         let bound = self.quantifiers.remove(var).unwrap();
-        LogicNode::Ex(var, child, bound)
+        LogicNode::Ex(var.clone(), child, bound)
     }
 }

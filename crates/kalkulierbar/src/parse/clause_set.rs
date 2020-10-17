@@ -1,11 +1,10 @@
 use std::{fmt, iter::Peekable};
 
 use serde::{Deserialize, Serialize};
-use transform::Lit;
 
 use super::{ParseErr, ParseResult};
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::logic::transform;
+use crate::KStr;
 
 #[derive(Deserialize, Serialize)]
 pub enum CNFStrategy {
@@ -17,7 +16,7 @@ pub enum CNFStrategy {
     Optimal,
 }
 
-pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<Lit<'f>>> {
+pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<KStr>> {
     ClauseSetParser::parse(formula)
 }
 
@@ -129,14 +128,14 @@ pub struct ClauseSetParser<'f> {
 }
 
 impl<'f> ClauseSetParser<'f> {
-    pub fn parse(formula: &'f str) -> ParseResult<ClauseSet<Lit<'f>>> {
+    pub fn parse(formula: &'f str) -> ParseResult<ClauseSet<KStr>> {
         let tokens: ClauseSetTokenizer = formula.into();
         let p = tokens.peekable();
         let mut parser = ClauseSetParser { tokens: p };
         parser.parse_cs()
     }
 
-    fn parse_cs(&mut self) -> ParseResult<ClauseSet<Lit<'f>>> {
+    fn parse_cs(&mut self) -> ParseResult<ClauseSet<KStr>> {
         let mut cs = vec![self.parse_c()?];
 
         while self.semi() && self.tokens.peek().is_some() {
@@ -146,7 +145,7 @@ impl<'f> ClauseSetParser<'f> {
         Ok(ClauseSet::new(cs))
     }
 
-    fn parse_c(&mut self) -> ParseResult<Clause<Lit<'f>>> {
+    fn parse_c(&mut self) -> ParseResult<Clause<KStr>> {
         let mut c = vec![self.parse_atom()?];
 
         while self.comma() {
@@ -156,19 +155,19 @@ impl<'f> ClauseSetParser<'f> {
         Ok(Clause::new(c))
     }
 
-    fn parse_atom(&mut self) -> ParseResult<Atom<Lit<'f>>> {
+    fn parse_atom(&mut self) -> ParseResult<Atom<KStr>> {
         let negated = self.em();
         Ok(Atom::new(self.parse_spelling()?, negated))
     }
 
-    fn parse_spelling(&mut self) -> ParseResult<Lit<'f>> {
+    fn parse_spelling(&mut self) -> ParseResult<KStr> {
         match self.tokens.next() {
             Some(Err(e)) => Err(e),
             Some(Ok(Token {
                 spelling,
                 kind: TokenKind::Ident,
                 ..
-            })) => Ok(Lit::Str(spelling)),
+            })) => Ok(spelling.into()),
             Some(Ok(t)) => Err(ParseErr::Expected("identifier".to_string(), t.to_string())),
             None => Err(ParseErr::Expected(
                 "identifier".to_string(),

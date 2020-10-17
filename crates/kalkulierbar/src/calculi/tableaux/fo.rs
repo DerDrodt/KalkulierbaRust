@@ -48,7 +48,7 @@ impl<'f> FOTabState<'f> {
         false
     }
 
-    fn apply_var_instantiation(&mut self, var_assign: HashMap<&'f str, FOTerm<'f>>) {}
+    fn apply_var_instantiation(&mut self, var_assign: HashMap<&'f str, FOTerm>) {}
 }
 
 impl<'f> TableauxState<Relation<'f>> for FOTabState<'f> {

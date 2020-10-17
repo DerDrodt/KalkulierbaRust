@@ -8,6 +8,7 @@ use crate::{
     clause::ClauseSet,
     logic::transform::{self, FormulaConversionErr},
     logic::LogicNode,
+    KStr,
 };
 
 pub mod clause_set;
@@ -15,10 +16,7 @@ pub mod prop;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
 
-pub fn parse_flexible<'f>(
-    formula: &'f str,
-    strategy: CNFStrategy,
-) -> ParseResult<ClauseSet<Lit<'f>>> {
+pub fn parse_flexible<'f>(formula: &'f str, strategy: CNFStrategy) -> ParseResult<ClauseSet<KStr>> {
     let likely_formula = formula.contains(|c| match c {
         '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
         _ => false,
@@ -51,10 +49,10 @@ pub fn parse_flexible<'f>(
     })
 }
 
-fn to_cnf<'f>(
-    node: &LogicNode<'f>,
+fn to_cnf(
+    node: &LogicNode,
     strategy: CNFStrategy,
-) -> Result<ClauseSet<Lit<'f>>, FormulaConversionErr> {
+) -> Result<ClauseSet<KStr>, FormulaConversionErr> {
     match strategy {
         CNFStrategy::Naive => node.naive_cnf(),
         CNFStrategy::Tseytin => node.tseytin_cnf(),
