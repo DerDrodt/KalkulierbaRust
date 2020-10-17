@@ -1,30 +1,32 @@
+use std::iter::Peekable;
+
 use crate::{
     logic::LogicNode,
-    parse::{self, ParseErr, ParseResult, Token, TokenKind},
+    parse::{ParseErr, ParseResult, Token, TokenKind},
 };
+
+use super::Tokenizer;
 
 pub fn parse_prop_formula<'f>(formula: &'f str) -> ParseResult<LogicNode> {
     PropParser::parse(formula)
 }
 
 pub struct PropParser<'t> {
-    tokens: Vec<Token<'t>>,
+    tokens: Peekable<Tokenizer<'t>>,
 }
 
 impl<'f> PropParser<'f> {
     pub fn parse(formula: &'f str) -> ParseResult<LogicNode> {
         let mut parser = PropParser {
-            tokens: parse::tokenize(formula)?,
+            tokens: Tokenizer::new(formula, false).peekable(),
         };
-        parser.tokens.reverse();
         let node = parser.parse_equiv()?;
-        if !parser.tokens.is_empty() {
-            Err(ParseErr::Expected(
+        match parser.tokens.next() {
+            Some(_) => Err(ParseErr::Expected(
                 "end of input".to_string(),
                 parser.got_msg(),
-            ))
-        } else {
-            Ok(*node)
+            )),
+            None => Ok(*node),
         }
     }
 
@@ -106,16 +108,19 @@ impl<'f> PropParser<'f> {
         Ok(exp)
     }
 
-    fn next_is(&self, expected: TokenKind) -> bool {
-        return self.tokens.len() > 0 && self.cur_token().unwrap().kind == expected;
+    fn next_is(&mut self, expected: TokenKind) -> bool {
+        match self.tokens.peek() {
+            Some(Ok(Token { kind, .. })) => *kind == expected,
+            _ => false,
+        }
     }
 
-    fn next_is_id(&self) -> bool {
+    fn next_is_id(&mut self) -> bool {
         self.next_is(TokenKind::CapIdent) || self.next_is(TokenKind::LowIdent)
     }
 
     fn bump(&mut self) -> ParseResult<()> {
-        match self.tokens.pop() {
+        match self.tokens.next() {
             Some(_) => Ok(()),
             None => Err(ParseErr::Expected(
                 "token".to_string(),
@@ -125,27 +130,29 @@ impl<'f> PropParser<'f> {
     }
 
     fn eat(&mut self, expected: TokenKind) -> ParseResult<()> {
-        if self.tokens.is_empty() || !self.next_is(expected.clone()) {
-            Err(ParseErr::Expected(expected.to_string(), self.got_msg()))
-        } else {
+        if self.next_is(expected.clone()) {
             self.bump()
-        }
-    }
-
-    fn got_msg(&self) -> String {
-        if self.tokens.is_empty() {
-            "end of input".to_string()
         } else {
-            let t = self.cur_token().unwrap();
-            format!("{} at position {}", t, t.src_pos)
+            Err(ParseErr::Expected(expected.to_string(), self.got_msg()))
         }
     }
 
-    fn cur_token(&self) -> ParseResult<&Token<'f>> {
-        self.tokens.last().ok_or(ParseErr::Expected(
-            "token".to_string(),
-            "end of input".to_string(),
-        ))
+    fn got_msg(&mut self) -> String {
+        match self.tokens.peek() {
+            Some(Ok(t)) => format!("{} at position {}", t, t.src_pos),
+            _ => "end of input".to_string(),
+        }
+    }
+
+    fn cur_token(&mut self) -> ParseResult<&Token<'f>> {
+        match self.tokens.peek() {
+            Some(Ok(t)) => Ok(&t),
+            Some(Err(e)) => Err(e.clone()),
+            _ => Err(ParseErr::Expected(
+                "token".to_string(),
+                "end of input".to_string(),
+            )),
+        }
     }
 }
 

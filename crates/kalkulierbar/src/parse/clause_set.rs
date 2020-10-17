@@ -97,7 +97,7 @@ impl<'f> ClauseSetTokenizer<'f> {
         let t = Token {
             kind,
             spelling,
-            src_pos: self.pos + size,
+            src_pos: self.pos,
         };
         self.pos += size;
         self.formula = &self.formula[size..];

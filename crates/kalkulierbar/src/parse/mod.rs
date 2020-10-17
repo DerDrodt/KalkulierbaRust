@@ -2,16 +2,11 @@ use std::fmt;
 
 pub use clause_set::{parse_clause_set, CNFStrategy};
 pub use prop::parse_prop_formula;
-use transform::Lit;
 
-use crate::{
-    clause::ClauseSet,
-    logic::transform::{self, FormulaConversionErr},
-    logic::LogicNode,
-    KStr,
-};
+use crate::{clause::ClauseSet, logic::transform::FormulaConversionErr, logic::LogicNode, KStr};
 
 pub mod clause_set;
+pub mod fo;
 pub mod prop;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
@@ -66,7 +61,7 @@ fn to_cnf(
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ParseErr {
     Expected(String, String),
     InvalidFormat,
@@ -136,117 +131,113 @@ impl fmt::Display for TokenKind {
     }
 }
 
-pub fn tokenize(formula: &str) -> ParseResult<Vec<Token>> {
-    let mut f = formula;
-
-    let mut tokens: Vec<Token> = vec![];
-
-    while !f.is_empty() {
-        let pos = match tokens.last() {
-            Some(t) => t.src_pos + t.spelling.len(),
-            None => 0,
-        };
-        f = extract_token(f, &mut tokens, pos)?;
-    }
-
-    Ok(tokens)
+struct Tokenizer<'f> {
+    formula: &'f str,
+    pos: usize,
+    extended: bool,
 }
 
-fn extract_token<'a>(
-    formula: &'a str,
-    tokens: &mut Vec<Token<'a>>,
-    pos: usize,
-) -> ParseResult<&'a str> {
-    Ok(
-        if formula.starts_with(|c| match c {
-            '&' | '|' | '!' | '(' | ')' | ',' | ':' => true,
-            _ => false,
-        }) {
-            let tt = match formula.chars().next().unwrap() {
-                '&' => TokenKind::And,
-                '|' => TokenKind::Or,
-                '!' => TokenKind::Not,
-                '(' => TokenKind::LParen,
-                ')' => TokenKind::RParen,
-                ',' => TokenKind::Comma,
-                ':' => TokenKind::Colon,
-                _ => TokenKind::Unknown,
-            };
-            tokens.push(Token {
-                kind: tt,
-                spelling: &formula[0..1],
-                src_pos: pos,
-            });
-            &formula[1..]
-        } else if formula.starts_with("->") {
-            tokens.push(Token {
-                kind: TokenKind::Impl,
-                spelling: "->",
-                src_pos: pos + 2,
-            });
-            &formula[2..]
-        } else if formula.starts_with("<->") {
-            tokens.push(Token {
-                kind: TokenKind::Equiv,
-                spelling: "<->",
-                src_pos: pos + 3,
-            });
-            &formula[3..]
-        } else if formula.starts_with("<=>") {
-            tokens.push(Token {
-                kind: TokenKind::Equiv,
-                spelling: "<=>",
-                src_pos: pos + 3,
-            });
-            &formula[3..]
-        } else if formula.starts_with("\\ex") {
-            tokens.push(Token {
-                kind: TokenKind::Equiv,
-                spelling: "\\ex",
-                src_pos: pos + 3,
-            });
-            &formula[3..]
-        } else if formula.starts_with("\\all") {
-            tokens.push(Token {
-                kind: TokenKind::Equiv,
-                spelling: "\\all",
-                src_pos: pos + 4,
-            });
-            &formula[pos + 4..]
-        } else if formula.starts_with(|c: char| c.is_whitespace()) {
-            &formula[1..]
-        } else {
-            let mut i = 0;
+impl<'f> Tokenizer<'f> {
+    fn new(formula: &'f str, extended: bool) -> Self {
+        Self {
+            formula,
+            pos: 0,
+            extended,
+        }
+    }
 
-            for c in formula.chars() {
-                match c {
-                    'a'..='z' | 'A'..='Z' | '0'..='9' => {
-                        i += 1;
-                    }
-                    '_' | '-' => break,
-                    _ => break,
+    fn next_token(&mut self) -> Option<ParseResult<Token<'f>>> {
+        if self.formula.is_empty() {
+            return None;
+        }
+
+        let (kind, spelling, size) = match self.formula.chars().next().unwrap() {
+            '&' => (TokenKind::And, "&", 1),
+            '|' => (TokenKind::Or, "|", 1),
+            '!' => (TokenKind::Not, "!", 1),
+            '(' => (TokenKind::LParen, "(", 1),
+            ')' => (TokenKind::RParen, ")", 1),
+            ',' => (TokenKind::Comma, ",", 1),
+            ':' => (TokenKind::Colon, ":", 1),
+            '-' => {
+                if self.formula.starts_with("->") {
+                    (TokenKind::Impl, "->", 2)
+                } else {
+                    return Some(Err(ParseErr::Expected("->".to_string(), "-".to_string())));
                 }
             }
+            '<' => {
+                let spelling = if self.formula.starts_with("<=>") {
+                    "<=>"
+                } else if self.formula.starts_with("<->") {
+                    "<->"
+                } else {
+                    return Some(Err(ParseErr::Expected("<=>".to_string(), "<".to_string())));
+                };
 
-            let spelling = &formula[0..i];
-
-            if spelling.is_empty() {
-                return Err(ParseErr::EmptyToken);
+                (TokenKind::Equiv, spelling, 3)
             }
+            '\\' => {
+                if self.formula.starts_with("\\ex") {
+                    (TokenKind::Ex, "\\ex", 3)
+                } else if self.formula.starts_with("\\all") {
+                    (TokenKind::All, "\\all", 4)
+                } else {
+                    return Some(Err(ParseErr::Expected(
+                        "Quantifier".to_string(),
+                        "\\".to_string(),
+                    )));
+                }
+            }
+            c if c.is_whitespace() => {
+                self.pos += 1;
+                self.formula = &self.formula[1..];
+                return self.next_token();
+            }
+            _ => {
+                let mut i = 0;
+                for c in self.formula.chars() {
+                    match c {
+                        'a'..='z' | 'A'..='Z' | '0'..='9' => i += 1,
+                        '-' | '_' if i > 0 && self.extended => i += 1,
+                        _ => break,
+                    }
+                }
+                let spelling = &self.formula[0..i];
 
-            let first = spelling.chars().next().unwrap();
-            let kind = match first {
-                'A'..='Z' => TokenKind::CapIdent,
-                _ => TokenKind::LowIdent,
-            };
+                if spelling.is_empty() {
+                    return None;
+                }
 
-            tokens.push(Token {
-                kind,
-                spelling,
-                src_pos: pos,
-            });
+                let first = spelling.chars().next().unwrap();
+                let tt = match first {
+                    'A'..='Z' => TokenKind::CapIdent,
+                    _ => TokenKind::LowIdent,
+                };
 
-            &formula[i..]
-        },
-    )
+                (tt, spelling, i)
+            }
+        };
+
+        let t = Token {
+            kind,
+            spelling,
+            src_pos: self.pos,
+        };
+        self.pos += size;
+        self.formula = &self.formula[size..];
+        Some(Ok(t))
+    }
+}
+
+impl<'f> Iterator for Tokenizer<'f> {
+    type Item = ParseResult<Token<'f>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.formula.is_empty() {
+            None
+        } else {
+            self.next_token()
+        }
+    }
 }

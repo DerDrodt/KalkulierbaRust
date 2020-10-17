@@ -1,15 +1,112 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    clause::Atom, clause::ClauseSet, logic::fo::FOTerm, logic::fo::Relation, logic::unify,
+    clause::Atom, clause::ClauseSet, logic::fo::FOTerm, logic::fo::Relation,
+    logic::transform::term_manipulator::VariableInstantiator,
+    logic::transform::term_manipulator::VariableSuffixAppend,
+    logic::transform::visitor::FOTermVisitor, logic::unify, Calculus, KStr,
 };
 
 use super::{TableauxErr, TableauxNode, TableauxState, TableauxType};
 
+pub enum FOTabErr {}
+
+pub type FOTabResult<T> = Result<T, FOTabErr>;
+
+pub struct FOTabParams {
+    ty: TableauxType,
+    regular: bool,
+    backtracking: bool,
+    manual_var_assign: bool,
+}
+
+impl Default for FOTabParams {
+    fn default() -> Self {
+        Self {
+            ty: TableauxType::Unconnected,
+            regular: false,
+            backtracking: false,
+            manual_var_assign: false,
+        }
+    }
+}
+
+pub struct FOTableaux;
+
+impl<'f> Calculus<'f> for FOTableaux {
+    type Params = FOTabParams;
+
+    type State = FOTabState<'f>;
+
+    type Move = FOTabMove;
+
+    type Error = FOTabErr;
+
+    fn parse_formula(
+        formula: &'f str,
+        params: Option<Self::Params>,
+    ) -> Result<Self::State, Self::Error> {
+        todo!()
+    }
+
+    fn apply_move(state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
+        let mut state = state;
+        state.status_msg.take();
+        match k_move {
+            FOTabMove::AutoClose(leaf, node) => apply_auto_close(state, leaf, node),
+            FOTabMove::CloseAssign(leaf, node, var_assign) => {
+                apply_close_assign(state, leaf, node, var_assign)
+            }
+            FOTabMove::Expand(leaf, clause) => apply_expand(state, leaf, clause),
+            FOTabMove::Lemma(leaf, lemma) => apply_lemma(state, leaf, lemma),
+            FOTabMove::Undo => apply_undo(state),
+        }
+    }
+
+    fn check_close(state: Self::State) -> crate::calculus::CloseMsg {
+        state.get_close_msg()
+    }
+}
+
+pub fn apply_auto_close(
+    mut state: FOTabState,
+    leaf: usize,
+    node: usize,
+) -> FOTabResult<FOTabState> {
+    todo!()
+}
+
+pub fn apply_close_assign(
+    mut state: FOTabState,
+    leaf: usize,
+    node: usize,
+    var_assign: HashMap<KStr, FOTerm>,
+) -> FOTabResult<FOTabState> {
+    todo!()
+}
+
+pub fn apply_expand(mut state: FOTabState, leaf: usize, clause: usize) -> FOTabResult<FOTabState> {
+    todo!()
+}
+
+pub fn apply_lemma(mut state: FOTabState, leaf: usize, lemma: usize) -> FOTabResult<FOTabState> {
+    todo!()
+}
+
+pub fn apply_undo(mut state: FOTabState) -> FOTabResult<FOTabState> {
+    todo!()
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum FOTabMove {}
+pub enum FOTabMove {
+    AutoClose(usize, usize),
+    CloseAssign(usize, usize, HashMap<KStr, FOTerm>),
+    Expand(usize, usize),
+    Lemma(usize, usize),
+    Undo,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FOTabState<'f> {
@@ -23,6 +120,7 @@ pub struct FOTabState<'f> {
     moves: Vec<FOTabMove>,
     used_backtracking: bool,
     expansion_counter: u32,
+    status_msg: Option<String>,
 }
 
 impl<'f> FOTabState<'f> {
@@ -48,7 +146,23 @@ impl<'f> FOTabState<'f> {
         false
     }
 
-    fn apply_var_instantiation(&mut self, var_assign: HashMap<&'f str, FOTerm>) {}
+    fn apply_var_instantiation(&mut self, var_assign: HashMap<KStr, FOTerm>) {
+        let mut instantiator = VariableInstantiator(var_assign);
+
+        self.nodes = self
+            .nodes
+            .iter()
+            .map(|n| {
+                let mut relation = n.relation.clone();
+                relation.args = relation
+                    .args
+                    .iter()
+                    .map(|a| instantiator.visit(a))
+                    .collect();
+                FOTabNode::new(n.parent, relation, n.negated, n.lemma_source)
+            })
+            .collect()
+    }
 }
 
 impl<'f> TableauxState<Relation<'f>> for FOTabState<'f> {
@@ -110,11 +224,16 @@ impl<'f> TableauxState<Relation<'f>> for FOTabState<'f> {
         &self,
         clause: &'c crate::clause::Clause<Relation<'f>>,
     ) -> Vec<crate::clause::Atom<Relation<'f>>> {
-        let suffix_appender = ();
+        let mut suffix_appender = VariableSuffixAppend(format!("_{}", self.expansion_counter + 1));
         let mut atom_list = Vec::new();
 
         for atom in clause.atoms() {
-            let new_args = atom.lit().args.iter().map(|a| a.clone()).collect();
+            let new_args = atom
+                .lit()
+                .args
+                .iter()
+                .map(|a| suffix_appender.visit(&a.clone()))
+                .collect();
             let rel = Relation::new(atom.lit().spelling, new_args);
             atom_list.push(Atom::new(rel, atom.negated()));
         }
