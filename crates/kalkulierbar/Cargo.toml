@@ -12,3 +12,4 @@ lazy_static = "1.4.0"
 serde = { version = "1.0.57", features = ["derive"] }
 sha3 = "0.9.1"
 scoped-tls = "1.0.0"
+smallvec = "1.8.0"

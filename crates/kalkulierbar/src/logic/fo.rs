@@ -2,21 +2,24 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::KStr;
+use crate::symbol::Symbol;
 
 #[derive(Clone, Debug, Serialize)]
-pub struct Relation<'f> {
-    pub spelling: &'f str,
+pub struct Relation {
+    pub spelling: Symbol,
     pub args: Vec<FOTerm>,
 }
 
-impl<'l> Relation<'l> {
-    pub fn new(spelling: &'l str, args: Vec<FOTerm>) -> Self {
-        Self { spelling, args }
+impl Relation {
+    pub fn new(spelling: Symbol, args: Vec<FOTerm>) -> Self {
+        Self {
+            spelling: spelling,
+            args,
+        }
     }
 }
 
-impl<'de: 'l, 'l> Deserialize<'de> for Relation<'l> {
+impl<'de: 'l, 'l> Deserialize<'de> for Relation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -25,7 +28,7 @@ impl<'de: 'l, 'l> Deserialize<'de> for Relation<'l> {
     }
 }
 
-impl<'l> fmt::Display for Relation<'l> {
+impl<'l> fmt::Display for Relation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
@@ -33,9 +36,9 @@ impl<'l> fmt::Display for Relation<'l> {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum FOTerm {
-    QuantifiedVar(KStr),
-    Const(KStr),
-    Function(KStr, Vec<FOTerm>),
+    QuantifiedVar(Symbol),
+    Const(Symbol),
+    Function(Symbol, Vec<FOTerm>),
 }
 
 impl Serialize for FOTerm {

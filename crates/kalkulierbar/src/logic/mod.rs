@@ -4,7 +4,7 @@ pub mod unify;
 
 use std::fmt;
 
-use crate::KStr;
+use crate::symbol::Symbol;
 
 use fo::FOTerm;
 
@@ -14,15 +14,15 @@ use self::transform::{to_basic::ToBasicOps, visitor::LogicNodeVisitor};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {
-    Var(KStr),
+    Var(Symbol),
     Not(Box<LogicNode>),
     And(Box<LogicNode>, Box<LogicNode>),
     Or(Box<LogicNode>, Box<LogicNode>),
     Impl(Box<LogicNode>, Box<LogicNode>),
     Equiv(Box<LogicNode>, Box<LogicNode>),
-    Rel(KStr, Vec<FOTerm>),
-    All(KStr, Box<LogicNode>, Vec<KStr>),
-    Ex(KStr, Box<LogicNode>, Vec<KStr>),
+    Rel(Symbol, Vec<FOTerm>),
+    All(Symbol, Box<LogicNode>, Vec<Symbol>),
+    Ex(Symbol, Box<LogicNode>, Vec<Symbol>),
 }
 
 impl LogicNode {
@@ -61,104 +61,126 @@ impl fmt::Display for LogicNode {
 #[cfg(test)]
 mod tests {
     use super::LogicNode::*;
+    use crate::session;
+    use crate::symbol::Symbol;
 
     #[test]
     fn var_to_basic_ops() {
-        assert_eq!(Var("a".into()), Var("a".into()).to_basic_ops());
-        assert_eq!(
-            Var("MyTestVar".into()),
-            Var("MyTestVar".into()).to_basic_ops()
-        );
-        assert_eq!(
-            Var("MyT35tV4r".into()),
-            Var("MyT35tV4r".into()).to_basic_ops()
-        );
+        session(|| {
+            assert_eq!(
+                Var(Symbol::intern("a")),
+                Var(Symbol::intern("a")).to_basic_ops()
+            );
+            assert_eq!(
+                Var(Symbol::intern("MyTestVar")),
+                Var(Symbol::intern("MyTestVar")).to_basic_ops()
+            );
+            assert_eq!(
+                Var(Symbol::intern("MyT35tV4r")),
+                Var(Symbol::intern("MyT35tV4r")).to_basic_ops()
+            );
+        })
     }
 
     #[test]
     fn not_to_basic_ops() {
-        let n1 = Not(Box::new(Var("a".into())));
-        let n2 = Not(Box::new(Equiv(
-            Box::new(Not(Box::new(Not(Box::new(Var("b".into())))))),
-            Box::new(Var("a".into())),
-        )));
-        let n3 = Not(Box::new(And(
-            Box::new(Or(
-                Box::new(Var("a".into())),
-                Box::new(Not(Box::new(Var("a".into())))),
-            )),
-            Box::new(Not(Box::new(Var("c".into())))),
-        )));
+        session(|| {
+            let n1 = Not(Box::new(Var(Symbol::intern("a"))));
+            let n2 = Not(Box::new(Equiv(
+                Box::new(Not(Box::new(Not(Box::new(Var(Symbol::intern("b"))))))),
+                Box::new(Var(Symbol::intern("a"))),
+            )));
+            let n3 = Not(Box::new(And(
+                Box::new(Or(
+                    Box::new(Var(Symbol::intern("a"))),
+                    Box::new(Not(Box::new(Var(Symbol::intern("a"))))),
+                )),
+                Box::new(Not(Box::new(Var(Symbol::intern("c"))))),
+            )));
 
-        assert_eq!("¬a".to_string(), n1.to_basic_ops().to_string());
-        assert_eq!(
-            "¬((¬¬b ∧ a) ∨ (¬¬¬b ∧ ¬a))".to_string(),
-            n2.to_basic_ops().to_string()
-        );
-        assert_eq!(
-            "¬((a ∨ ¬a) ∧ ¬c)".to_string(),
-            n3.to_basic_ops().to_string()
-        );
+            assert_eq!("¬a".to_string(), n1.to_basic_ops().to_string());
+            assert_eq!(
+                "¬((¬¬b ∧ a) ∨ (¬¬¬b ∧ ¬a))".to_string(),
+                n2.to_basic_ops().to_string()
+            );
+            assert_eq!(
+                "¬((a ∨ ¬a) ∧ ¬c)".to_string(),
+                n3.to_basic_ops().to_string()
+            );
+        })
     }
 
     #[test]
     fn and_to_basic_ops() {
-        let a1 = And(
-            Box::new(Not(Box::new(Var("a".into())))),
-            Box::new(And(
-                Box::new(Var("b".into())),
-                Box::new(Impl(Box::new(Var("b".into())), Box::new(Var("a".into())))),
-            )),
-        );
-        let a2 = And(
-            Box::new(Var("a".into())),
-            Box::new(Not(Box::new(Var("a".into())))),
-        );
-        let a3 = And(
-            Box::new(Or(
-                Box::new(Var("a".into())),
-                Box::new(Not(Box::new(Var("a".into())))),
-            )),
-            Box::new(Var("b".into())),
-        );
+        session(|| {
+            let a1 = And(
+                Box::new(Not(Box::new(Var(Symbol::intern("a"))))),
+                Box::new(And(
+                    Box::new(Var(Symbol::intern("b"))),
+                    Box::new(Impl(
+                        Box::new(Var(Symbol::intern("b"))),
+                        Box::new(Var(Symbol::intern("a"))),
+                    )),
+                )),
+            );
+            let a2 = And(
+                Box::new(Var(Symbol::intern("a"))),
+                Box::new(Not(Box::new(Var(Symbol::intern("a"))))),
+            );
+            let a3 = And(
+                Box::new(Or(
+                    Box::new(Var(Symbol::intern("a"))),
+                    Box::new(Not(Box::new(Var(Symbol::intern("a"))))),
+                )),
+                Box::new(Var(Symbol::intern("b"))),
+            );
 
-        assert_eq!(
-            "(¬a ∧ (b ∧ (¬b ∨ a)))".to_string(),
-            a1.to_basic_ops().to_string()
-        );
-        assert_eq!("(a ∧ ¬a)".to_string(), a2.to_basic_ops().to_string());
-        assert_eq!("((a ∨ ¬a) ∧ b)".to_string(), a3.to_basic_ops().to_string());
+            assert_eq!(
+                "(¬a ∧ (b ∧ (¬b ∨ a)))".to_string(),
+                a1.to_basic_ops().to_string()
+            );
+            assert_eq!("(a ∧ ¬a)".to_string(), a2.to_basic_ops().to_string());
+            assert_eq!("((a ∨ ¬a) ∧ b)".to_string(), a3.to_basic_ops().to_string());
+        })
     }
 
     #[test]
     fn or_to_basic_ops() {
-        let o1 = Or(Box::new(Var("a".into())), Box::new(Var("b".into())));
-        let o2 = Or(
-            Box::new(Or(
-                Box::new(Var("a".into())),
-                Box::new(Not(Box::new(Var("b".into())))),
-            )),
-            Box::new(Equiv(Box::new(Var("a".into())), Box::new(Var("b".into())))),
-        );
-        let o3 = Or(
-            Box::new(Not(Box::new(And(
-                Box::new(Var("a".into())),
-                Box::new(Var("b".into())),
-            )))),
-            Box::new(Not(Box::new(Impl(
-                Box::new(Var("b".into())),
-                Box::new(Not(Box::new(Var("b".into())))),
-            )))),
-        );
+        session(|| {
+            let o1 = Or(
+                Box::new(Var(Symbol::intern("a"))),
+                Box::new(Var(Symbol::intern("b"))),
+            );
+            let o2 = Or(
+                Box::new(Or(
+                    Box::new(Var(Symbol::intern("a"))),
+                    Box::new(Not(Box::new(Var(Symbol::intern("b"))))),
+                )),
+                Box::new(Equiv(
+                    Box::new(Var(Symbol::intern("a"))),
+                    Box::new(Var(Symbol::intern("b"))),
+                )),
+            );
+            let o3 = Or(
+                Box::new(Not(Box::new(And(
+                    Box::new(Var(Symbol::intern("a"))),
+                    Box::new(Var(Symbol::intern("b"))),
+                )))),
+                Box::new(Not(Box::new(Impl(
+                    Box::new(Var(Symbol::intern("b"))),
+                    Box::new(Not(Box::new(Var(Symbol::intern("b"))))),
+                )))),
+            );
 
-        assert_eq!("(a ∨ b)".to_string(), o1.to_basic_ops().to_string());
-        assert_eq!(
-            "((a ∨ ¬b) ∨ ((a ∧ b) ∨ (¬a ∧ ¬b)))".to_string(),
-            o2.to_basic_ops().to_string()
-        );
-        assert_eq!(
-            "(¬(a ∧ b) ∨ ¬(¬b ∨ ¬b))".to_string(),
-            o3.to_basic_ops().to_string()
-        );
+            assert_eq!("(a ∨ b)".to_string(), o1.to_basic_ops().to_string());
+            assert_eq!(
+                "((a ∨ ¬b) ∨ ((a ∧ b) ∨ (¬a ∧ ¬b)))".to_string(),
+                o2.to_basic_ops().to_string()
+            );
+            assert_eq!(
+                "(¬(a ∧ b) ∨ ¬(¬b ∨ ¬b))".to_string(),
+                o3.to_basic_ops().to_string()
+            );
+        })
     }
 }

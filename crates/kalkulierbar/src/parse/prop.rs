@@ -3,6 +3,7 @@ use std::iter::Peekable;
 use crate::{
     logic::LogicNode,
     parse::{ParseErr, ParseResult, Token, TokenKind},
+    symbol::Symbol,
 };
 
 use super::Tokenizer;
@@ -103,7 +104,7 @@ impl<'f> PropParser<'f> {
             return Err(ParseErr::Expected("identifier".to_string(), self.got_msg()));
         }
 
-        let exp = Box::new(LogicNode::Var(self.cur_token()?.spelling.into()));
+        let exp = Box::new(LogicNode::Var(Symbol::intern(self.cur_token()?.spelling)));
         self.bump()?;
         Ok(exp)
     }
@@ -130,7 +131,7 @@ impl<'f> PropParser<'f> {
     }
 
     fn eat(&mut self, expected: TokenKind) -> ParseResult<()> {
-        if self.next_is(expected.clone()) {
+        if self.next_is(expected) {
             self.bump()
         } else {
             Err(ParseErr::Expected(expected.to_string(), self.got_msg()))
@@ -159,12 +160,15 @@ impl<'f> PropParser<'f> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session;
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
             $(
-                let cs = $func($f).expect($f);
-                assert_eq!($e, cs.to_string());
+                session(|| {
+                    let cs = $func($f).expect($f);
+                    assert_eq!($e, cs.to_string());
+                });
             )*
         }};
     }
@@ -172,8 +176,10 @@ mod tests {
     macro_rules! test_list_invalid {
         ($func:ident, $( $f:expr ),*) => {{
             $(
-                let res = $func($f);
-                assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
+                session(|| {
+                    let res = $func($f);
+                    assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
+                });
             )*
         }};
     }

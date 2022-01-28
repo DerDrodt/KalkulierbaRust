@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{ParseErr, ParseResult};
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::KStr;
+use crate::symbol::Symbol;
 
 #[derive(Deserialize, Serialize)]
 pub enum CNFStrategy {
@@ -16,7 +16,7 @@ pub enum CNFStrategy {
     Optimal,
 }
 
-pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<KStr>> {
+pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<Symbol>> {
     ClauseSetParser::parse(formula)
 }
 
@@ -128,14 +128,14 @@ pub struct ClauseSetParser<'f> {
 }
 
 impl<'f> ClauseSetParser<'f> {
-    pub fn parse(formula: &'f str) -> ParseResult<ClauseSet<KStr>> {
+    pub fn parse(formula: &'f str) -> ParseResult<ClauseSet<Symbol>> {
         let tokens: ClauseSetTokenizer = formula.into();
         let p = tokens.peekable();
         let mut parser = ClauseSetParser { tokens: p };
         parser.parse_cs()
     }
 
-    fn parse_cs(&mut self) -> ParseResult<ClauseSet<KStr>> {
+    fn parse_cs(&mut self) -> ParseResult<ClauseSet<Symbol>> {
         let mut cs = vec![self.parse_c()?];
 
         while self.semi() && self.tokens.peek().is_some() {
@@ -145,7 +145,7 @@ impl<'f> ClauseSetParser<'f> {
         Ok(ClauseSet::new(cs))
     }
 
-    fn parse_c(&mut self) -> ParseResult<Clause<KStr>> {
+    fn parse_c(&mut self) -> ParseResult<Clause<Symbol>> {
         let mut c = vec![self.parse_atom()?];
 
         while self.comma() {
@@ -155,19 +155,19 @@ impl<'f> ClauseSetParser<'f> {
         Ok(Clause::new(c))
     }
 
-    fn parse_atom(&mut self) -> ParseResult<Atom<KStr>> {
+    fn parse_atom(&mut self) -> ParseResult<Atom<Symbol>> {
         let negated = self.em();
         Ok(Atom::new(self.parse_spelling()?, negated))
     }
 
-    fn parse_spelling(&mut self) -> ParseResult<KStr> {
+    fn parse_spelling(&mut self) -> ParseResult<Symbol> {
         match self.tokens.next() {
             Some(Err(e)) => Err(e),
             Some(Ok(Token {
                 spelling,
                 kind: TokenKind::Ident,
                 ..
-            })) => Ok(spelling.into()),
+            })) => Ok(Symbol::intern(spelling)),
             Some(Ok(t)) => Err(ParseErr::Expected("identifier".to_string(), t.to_string())),
             None => Err(ParseErr::Expected(
                 "identifier".to_string(),
@@ -206,12 +206,15 @@ impl<'f> ClauseSetParser<'f> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session;
 
     macro_rules! test_map {
         ($func:ident, $( $f:expr, $e:expr );*) => {{
             $(
-                let cs = $func($f).expect($f);
-                assert_eq!($e, cs.to_string());
+                session(|| {
+                    let cs = $func($f).expect($f);
+                    assert_eq!($e, cs.to_string());
+                });
             )*
         }};
     }
@@ -219,8 +222,10 @@ mod tests {
     macro_rules! test_list_invalid {
         ($func:ident, $( $f:expr ),*) => {{
             $(
-                let res = $func($f);
-                assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
+                session(|| {
+                    let res = $func($f);
+                    assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
+                });
             )*
         }};
     }

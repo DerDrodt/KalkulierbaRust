@@ -1,5 +1,5 @@
 use super::fo::Relation;
 
-pub fn unify<'l>(rel1: &Relation<'l>, rel2: &Relation<'l>) -> Result<(), &'static str> {
+pub fn unify(rel1: &Relation, rel2: &Relation) -> Result<(), &'static str> {
     todo!()
 }

@@ -3,7 +3,9 @@ use std::fmt;
 pub use clause_set::{parse_clause_set, CNFStrategy};
 pub use prop::parse_prop_formula;
 
-use crate::{clause::ClauseSet, logic::transform::FormulaConversionErr, logic::LogicNode, KStr};
+use crate::{
+    clause::ClauseSet, logic::transform::FormulaConversionErr, logic::LogicNode, symbol::Symbol,
+};
 
 pub mod clause_set;
 pub mod fo;
@@ -11,7 +13,10 @@ pub mod prop;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
 
-pub fn parse_flexible<'f>(formula: &'f str, strategy: CNFStrategy) -> ParseResult<ClauseSet<KStr>> {
+pub fn parse_flexible<'f>(
+    formula: &'f str,
+    strategy: CNFStrategy,
+) -> ParseResult<ClauseSet<Symbol>> {
     let likely_formula = formula.contains(|c| match c {
         '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
         _ => false,
@@ -47,7 +52,7 @@ pub fn parse_flexible<'f>(formula: &'f str, strategy: CNFStrategy) -> ParseResul
 fn to_cnf(
     node: &LogicNode,
     strategy: CNFStrategy,
-) -> Result<ClauseSet<KStr>, FormulaConversionErr> {
+) -> Result<ClauseSet<Symbol>, FormulaConversionErr> {
     match strategy {
         CNFStrategy::Naive => node.naive_cnf(),
         CNFStrategy::Tseytin => node.tseytin_cnf(),
@@ -65,6 +70,8 @@ fn to_cnf(
 pub enum ParseErr {
     Expected(String, String),
     InvalidFormat,
+    UnboundVar(String),
+    UnboundVars(Vec<String>),
     EmptyToken,
 }
 
@@ -74,6 +81,19 @@ impl fmt::Display for ParseErr {
             ParseErr::Expected(expected, got) => write!(f, "Expected {} but got {}", expected, got),
             ParseErr::InvalidFormat => write!(f, "Please use alphanumeric variables only, separate atoms with ',' and clauses with ';'."),
             ParseErr::EmptyToken => write!(f, "Encountered an empty token"),
+            ParseErr::UnboundVars(v) => {
+                let mut vs = String::new();
+
+                for (i, var) in v.iter().enumerate() {
+                    if i > 0 {
+                        vs.push_str(", ");
+                    }
+                    vs.push_str(var);
+                }
+
+                write!(f, "Unbound variables found: {}", vs)
+            }
+            ParseErr::UnboundVar(v) => write!(f, "Unbound var {}",v)
         }
     }
 }
@@ -90,7 +110,7 @@ impl<'t> fmt::Display for Token<'t> {
         write!(f, "{}", self.spelling)
     }
 }
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
     And,
     Or,

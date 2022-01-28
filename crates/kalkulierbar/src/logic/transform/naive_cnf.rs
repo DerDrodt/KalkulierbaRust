@@ -1,7 +1,7 @@
 use crate::{
     clause::{Atom, Clause, ClauseSet},
     logic::LogicNode,
-    KStr,
+    symbol::Symbol,
 };
 
 use super::visitor::LogicNodeVisitor;
@@ -18,10 +18,10 @@ impl NaiveCNF {
 pub struct FormulaConversionErr;
 
 impl LogicNodeVisitor for NaiveCNF {
-    type Ret = Result<ClauseSet<KStr>, FormulaConversionErr>;
+    type Ret = Result<ClauseSet<Symbol>, FormulaConversionErr>;
 
-    fn visit_var(&mut self, spelling: &KStr) -> Self::Ret {
-        let a = Atom::new(spelling.clone(), false);
+    fn visit_var(&mut self, spelling: Symbol) -> Self::Ret {
+        let a = Atom::new(spelling, false);
         let c = Clause::new(vec![a]);
         Ok(ClauseSet::new(vec![c]))
     }
@@ -29,7 +29,7 @@ impl LogicNodeVisitor for NaiveCNF {
     fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
         match child {
             crate::logic::LogicNode::Var(s) => {
-                let a = Atom::new(s.clone(), true);
+                let a = Atom::new(*s, true);
                 let c = Clause::new(vec![a]);
                 Ok(ClauseSet::new(vec![c]))
             }
@@ -71,8 +71,8 @@ impl LogicNodeVisitor for NaiveCNF {
         left: &crate::logic::LogicNode,
         right: &crate::logic::LogicNode,
     ) -> Self::Ret {
-        let left: Vec<Clause<KStr>> = self.visit(left)?.into();
-        let right: Vec<Clause<KStr>> = self.visit(right)?.into();
+        let left: Vec<Clause<Symbol>> = self.visit(left)?.into();
+        let right: Vec<Clause<Symbol>> = self.visit(right)?.into();
 
         if left.len() * right.len() > crate::CNF_BLOWUP_LIMIT as usize {
             Err(FormulaConversionErr)
@@ -80,7 +80,7 @@ impl LogicNodeVisitor for NaiveCNF {
             let mut clauses = vec![];
             for lc in left.into_iter() {
                 for rc in right.clone().into_iter() {
-                    let mut atoms: Vec<Atom<KStr>> = lc.clone().into();
+                    let mut atoms: Vec<Atom<Symbol>> = lc.clone().into();
                     atoms.append(&mut rc.into());
                     let clause = Clause::new(atoms);
                     clauses.push(clause);
@@ -109,24 +109,24 @@ impl LogicNodeVisitor for NaiveCNF {
         self.visit(&n)
     }
 
-    fn visit_rel(&mut self, _spelling: &KStr, _args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, _spelling: Symbol, _args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 
     fn visit_all(
         &mut self,
-        _var: &KStr,
+        _var: Symbol,
         _child: &crate::logic::LogicNode,
-        _bound_vars: &Vec<KStr>,
+        _bound_vars: &Vec<Symbol>,
     ) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 
     fn visit_ex(
         &mut self,
-        _var: &KStr,
+        _var: Symbol,
         _child: &crate::logic::LogicNode,
-        _bound_vars: &Vec<KStr>,
+        _bound_vars: &Vec<Symbol>,
     ) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
