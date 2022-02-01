@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::symbol::Symbol;
 
-use super::visitor::{LogicNodeVisitor, MutFOTermVisitor};
+use super::visitor::{MutFOTermVisitor, MutLogicNodeVisitor};
 use super::{super::LogicNode, term_manipulator::QuantifierLinker};
 
 pub struct ToBasicOps {
@@ -17,7 +17,7 @@ impl ToBasicOps {
     }
 }
 
-impl<'a> LogicNodeVisitor for ToBasicOps {
+impl<'a> MutLogicNodeVisitor for ToBasicOps {
     type Ret = LogicNode;
 
     fn visit_var(&mut self, spelling: Symbol) -> Self::Ret {
@@ -82,7 +82,10 @@ impl<'a> LogicNodeVisitor for ToBasicOps {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session;
+    use crate::{
+        logic::{fo::FOTerm, LogicNode},
+        session,
+    };
 
     fn var(s: &str) -> LogicNode {
         LogicNode::Var(Symbol::intern(s))
@@ -106,6 +109,34 @@ mod tests {
 
     fn equiv(l: LogicNode, r: LogicNode) -> LogicNode {
         LogicNode::Equiv(Box::new(l), Box::new(r))
+    }
+
+    macro_rules! rel {
+        ($name:expr, $( $arg:expr ),*) => {
+            LogicNode::Rel(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    macro_rules! all {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! ex {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! func {
+        ($name:expr, $( $arg:expr ),*) => {
+            FOTerm::Function(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    fn q_var(s: &str) -> FOTerm {
+        FOTerm::QuantifiedVar(Symbol::intern(s))
     }
 
     fn v1() -> LogicNode {
@@ -159,6 +190,57 @@ mod tests {
         )
     }
 
+    fn u1() -> LogicNode {
+        all!("X", or(var("X"), not(var("X"))))
+    }
+
+    fn u2() -> LogicNode {
+        all!(
+            "X",
+            ex!(
+                "Y",
+                all!(
+                    "Z",
+                    and(
+                        rel!("R", q_var("X"), q_var("Y")),
+                        rel!("R", q_var("Y"), q_var("Z"))
+                    )
+                )
+            )
+        )
+    }
+
+    fn u3() -> LogicNode {
+        all!(
+            "Number1",
+            ex!(
+                "Number2",
+                rel!("Greater", q_var("Number1"), q_var("Number2"))
+            )
+        )
+    }
+
+    fn e1() -> LogicNode {
+        ex!("C", not(rel!("Q", q_var("C"))))
+    }
+
+    fn e2() -> LogicNode {
+        ex!(
+            "X",
+            all!(
+                "Y",
+                rel!("=", q_var("Y"), func!("m", q_var("X"), q_var("Y")))
+            )
+        )
+    }
+
+    fn e3() -> LogicNode {
+        ex!(
+            "El",
+            imp(rel!("P", q_var("El")), all!("Y", rel!("P", q_var("Y"))))
+        )
+    }
+
     #[test]
     fn test_var() {
         session(|| {
@@ -200,6 +282,36 @@ mod tests {
             assert_eq!(
                 "(¬(a ∧ b) ∨ ¬(¬b ∨ ¬b))",
                 format!("{}", o3().to_basic_ops())
+            );
+        })
+    }
+
+    #[test]
+    fn test_all() {
+        session(|| {
+            assert_eq!("(∀X: (X ∨ ¬X))", format!("{}", u1().to_basic_ops()));
+            assert_eq!(
+                "(∀X: (∃Y: (∀Z: (R(X, Y) ∧ R(Y, Z)))))",
+                format!("{}", u2().to_basic_ops())
+            );
+            assert_eq!(
+                "(∀Number1: (∃Number2: Greater(Number1, Number2)))",
+                format!("{}", u3().to_basic_ops())
+            );
+        })
+    }
+
+    #[test]
+    fn test_ex() {
+        session(|| {
+            assert_eq!("(∃C: ¬Q(C))", format!("{}", e1().to_basic_ops()));
+            assert_eq!(
+                "(∃X: (∀Y: =(Y, m(X, Y))))",
+                format!("{}", e2().to_basic_ops())
+            );
+            assert_eq!(
+                "(∃El: (¬P(El) ∨ (∀Y: P(Y))))",
+                format!("{}", e3().to_basic_ops())
             );
         })
     }

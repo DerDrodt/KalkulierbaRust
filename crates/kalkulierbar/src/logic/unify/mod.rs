@@ -7,6 +7,7 @@ use super::{
     transform::{term_manipulator::TermContainsVariableChecker, visitor::FOTermVisitor},
 };
 
+#[derive(Debug)]
 pub enum UnificationErr {
     DifferentRels(Relation, Relation),
     DifferentNum(Relation, Relation),
@@ -116,4 +117,65 @@ fn unify_terms<'a>(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, Unificat
     }
 
     Ok(mgu)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hash;
+
+    use super::*;
+    use crate::session;
+
+    macro_rules! rel {
+        ($name:expr, $( $arg:expr ),*) => {
+            Relation::new(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    macro_rules! all {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! ex {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! func {
+        ($name:expr, $( $arg:expr ),*) => {
+            FOTerm::Function(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    fn q_var(s: &str) -> FOTerm {
+        FOTerm::QuantifiedVar(Symbol::intern(s))
+    }
+
+    fn con(s: &str) -> FOTerm {
+        FOTerm::Const(Symbol::intern(s))
+    }
+
+    #[test]
+    fn test_unify() {
+        session(|| {
+            let mgu = unify(
+                &rel!("R", func!("f", q_var("X")), func!("g", con("c"))),
+                &rel!("R", func!("f", q_var("Y")), q_var("Y")),
+            )
+            .unwrap();
+
+            let mut map = HashMap::new();
+            map.insert(Symbol::intern("X"), func!("g", con("c")));
+            map.insert(Symbol::intern("Y"), func!("g", con("c")));
+
+            assert_eq!(map.len(), mgu.0.len());
+
+            for (key, val) in map {
+                assert!(val.syn_eq(mgu.get(key)), "{}!={}", val, mgu.get(key))
+            }
+        })
+    }
 }

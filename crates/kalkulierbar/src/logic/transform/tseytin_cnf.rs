@@ -4,7 +4,7 @@ use crate::{
     symbol::Symbol,
 };
 
-use super::visitor::LogicNodeVisitor;
+use super::visitor::MutLogicNodeVisitor;
 
 pub struct TseytinCNF {
     pub clause_set: ClauseSet<Symbol>,
@@ -39,7 +39,7 @@ impl TseytinCNF {
     }
 }
 
-impl LogicNodeVisitor for TseytinCNF {
+impl MutLogicNodeVisitor for TseytinCNF {
     type Ret = ();
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
@@ -183,7 +183,7 @@ impl LogicNodeVisitor for TseytinCNF {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session;
+    use crate::{logic::fo::FOTerm, session};
 
     fn var(s: &str) -> LogicNode {
         LogicNode::Var(Symbol::intern(s))
@@ -207,6 +207,28 @@ mod tests {
 
     fn equiv(l: LogicNode, r: LogicNode) -> LogicNode {
         LogicNode::Equiv(Box::new(l), Box::new(r))
+    }
+
+    macro_rules! rel {
+        ($name:expr, $( $arg:expr ),*) => {
+            LogicNode::Rel(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    macro_rules! all {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! ex {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    fn q_var(s: &str) -> FOTerm {
+        FOTerm::QuantifiedVar(Symbol::intern(s))
     }
 
     fn v1() -> LogicNode {
@@ -260,6 +282,14 @@ mod tests {
         )
     }
 
+    fn u1() -> LogicNode {
+        all!("X", or(var("X"), not(var("X"))))
+    }
+
+    fn e1() -> LogicNode {
+        ex!("C", not(rel!("Q", q_var("C"))))
+    }
+
     #[test]
     fn test_var() {
         session(|| {
@@ -303,5 +333,17 @@ mod tests {
             assert_eq!("{or0}, {!varb, !not3}, {varb, not3}, {!vara, or1}, {!not3, or1}, {vara, not3, !or1}, {vara, !varb, !equiv5}, {!vara, varb, !equiv5}, {!vara, !varb, equiv5}, {vara, varb, equiv5}, {!or1, or0}, {!equiv5, or0}, {or1, equiv5, !or0}", format!("{}", o2().tseytin_cnf().unwrap()));
             assert_eq!("{or0}, {vara, !and2}, {varb, !and2}, {!vara, !varb, and2}, {!and2, !not1}, {and2, not1}, {!varb, !not8}, {varb, not8}, {varb, impl6}, {!not8, impl6}, {!varb, not8, !impl6}, {!impl6, !not5}, {impl6, not5}, {!not1, or0}, {!not5, or0}, {not1, not5, !or0}", format!("{}", o3().tseytin_cnf().unwrap()));
         })
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_all() {
+        u1().tseytin_cnf().unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ex() {
+        e1().tseytin_cnf().unwrap();
     }
 }

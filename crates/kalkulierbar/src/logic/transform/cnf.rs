@@ -8,7 +8,7 @@ use serde::{
 use super::super::LogicNode;
 use super::naive_cnf::{FormulaConversionErr, NaiveCNF};
 use super::tseytin_cnf::TseytinCNF;
-use super::visitor::LogicNodeVisitor;
+use super::visitor::MutLogicNodeVisitor;
 use crate::clause::{Atom, Clause, ClauseSet};
 use crate::symbol::Symbol;
 

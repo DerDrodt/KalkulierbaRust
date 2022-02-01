@@ -12,10 +12,7 @@ pub struct Relation {
 
 impl Relation {
     pub fn new(spelling: Symbol, args: Vec<FOTerm>) -> Self {
-        Self {
-            spelling: spelling,
-            args,
-        }
+        Self { spelling, args }
     }
 }
 
@@ -30,7 +27,16 @@ impl<'de: 'l, 'l> Deserialize<'de> for Relation {
 
 impl<'l> fmt::Display for Relation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+        let mut arg_str = String::new();
+
+        for (i, a) in self.args.iter().enumerate() {
+            if i > 0 {
+                arg_str.push_str(", ");
+            }
+            arg_str.push_str(&a.to_string());
+        }
+
+        write!(f, "{}({})", self.spelling, arg_str)
     }
 }
 

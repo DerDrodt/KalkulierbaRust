@@ -10,7 +10,7 @@ use fo::FOTerm;
 
 pub use transform::Lit;
 
-use self::transform::{to_basic::ToBasicOps, visitor::LogicNodeVisitor};
+use self::transform::{to_basic::ToBasicOps, visitor::MutLogicNodeVisitor};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {

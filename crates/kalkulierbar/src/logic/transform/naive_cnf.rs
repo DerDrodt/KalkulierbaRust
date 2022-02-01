@@ -4,7 +4,7 @@ use crate::{
     symbol::Symbol,
 };
 
-use super::visitor::LogicNodeVisitor;
+use super::visitor::MutLogicNodeVisitor;
 
 pub struct NaiveCNF;
 
@@ -17,7 +17,7 @@ impl NaiveCNF {
 #[derive(Debug)]
 pub struct FormulaConversionErr;
 
-impl LogicNodeVisitor for NaiveCNF {
+impl MutLogicNodeVisitor for NaiveCNF {
     type Ret = Result<ClauseSet<Symbol>, FormulaConversionErr>;
 
     fn visit_var(&mut self, spelling: Symbol) -> Self::Ret {
@@ -135,7 +135,7 @@ impl LogicNodeVisitor for NaiveCNF {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session;
+    use crate::{logic::fo::FOTerm, session};
 
     fn var(s: &str) -> LogicNode {
         LogicNode::Var(Symbol::intern(s))
@@ -159,6 +159,28 @@ mod tests {
 
     fn equiv(l: LogicNode, r: LogicNode) -> LogicNode {
         LogicNode::Equiv(Box::new(l), Box::new(r))
+    }
+
+    macro_rules! rel {
+        ($name:expr, $( $arg:expr ),*) => {
+            LogicNode::Rel(Symbol::intern($name), vec![$($arg),*])
+        };
+    }
+
+    macro_rules! all {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    macro_rules! ex {
+        ($name:expr, $child:expr $(, $arg:expr )*) => {
+            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
+        };
+    }
+
+    fn q_var(s: &str) -> FOTerm {
+        FOTerm::QuantifiedVar(Symbol::intern(s))
     }
 
     fn v1() -> LogicNode {
@@ -212,6 +234,14 @@ mod tests {
         )
     }
 
+    fn u1() -> LogicNode {
+        all!("X", or(var("X"), not(var("X"))))
+    }
+
+    fn e1() -> LogicNode {
+        ex!("C", not(rel!("Q", q_var("C"))))
+    }
+
     #[test]
     fn test_var() {
         session(|| {
@@ -258,5 +288,17 @@ mod tests {
                 format!("{}", o3().naive_cnf().unwrap())
             );
         })
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_all() {
+        u1().naive_cnf().unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ex() {
+        e1().naive_cnf().unwrap();
     }
 }

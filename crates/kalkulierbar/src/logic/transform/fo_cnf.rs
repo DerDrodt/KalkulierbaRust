@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Debug};
 
 use crate::{
     clause::{Atom, Clause, ClauseSet},
@@ -7,16 +7,21 @@ use crate::{
     symbol::Symbol,
 };
 
-use super::visitor::LogicNodeVisitor;
+use super::{
+    skolem_normal::{skolem_normal_form, SkolemNormalFormErr},
+    visitor::MutLogicNodeVisitor,
+};
 
 pub fn fo_cnf(formula: LogicNode) -> Result<ClauseSet<Relation>, FOCNFErr> {
-    todo!()
+    let mut cnf = FOCNF;
+    cnf.visit(&skolem_normal_form(formula)?)
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum FOCNFErr {
     UnknownNode,
     HeavyBlowUp,
+    SkolemErr(SkolemNormalFormErr),
 }
 
 impl fmt::Display for FOCNFErr {
@@ -24,13 +29,20 @@ impl fmt::Display for FOCNFErr {
         match self {
             FOCNFErr::UnknownNode => write!(f, ""),
             FOCNFErr::HeavyBlowUp => write!(f, ""),
+            FOCNFErr::SkolemErr(e) => fmt::Display::fmt(&e, f),
         }
+    }
+}
+
+impl From<SkolemNormalFormErr> for FOCNFErr {
+    fn from(e: SkolemNormalFormErr) -> Self {
+        Self::SkolemErr(e)
     }
 }
 
 struct FOCNF;
 
-impl LogicNodeVisitor for FOCNF {
+impl MutLogicNodeVisitor for FOCNF {
     type Ret = Result<ClauseSet<Relation>, FOCNFErr>;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
@@ -122,5 +134,38 @@ impl LogicNodeVisitor for FOCNF {
 
     fn visit_ex(&mut self, _: Symbol, _: &crate::logic::LogicNode, _: &Vec<Symbol>) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse::fo::parse_fo_formula, session};
+
+    #[test]
+    fn valid() {
+        let formulas = vec![
+            (
+                "R(a) -> R(b) | R(a) & !R(b)",
+                "{!R(a), R(b), R(a)}, {!R(a), R(b), !R(b)}",
+            ),
+            ("!(R(a) | R(b))", "{!R(a)}, {!R(b)}"),
+            ("!(R(a) & R(b))", "{!R(a), !R(b)}"),
+            (
+                "!(!R(a)) <-> !R(a)",
+                "{R(a), !R(a)}, {R(a), R(a)}, {!R(a), !R(a)}, {!R(a), R(a)}",
+            ),
+            (r"!\ex A : \all B : (R(B) -> !R(A))", "{R(sk1(A))}, {R(A)}"),
+            (
+                r"!\all A : \all C : (R(A) <-> !R(C))",
+                "{!R(sk1), R(sk2)}, {R(sk1), !R(sk2)}",
+            ),
+        ];
+        session(|| {
+            for (f, e) in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                assert_eq!(e, format!("{}", fo_cnf(parsed).unwrap()));
+            }
+        })
     }
 }
