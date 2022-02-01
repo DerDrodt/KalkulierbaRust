@@ -98,7 +98,7 @@ where
             Ok(n) => n
                 .children()
                 .iter()
-                .fold(true, |acc, e| acc && self.nodes()[*e].is_closed()),
+                .all(|e| self.nodes()[*e].is_closed()),
             Err(_) => false,
         }
     }

@@ -75,16 +75,12 @@ impl<'f> Calculus<'f> for FOTableaux {
     }
 }
 
-pub fn apply_auto_close(
-    mut state: FOTabState,
-    leaf: usize,
-    node: usize,
-) -> FOTabResult<FOTabState> {
+pub fn apply_auto_close(state: FOTabState, leaf: usize, node: usize) -> FOTabResult<FOTabState> {
     todo!()
 }
 
 pub fn apply_close_assign(
-    mut state: FOTabState,
+    state: FOTabState,
     leaf: usize,
     node: usize,
     var_assign: HashMap<Symbol, FOTerm>,
@@ -92,15 +88,15 @@ pub fn apply_close_assign(
     todo!()
 }
 
-pub fn apply_expand(mut state: FOTabState, leaf: usize, clause: usize) -> FOTabResult<FOTabState> {
+pub fn apply_expand(state: FOTabState, leaf: usize, clause: usize) -> FOTabResult<FOTabState> {
     todo!()
 }
 
-pub fn apply_lemma(mut state: FOTabState, leaf: usize, lemma: usize) -> FOTabResult<FOTabState> {
+pub fn apply_lemma(state: FOTabState, leaf: usize, lemma: usize) -> FOTabResult<FOTabState> {
     todo!()
 }
 
-pub fn apply_undo(mut state: FOTabState) -> FOTabResult<FOTabState> {
+pub fn apply_undo(state: FOTabState) -> FOTabResult<FOTabState> {
     todo!()
 }
 
@@ -153,7 +149,7 @@ impl<'f> FOTabState<'f> {
 
     fn apply_var_instantiation(&mut self, var_assign: HashMap<Symbol, FOTerm>) {
         let u = Unifier::from_map(var_assign);
-        let mut instantiator = VariableInstantiator(&u);
+        let instantiator = VariableInstantiator(&u);
 
         self.nodes = self
             .nodes
@@ -230,7 +226,7 @@ impl<'f> TableauxState<Relation> for FOTabState<'f> {
         &self,
         clause: &'c crate::clause::Clause<Relation>,
     ) -> Vec<crate::clause::Atom<Relation>> {
-        let mut suffix_appender =
+        let suffix_appender =
             VariableSuffixAppend(Symbol::intern(&format!("_{}", self.expansion_counter + 1)));
         let mut atom_list = Vec::new();
 
@@ -241,7 +237,7 @@ impl<'f> TableauxState<Relation> for FOTabState<'f> {
                 .iter()
                 .map(|a| suffix_appender.visit(&a.clone()))
                 .collect();
-            let rel = Relation::new(atom.lit().spelling.clone(), new_args);
+            let rel = Relation::new(atom.lit().spelling, new_args);
             atom_list.push(Atom::new(rel, atom.negated()));
         }
 
@@ -338,7 +334,7 @@ impl<'f> TableauxNode<Relation> for FOTabNode {
     }
 
     fn is_leaf(&self) -> bool {
-        self.children.len() == 0
+        self.children.is_empty()
     }
 
     fn mark_closed(&mut self) {

@@ -125,12 +125,11 @@ impl<'l> fmt::Display for FOTerm {
 #[cfg(test)]
 mod tests {
     use crate::{parse::fo::parse_fo_term, session};
-    use std::vec;
 
     #[test]
     fn eq_terms() {
         session(|| {
-            for (a, b) in vec![
+            for (a, b) in &[
                 ("f(g(f(q)), c)", "f(g(f(q)), c)"),
                 ("a", "a"),
                 ("f(X)", "f(X)"),
@@ -144,7 +143,7 @@ mod tests {
     #[test]
     fn neq_terms() {
         session(|| {
-            for (a, b) in vec![
+            for (a, b) in &[
                 ("f(g(f(q)), c)", "f(g(f(q)), d)"),
                 ("a", "d"),
                 ("f(X)", "f(X, X)"),

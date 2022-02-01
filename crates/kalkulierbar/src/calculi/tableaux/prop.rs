@@ -124,7 +124,7 @@ impl ProtectedState for PropTableauxState {
             for (i, n) in self.nodes.iter().enumerate() {
                 ns.push_str(&n.info());
                 if i < self.nodes.len() - 1 {
-                    ns.push_str("|");
+                    ns.push('|');
                 }
             }
             ns
@@ -134,7 +134,7 @@ impl ProtectedState for PropTableauxState {
             for (i, m) in self.moves.iter().enumerate() {
                 ms.push_str(&m.to_string());
                 if i < self.moves.len() - 1 {
-                    ms.push_str(",");
+                    ms.push(',');
                 }
             }
             ms
@@ -222,7 +222,7 @@ impl PropTableauxState {
         &self,
         clause: &'c Clause<Symbol>,
     ) -> &'c Vec<Atom<Symbol>> {
-        &clause.atoms()
+        clause.atoms()
     }
 
     pub fn node_ancestry_contains_atom(
@@ -255,14 +255,14 @@ impl PropTableauxState {
     }
 
     pub fn is_leaf(&self, leaf: usize) -> bool {
-        self.nodes[leaf].children.len() == 0
+        self.nodes[leaf].children.is_empty()
     }
 
     pub fn all_children_closed(&self, node_id: usize) -> bool {
         let node = &self.nodes[node_id];
         node.children
             .iter()
-            .fold(true, |acc, e| acc && self.nodes[*e].is_closed())
+            .all(|e| self.nodes[*e].is_closed())
     }
 
     pub fn get_close_msg(&self) -> CloseMsg {
@@ -274,7 +274,7 @@ impl PropTableauxState {
                 TableauxType::WeaklyConnected => "weakly connected",
                 TableauxType::StronglyConnected => "strongly connected",
             };
-            let regularity = if check_regularity(&self) {
+            let regularity = if check_regularity(self) {
                 "regular "
             } else {
                 ""
@@ -344,7 +344,7 @@ impl PropTableauxState {
         let atom = atom.not();
 
         if self.regular {
-            verify_expand_regularity(&self, leaf_id, &Clause::new(vec![atom.clone()]))?;
+            verify_expand_regularity(self, leaf_id, &Clause::new(vec![atom.clone()]))?;
         }
 
         Ok(atom)
@@ -434,7 +434,7 @@ impl PropTabNode {
             for (i, c) in self.children.iter().enumerate() {
                 cs.push_str(&c.to_string());
                 if i < self.children.len() - 1 {
-                    cs.push_str(",");
+                    cs.push(',');
                 }
             }
             cs
@@ -475,10 +475,10 @@ pub enum PropTableauxMove {
 impl fmt::Display for PropTableauxMove {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PropTableauxMove::Expand(l, r) => write!(f, "{}({},{})", "Expand", l, r),
-            PropTableauxMove::AutoClose(l, r) => write!(f, "{}({},{})", "AutoClose", l, r),
-            PropTableauxMove::Lemma(l, r) => write!(f, "{}({},{})", "Lemma", l, r),
-            PropTableauxMove::Undo => write!(f, "{}", "Undo"),
+            PropTableauxMove::Expand(l, r) => write!(f, "Expand({},{})", l, r),
+            PropTableauxMove::AutoClose(l, r) => write!(f, "AutoClose({},{})", l, r),
+            PropTableauxMove::Lemma(l, r) => write!(f, "Lemma({},{})", l, r),
+            PropTableauxMove::Undo => write!(f, "Undo"),
         }
     }
 }
@@ -669,14 +669,12 @@ fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> Pro
         TableauxType::WeaklyConnected
             if !children
                 .iter()
-                .fold(false, |acc, id| acc || state.node_is_closable(*id).unwrap()) =>
+                .any(|id| state.node_is_closable(*id).unwrap()) =>
         {
             Err(PropTabError::WouldMakeUnconnected)
         }
         TableauxType::StronglyConnected
-            if !children.iter().fold(false, |acc, id| {
-                acc || state.node_is_directly_closable(*id).unwrap()
-            }) =>
+            if !children.iter().any(|id| state.node_is_directly_closable(*id).unwrap()) =>
         {
             Err(PropTabError::WouldMakeNotStronglyConnected(
                 leaf.to_string(),
@@ -692,9 +690,7 @@ fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
         true
     } else {
         let strong = ty == TableauxType::StronglyConnected;
-        start.iter().fold(true, |acc, id| {
-            acc && check_connectedness_subtree(state, *id, strong)
-        })
+        start.iter().all(|id| check_connectedness_subtree(state, *id, strong))
     }
 }
 
@@ -735,9 +731,7 @@ fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: b
 fn check_regularity(state: &PropTableauxState) -> bool {
     let start = &state.root().children;
 
-    start.iter().fold(true, |acc, id| {
-        acc && check_regularity_subtree(state, *id, vec![])
-    })
+    start.iter().all(|id| check_regularity_subtree(state, *id, vec![]))
 }
 
 fn check_regularity_subtree(
@@ -972,7 +966,7 @@ impl<'de> Deserialize<'de> for PropTableauxMove {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["type", "id1", "id2"];
+        const FIELDS: &[&str] = &["type", "id1", "id2"];
         deserializer.deserialize_struct("PropTableauxMove", FIELDS, MoveVisitor)
     }
 }
@@ -1400,7 +1394,7 @@ mod tests {
                 assert_eq!(PropTabError::ExpectedLeaf(0), res);
 
                 let res =
-                    PropTableaux::apply_move(state.clone(), PropTableauxMove::Lemma(usize::MAX, 0))
+                    PropTableaux::apply_move(state, PropTableauxMove::Lemma(usize::MAX, 0))
                         .unwrap_err();
                 assert_eq!(PropTabError::InvalidNodeId(usize::MAX), res);
             })
@@ -1600,7 +1594,7 @@ mod tests {
                     PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
 
                 let res =
-                    PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(2, 1))
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1))
                         .unwrap_err();
 
                 assert_eq!(PropTabError::AlreadyClosed(2), res);
@@ -1620,7 +1614,7 @@ mod tests {
                 let state = super::create_artificial_expand_state(state, nodes);
 
                 let res =
-                    PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(2, 1))
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1))
                         .unwrap_err();
 
                 assert_eq!(PropTabError::ExpectedSameSpelling(2, 1), res);
@@ -1637,7 +1631,7 @@ mod tests {
                 let state = super::create_artificial_expand_state(state, nodes);
 
                 let res =
-                    PropTableaux::apply_move(state.clone(), PropTableauxMove::AutoClose(1, 0))
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(1, 0))
                         .unwrap_err();
 
                 assert_eq!(PropTabError::CloseRoot, res);
@@ -1774,7 +1768,7 @@ mod tests {
                 let state =
                     PropTableaux::apply_move(state, PropTableauxMove::AutoClose(6, 4)).unwrap();
 
-                assert!(PropTableaux::check_close(state.clone()).closed);
+                assert!(PropTableaux::check_close(state).closed);
             })
         }
 

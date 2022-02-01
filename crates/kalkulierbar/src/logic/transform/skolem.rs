@@ -56,7 +56,7 @@ impl Skolemization {
             name = Symbol::intern(&format!("sk{}", self.counter));
         }
 
-        if self.quantified_vars.len() == 0 {
+        if self.quantified_vars.is_empty() {
             FOTerm::Const(name)
         } else {
             let mut args = Vec::new();
@@ -148,7 +148,7 @@ impl MutLogicNodeVisitor for Skolemization {
     fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
         let term = self.get_skolem_term();
 
-        let old = self.replacement_map.insert(var, term.clone());
+        let old = self.replacement_map.insert(var, term);
 
         let ret = self.visit(child);
 

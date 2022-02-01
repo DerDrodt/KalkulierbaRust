@@ -186,7 +186,7 @@ impl<'f> ClauseSetParser<'f> {
                     false
                 }
             }
-            _ => return false,
+            _ => false,
         }
     }
 

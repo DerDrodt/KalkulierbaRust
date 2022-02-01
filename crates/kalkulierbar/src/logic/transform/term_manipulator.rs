@@ -70,6 +70,6 @@ impl FOTermVisitor for TermContainsVariableChecker {
     }
 
     fn visit_fn(&self, _: Symbol, args: &Vec<FOTerm>) -> Self::Ret {
-        args.iter().fold(false, |acc, t| acc || self.visit(t))
+        args.iter().any(|t| self.visit(t))
     }
 }

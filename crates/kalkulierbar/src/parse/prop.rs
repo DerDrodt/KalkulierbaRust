@@ -147,7 +147,7 @@ impl<'f> PropParser<'f> {
 
     fn cur_token(&mut self) -> ParseResult<&Token<'f>> {
         match self.tokens.peek() {
-            Some(Ok(t)) => Ok(&t),
+            Some(Ok(t)) => Ok(t),
             Some(Err(e)) => Err(e.clone()),
             _ => Err(ParseErr::Expected(
                 "token".to_string(),

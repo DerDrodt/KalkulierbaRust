@@ -283,7 +283,7 @@ impl<'t> FOParser<'t> {
 
     fn cur_token(&mut self) -> ParseResult<&Token<'t>> {
         match self.tokens.peek() {
-            Some(Ok(t)) => Ok(&t),
+            Some(Ok(t)) => Ok(t),
             Some(Err(e)) => Err(e.clone()),
             _ => Err(ParseErr::Expected(
                 "token".to_string(),

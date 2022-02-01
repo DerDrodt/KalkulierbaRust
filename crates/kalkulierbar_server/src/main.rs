@@ -29,10 +29,8 @@ prop-tableaux",
 }
 
 async fn prop_tableaux() -> impl Responder {
-    HttpResponse::Ok().body(format!(
-        "Calculus prop-tableaux loaded.
-Interact via the /parse /move /close and /validate endpoints"
-    ))
+    HttpResponse::Ok().body("Calculus prop-tableaux loaded.
+Interact via the /parse /move /close and /validate endpoints".to_string())
 }
 
 async fn prop_tableaux_parse(form: web::Form<ParseForm>) -> Result<HttpResponse> {
@@ -46,7 +44,7 @@ async fn prop_tableaux_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
         };
 
         let state = prop::PropTableaux::parse_formula(&formula, params)
-            .map_err(|e| error::ErrorBadRequest(e))?;
+            .map_err(error::ErrorBadRequest)?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -75,7 +73,7 @@ async fn prop_tableaux_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
         let r#move: prop::PropTableauxMove = serde_json::from_str(&r#move)?;
 
         let state =
-            prop::PropTableaux::apply_move(state, r#move).map_err(|e| error::ErrorBadRequest(e))?;
+            prop::PropTableaux::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
 
         Ok(HttpResponse::Ok().json(state))
     })

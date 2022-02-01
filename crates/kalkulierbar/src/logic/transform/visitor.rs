@@ -8,11 +8,11 @@ pub trait MutLogicNodeVisitor {
     fn visit(&mut self, node: &LogicNode) -> Self::Ret {
         match node {
             LogicNode::Var(s) => self.visit_var(*s),
-            LogicNode::Not(c) => self.visit_not(&c),
-            LogicNode::And(left, right) => self.visit_and(&left, &right),
-            LogicNode::Or(left, right) => self.visit_or(&left, &right),
-            LogicNode::Impl(left, right) => self.visit_impl(&left, &right),
-            LogicNode::Equiv(left, right) => self.visit_equiv(&left, &right),
+            LogicNode::Not(c) => self.visit_not(c),
+            LogicNode::And(left, right) => self.visit_and(left, right),
+            LogicNode::Or(left, right) => self.visit_or(left, right),
+            LogicNode::Impl(left, right) => self.visit_impl(left, right),
+            LogicNode::Equiv(left, right) => self.visit_equiv(left, right),
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
             LogicNode::All(var, child) => self.visit_all(*var, child),
             LogicNode::Ex(var, child) => self.visit_ex(*var, child),
@@ -44,11 +44,11 @@ pub trait LogicNodeVisitor {
     fn visit(&self, node: &LogicNode) -> Self::Ret {
         match node {
             LogicNode::Var(s) => self.visit_var(*s),
-            LogicNode::Not(c) => self.visit_not(&c),
-            LogicNode::And(left, right) => self.visit_and(&left, &right),
-            LogicNode::Or(left, right) => self.visit_or(&left, &right),
-            LogicNode::Impl(left, right) => self.visit_impl(&left, &right),
-            LogicNode::Equiv(left, right) => self.visit_equiv(&left, &right),
+            LogicNode::Not(c) => self.visit_not(c),
+            LogicNode::And(left, right) => self.visit_and(left, right),
+            LogicNode::Or(left, right) => self.visit_or(left, right),
+            LogicNode::Impl(left, right) => self.visit_impl(left, right),
+            LogicNode::Equiv(left, right) => self.visit_equiv(left, right),
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
             LogicNode::All(var, child) => self.visit_all(*var, child),
             LogicNode::Ex(var, child) => self.visit_ex(*var, child),
