@@ -1,19 +1,13 @@
-use std::collections::HashMap;
-
 use crate::symbol::Symbol;
 
-use super::visitor::{MutFOTermVisitor, MutLogicNodeVisitor};
-use super::{super::LogicNode, term_manipulator::QuantifierLinker};
+use super::super::LogicNode;
+use super::visitor::MutLogicNodeVisitor;
 
-pub struct ToBasicOps {
-    quantifiers: HashMap<Symbol, Vec<Symbol>>,
-}
+pub struct ToBasicOps {}
 
 impl ToBasicOps {
     pub fn new() -> Self {
-        Self {
-            quantifiers: HashMap::new(),
-        }
+        Self {}
     }
 }
 
@@ -55,27 +49,17 @@ impl<'a> MutLogicNodeVisitor for ToBasicOps {
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        let mut linker = QuantifierLinker::new(&mut self.quantifiers);
-
-        for arg in args {
-            linker.visit(arg).unwrap();
-        }
-
         LogicNode::Rel(spelling, args.clone())
     }
 
-    fn visit_all(&mut self, var: Symbol, child: &LogicNode, _: &Vec<Symbol>) -> Self::Ret {
-        self.quantifiers.insert(var, Vec::new());
+    fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
         let child = self.visit(child).into();
-        let bound = self.quantifiers.remove(&var).unwrap();
-        LogicNode::All(var, child, bound)
+        LogicNode::All(var, child)
     }
 
-    fn visit_ex(&mut self, var: Symbol, child: &LogicNode, _: &Vec<Symbol>) -> Self::Ret {
-        self.quantifiers.insert(var, Vec::new());
+    fn visit_ex(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
         let child = self.visit(child).into();
-        let bound = self.quantifiers.remove(&var).unwrap();
-        LogicNode::Ex(var, child, bound)
+        LogicNode::Ex(var, child)
     }
 }
 
@@ -117,16 +101,12 @@ mod tests {
         };
     }
 
-    macro_rules! all {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
-        };
+    fn all(name: &str, child: LogicNode) -> LogicNode {
+        LogicNode::All(Symbol::intern(name), Box::new(child))
     }
 
-    macro_rules! ex {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
-        };
+    fn ex(name: &str, child: LogicNode) -> LogicNode {
+        LogicNode::Ex(Symbol::intern(name), Box::new(child))
     }
 
     macro_rules! func {
@@ -191,53 +171,53 @@ mod tests {
     }
 
     fn u1() -> LogicNode {
-        all!("X", or(var("X"), not(var("X"))))
+        all("X", or(var("X"), not(var("X"))))
     }
 
     fn u2() -> LogicNode {
-        all!(
+        all(
             "X",
-            ex!(
+            ex(
                 "Y",
-                all!(
+                all(
                     "Z",
                     and(
                         rel!("R", q_var("X"), q_var("Y")),
-                        rel!("R", q_var("Y"), q_var("Z"))
-                    )
-                )
-            )
+                        rel!("R", q_var("Y"), q_var("Z")),
+                    ),
+                ),
+            ),
         )
     }
 
     fn u3() -> LogicNode {
-        all!(
+        all(
             "Number1",
-            ex!(
+            ex(
                 "Number2",
-                rel!("Greater", q_var("Number1"), q_var("Number2"))
-            )
+                rel!("Greater", q_var("Number1"), q_var("Number2")),
+            ),
         )
     }
 
     fn e1() -> LogicNode {
-        ex!("C", not(rel!("Q", q_var("C"))))
+        ex("C", not(rel!("Q", q_var("C"))))
     }
 
     fn e2() -> LogicNode {
-        ex!(
+        ex(
             "X",
-            all!(
+            all(
                 "Y",
-                rel!("=", q_var("Y"), func!("m", q_var("X"), q_var("Y")))
-            )
+                rel!("=", q_var("Y"), func!("m", q_var("X"), q_var("Y"))),
+            ),
         )
     }
 
     fn e3() -> LogicNode {
-        ex!(
+        ex(
             "El",
-            imp(rel!("P", q_var("El")), all!("Y", rel!("P", q_var("Y"))))
+            imp(rel!("P", q_var("El")), all("Y", rel!("P", q_var("Y")))),
         )
     }
 

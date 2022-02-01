@@ -123,16 +123,11 @@ impl MutLogicNodeVisitor for FOCNF {
         Ok(ClauseSet::new(vec![clause]))
     }
 
-    fn visit_all(
-        &mut self,
-        _: Symbol,
-        child: &crate::logic::LogicNode,
-        _: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_all(&mut self, _: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
         self.visit(child)
     }
 
-    fn visit_ex(&mut self, _: Symbol, _: &crate::logic::LogicNode, _: &Vec<Symbol>) -> Self::Ret {
+    fn visit_ex(&mut self, _: Symbol, _: &crate::logic::LogicNode) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 }

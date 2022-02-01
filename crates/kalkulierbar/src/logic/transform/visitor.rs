@@ -14,8 +14,8 @@ pub trait MutLogicNodeVisitor {
             LogicNode::Impl(left, right) => self.visit_impl(&left, &right),
             LogicNode::Equiv(left, right) => self.visit_equiv(&left, &right),
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
-            LogicNode::All(var, child, bound_vars) => self.visit_all(*var, child, bound_vars),
-            LogicNode::Ex(var, child, bound_vars) => self.visit_ex(*var, child, bound_vars),
+            LogicNode::All(var, child) => self.visit_all(*var, child),
+            LogicNode::Ex(var, child) => self.visit_ex(*var, child),
         }
     }
 
@@ -33,9 +33,9 @@ pub trait MutLogicNodeVisitor {
 
     fn visit_rel(&mut self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
 
-    fn visit_all(&mut self, var: Symbol, child: &LogicNode, bound_vars: &Vec<Symbol>) -> Self::Ret;
+    fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
-    fn visit_ex(&mut self, var: Symbol, child: &LogicNode, bound_vars: &Vec<Symbol>) -> Self::Ret;
+    fn visit_ex(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret;
 }
 
 pub trait LogicNodeVisitor {
@@ -50,8 +50,8 @@ pub trait LogicNodeVisitor {
             LogicNode::Impl(left, right) => self.visit_impl(&left, &right),
             LogicNode::Equiv(left, right) => self.visit_equiv(&left, &right),
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
-            LogicNode::All(var, child, bound_vars) => self.visit_all(*var, child, bound_vars),
-            LogicNode::Ex(var, child, bound_vars) => self.visit_ex(*var, child, bound_vars),
+            LogicNode::All(var, child) => self.visit_all(*var, child),
+            LogicNode::Ex(var, child) => self.visit_ex(*var, child),
         }
     }
 
@@ -69,9 +69,9 @@ pub trait LogicNodeVisitor {
 
     fn visit_rel(&self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
 
-    fn visit_all(&self, var: Symbol, child: &LogicNode, bound_vars: &Vec<Symbol>) -> Self::Ret;
+    fn visit_all(&self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
-    fn visit_ex(&self, var: Symbol, child: &LogicNode, bound_vars: &Vec<Symbol>) -> Self::Ret;
+    fn visit_ex(&self, var: Symbol, child: &LogicNode) -> Self::Ret;
 }
 
 pub trait MutFOTermVisitor {

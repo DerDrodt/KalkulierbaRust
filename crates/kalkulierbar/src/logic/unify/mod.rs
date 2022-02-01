@@ -121,7 +121,6 @@ fn unify_terms<'a>(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, Unificat
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hash;
 
     use super::*;
     use crate::session;
@@ -129,18 +128,6 @@ mod tests {
     macro_rules! rel {
         ($name:expr, $( $arg:expr ),*) => {
             Relation::new(Symbol::intern($name), vec![$($arg),*])
-        };
-    }
-
-    macro_rules! all {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
-        };
-    }
-
-    macro_rules! ex {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
         };
     }
 

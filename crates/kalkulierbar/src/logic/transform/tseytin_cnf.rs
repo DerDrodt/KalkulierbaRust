@@ -161,21 +161,11 @@ impl MutLogicNodeVisitor for TseytinCNF {
         panic!("Cannot create CNF of FO formula")
     }
 
-    fn visit_all(
-        &mut self,
-        _var: Symbol,
-        _child: &LogicNode,
-        _bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_all(&mut self, _var: Symbol, _child: &LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 
-    fn visit_ex(
-        &mut self,
-        _var: Symbol,
-        _child: &LogicNode,
-        _bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_ex(&mut self, _var: Symbol, _child: &LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 }
@@ -215,16 +205,12 @@ mod tests {
         };
     }
 
-    macro_rules! all {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::All(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
-        };
+    fn all(name: &str, child: LogicNode) -> LogicNode {
+        LogicNode::All(Symbol::intern(name), Box::new(child))
     }
 
-    macro_rules! ex {
-        ($name:expr, $child:expr $(, $arg:expr )*) => {
-            LogicNode::Ex(Symbol::intern($name), Box::new($child), vec![$(Symbol::intern($arg)),*])
-        };
+    fn ex(name: &str, child: LogicNode) -> LogicNode {
+        LogicNode::Ex(Symbol::intern(name), Box::new(child))
     }
 
     fn q_var(s: &str) -> FOTerm {
@@ -283,11 +269,11 @@ mod tests {
     }
 
     fn u1() -> LogicNode {
-        all!("X", or(var("X"), not(var("X"))))
+        all("X", or(var("X"), not(var("X"))))
     }
 
     fn e1() -> LogicNode {
-        ex!("C", not(rel!("Q", q_var("C"))))
+        ex("C", not(rel!("Q", q_var("C"))))
     }
 
     #[test]

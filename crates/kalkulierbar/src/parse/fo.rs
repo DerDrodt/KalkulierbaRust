@@ -140,10 +140,6 @@ impl<'t> FOParser<'t> {
             .quantifier_scope
             .remove(self.quantifier_scope.len() - 1);
 
-        let bound_vars = last_scope
-            .iter()
-            .filter_map(|it| if *it == name { Some(*it) } else { None })
-            .collect();
         let mut bound_before: Vec<Symbol> = last_scope
             .iter()
             .filter_map(|it| if *it != name { Some(*it) } else { None })
@@ -163,8 +159,8 @@ impl<'t> FOParser<'t> {
         }
 
         Ok(Box::new(match kind {
-            TokenKind::All => LogicNode::All(name, sub, bound_vars),
-            TokenKind::Ex => LogicNode::Ex(name, sub, bound_vars),
+            TokenKind::All => LogicNode::All(name, sub),
+            TokenKind::Ex => LogicNode::Ex(name, sub),
             _ => panic!(),
         }))
     }

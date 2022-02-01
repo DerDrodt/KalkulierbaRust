@@ -24,25 +24,26 @@ impl LogicNodeVisitor for NegationNormalForm {
                     LogicNode::Not(l.clone()).into(),
                     LogicNode::Not(r.clone()).into(),
                 );
-                Ok(n.into())
+                Ok(self.visit(&n)?)
             }
             LogicNode::Or(l, r) => {
                 let n = LogicNode::And(
                     LogicNode::Not(l.clone()).into(),
                     LogicNode::Not(r.clone()).into(),
                 );
-                Ok(n.into())
+                Ok(self.visit(&n)?)
             }
-            LogicNode::Rel(name, args) => Ok(LogicNode::Rel(*name, args.clone())),
-            LogicNode::All(var, c, bound) => Ok(LogicNode::Ex(
+            LogicNode::Rel(name, args) => Ok(LogicNode::Not(Box::new(LogicNode::Rel(
+                *name,
+                args.clone(),
+            )))),
+            LogicNode::All(var, c) => Ok(LogicNode::Ex(
                 *var,
                 self.visit(&LogicNode::Not(c.clone()))?.into(),
-                bound.clone(),
             )),
-            LogicNode::Ex(var, c, bound) => Ok(LogicNode::All(
+            LogicNode::Ex(var, c) => Ok(LogicNode::All(
                 *var,
                 self.visit(&LogicNode::Not(c.clone()))?.into(),
-                bound.clone(),
             )),
             _ => Err("Unknown LogicNode encountered during Negation Normal Form transformation"),
         }
@@ -90,29 +91,11 @@ impl LogicNodeVisitor for NegationNormalForm {
         Ok(LogicNode::Rel(name, args.clone()))
     }
 
-    fn visit_all(
-        &self,
-        var: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
-        Ok(LogicNode::All(
-            var,
-            self.visit(child)?.into(),
-            bound_vars.clone(),
-        ))
+    fn visit_all(&self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+        Ok(LogicNode::All(var, self.visit(child)?.into()))
     }
 
-    fn visit_ex(
-        &self,
-        var: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
-        Ok(LogicNode::Ex(
-            var,
-            self.visit(child)?.into(),
-            bound_vars.clone(),
-        ))
+    fn visit_ex(&self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+        Ok(LogicNode::Ex(var, self.visit(child)?.into()))
     }
 }

@@ -95,34 +95,32 @@ impl MutLogicNodeVisitor for UniqueVars {
         LogicNode::Rel(spelling, args.iter().map(|a| renamer.visit(a)).collect())
     }
 
-    fn visit_all(
-        &mut self,
-        var: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
         let disamb = self.handle_var_binding(var);
 
-        for v in bound_vars {
-            self.replacements.insert(*v, disamb);
+        let old = self.replacements.insert(var, disamb);
+        let child = self.visit(child);
+        if let Some(v) = old {
+            self.replacements.insert(var, v);
+        } else {
+            self.replacements.remove(&var);
         }
 
-        LogicNode::All(disamb, Box::new(self.visit(child)), bound_vars.clone())
+        LogicNode::All(disamb, Box::new(child))
     }
 
-    fn visit_ex(
-        &mut self,
-        var: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
         let disamb = self.handle_var_binding(var);
 
-        for v in bound_vars {
-            self.replacements.insert(*v, disamb);
+        let old = self.replacements.insert(var, disamb);
+        let child = self.visit(child);
+        if let Some(v) = old {
+            self.replacements.insert(var, v);
+        } else {
+            self.replacements.remove(&var);
         }
 
-        LogicNode::Ex(disamb, Box::new(self.visit(child)), bound_vars.clone())
+        LogicNode::Ex(disamb, Box::new(child))
     }
 }
 

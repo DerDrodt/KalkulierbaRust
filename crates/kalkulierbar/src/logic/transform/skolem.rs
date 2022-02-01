@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use crate::{
     logic::{fo::FOTerm, LogicNode},
@@ -6,15 +9,30 @@ use crate::{
 };
 
 use super::{
-    term_manipulator::QuantifierLinker,
+    collectors::collect_symbols,
     visitor::{MutFOTermVisitor, MutLogicNodeVisitor},
 };
 
+pub fn skolemize(n: &LogicNode) -> Result<LogicNode, SkolemizationErr> {
+    let used_symbols = collect_symbols(n);
+    Skolemization::new(used_symbols).visit(n)
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct SkolemizationErr;
+
+impl fmt::Display for SkolemizationErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Double-bound universally quantified variable encountered during Skolemization"
+        )
+    }
+}
 
 pub struct Skolemization {
     counter: u32,
-    quantified_vars: HashMap<Symbol, Vec<Symbol>>,
+    quantified_vars: Vec<Symbol>,
     replacement_map: HashMap<Symbol, FOTerm>,
     used_names: HashSet<Symbol>,
 }
@@ -23,7 +41,7 @@ impl Skolemization {
     pub fn new(used_names: HashSet<Symbol>) -> Self {
         Self {
             counter: 0,
-            quantified_vars: HashMap::new(),
+            quantified_vars: Vec::new(),
             replacement_map: HashMap::new(),
             used_names,
         }
@@ -43,7 +61,7 @@ impl Skolemization {
         } else {
             let mut args = Vec::new();
 
-            for (v, _) in &self.quantified_vars {
+            for v in &self.quantified_vars {
                 args.push(FOTerm::QuantifiedVar(*v))
             }
 
@@ -60,7 +78,7 @@ impl MutLogicNodeVisitor for Skolemization {
     }
 
     fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
-        Ok(LogicNode::Not(Box::new(child.clone())))
+        Ok(LogicNode::Not(Box::new(self.visit(child)?)))
     }
 
     fn visit_and(
@@ -69,8 +87,8 @@ impl MutLogicNodeVisitor for Skolemization {
         right: &crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::And(
-            Box::new(left.clone()),
-            Box::new(right.clone()),
+            Box::new(self.visit(left)?),
+            Box::new(self.visit(right)?),
         ))
     }
 
@@ -80,8 +98,8 @@ impl MutLogicNodeVisitor for Skolemization {
         right: &crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Or(
-            Box::new(left.clone()),
-            Box::new(right.clone()),
+            Box::new(self.visit(left)?),
+            Box::new(self.visit(right)?),
         ))
     }
 
@@ -91,8 +109,8 @@ impl MutLogicNodeVisitor for Skolemization {
         right: &crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Impl(
-            Box::new(left.clone()),
-            Box::new(right.clone()),
+            Box::new(self.visit(left)?),
+            Box::new(self.visit(right)?),
         ))
     }
 
@@ -102,64 +120,55 @@ impl MutLogicNodeVisitor for Skolemization {
         right: &crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Equiv(
-            Box::new(left.clone()),
-            Box::new(right.clone()),
+            Box::new(self.visit(left)?),
+            Box::new(self.visit(right)?),
         ))
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret {
-        let mut replacer =
-            SkolemTermReplacer::new(&self.replacement_map, &mut self.quantified_vars);
+        let mut replacer = SkolemTermReplacer::new(&self.replacement_map);
         Ok(LogicNode::Rel(
             spelling,
             args.iter().map(|a| replacer.visit(a)).collect(),
         ))
     }
 
-    fn visit_all(
-        &mut self,
-        var: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
-        if self.quantified_vars.contains_key(&var) {
+    fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+        if self.quantified_vars.contains(&var) {
             return Err(SkolemizationErr);
         }
-        self.quantified_vars.insert(var, bound_vars.clone());
+        self.quantified_vars.push(var);
         let child = self.visit(child)?;
-        let bound_vars = self.quantified_vars.remove(&var).unwrap();
+        let popped = self.quantified_vars.pop().unwrap();
+        assert!(popped == var);
 
-        Ok(LogicNode::All(var, Box::new(child), bound_vars))
+        Ok(LogicNode::All(var, Box::new(child)))
     }
 
-    fn visit_ex(
-        &mut self,
-        _: Symbol,
-        child: &crate::logic::LogicNode,
-        bound_vars: &Vec<Symbol>,
-    ) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
         let term = self.get_skolem_term();
-        for var in bound_vars {
-            self.replacement_map.insert(*var, term.clone());
+
+        let old = self.replacement_map.insert(var, term.clone());
+
+        let ret = self.visit(child);
+
+        if let Some(v) = old {
+            self.replacement_map.insert(var, v);
+        } else {
+            self.replacement_map.remove(&var);
         }
-        self.visit(child)
+
+        ret
     }
 }
 
 struct SkolemTermReplacer<'a> {
     replacement_map: &'a HashMap<Symbol, FOTerm>,
-    binding_quants: &'a mut HashMap<Symbol, Vec<Symbol>>,
 }
 
 impl<'a> SkolemTermReplacer<'a> {
-    fn new(
-        replacement_map: &'a HashMap<Symbol, FOTerm>,
-        binding_quants: &'a mut HashMap<Symbol, Vec<Symbol>>,
-    ) -> Self {
-        Self {
-            replacement_map,
-            binding_quants,
-        }
+    fn new(replacement_map: &'a HashMap<Symbol, FOTerm>) -> Self {
+        Self { replacement_map }
     }
 }
 
@@ -168,11 +177,7 @@ impl<'a> MutFOTermVisitor for SkolemTermReplacer<'a> {
 
     fn visit_quantified_var(&mut self, s: Symbol) -> Self::Ret {
         if self.replacement_map.contains_key(&s) {
-            let mut linker = QuantifierLinker::new(&mut self.binding_quants);
-
             let skolem_term = self.replacement_map.get(&s).unwrap().clone();
-
-            linker.visit(&skolem_term).unwrap();
 
             skolem_term
         } else {

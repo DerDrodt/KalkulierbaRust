@@ -21,8 +21,8 @@ pub enum LogicNode {
     Impl(Box<LogicNode>, Box<LogicNode>),
     Equiv(Box<LogicNode>, Box<LogicNode>),
     Rel(Symbol, Vec<FOTerm>),
-    All(Symbol, Box<LogicNode>, Vec<Symbol>),
-    Ex(Symbol, Box<LogicNode>, Vec<Symbol>),
+    All(Symbol, Box<LogicNode>),
+    Ex(Symbol, Box<LogicNode>),
 }
 
 impl LogicNode {
@@ -52,8 +52,8 @@ impl fmt::Display for LogicNode {
 
                 write!(f, "{}({})", name, arg_str)
             }
-            LogicNode::All(var, child, _) => write!(f, "(∀{}: {})", var, child),
-            LogicNode::Ex(var, child, _) => write!(f, "(∃{}: {})", var, child),
+            LogicNode::All(var, child) => write!(f, "(∀{}: {})", var, child),
+            LogicNode::Ex(var, child) => write!(f, "(∃{}: {})", var, child),
         }
     }
 }

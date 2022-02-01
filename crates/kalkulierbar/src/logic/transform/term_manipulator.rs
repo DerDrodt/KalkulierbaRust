@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use super::visitor::{FOTermVisitor, MutFOTermVisitor};
+use super::visitor::FOTermVisitor;
 
 use crate::{
     logic::{fo::FOTerm, unify::Unifier},
@@ -55,43 +53,6 @@ impl FOTermVisitor for VariableSuffixAppend {
         let args = args.iter().map(|a| self.visit(a)).collect();
 
         FOTerm::Function(name, args)
-    }
-}
-
-pub struct QuantifierLinker<'h> {
-    quantifiers: &'h mut HashMap<Symbol, Vec<Symbol>>,
-}
-
-impl<'a, 'h> QuantifierLinker<'h> {
-    pub fn new(quantifiers: &'h mut HashMap<Symbol, Vec<Symbol>>) -> Self {
-        Self { quantifiers }
-    }
-}
-
-impl<'a, 'h> MutFOTermVisitor for QuantifierLinker<'h> {
-    type Ret = Result<(), Symbol>;
-
-    fn visit_quantified_var(&mut self, s: Symbol) -> Self::Ret {
-        let quant = self.quantifiers.get_mut(&s);
-
-        match quant {
-            Some(quant) => {
-                quant.push(s);
-                Ok(())
-            }
-            None => Err(s),
-        }
-    }
-
-    fn visit_const(&mut self, _: Symbol) -> Self::Ret {
-        Ok(())
-    }
-
-    fn visit_fn(&mut self, _: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        for arg in args {
-            self.visit(arg)?;
-        }
-        Ok(())
     }
 }
 
