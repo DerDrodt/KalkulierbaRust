@@ -179,3 +179,129 @@ impl LogicNodeVisitor for TseytinCNF {
         panic!("Cannot create CNF of FO formula")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    fn var(s: &str) -> LogicNode {
+        LogicNode::Var(Symbol::intern(s))
+    }
+
+    fn not(n: LogicNode) -> LogicNode {
+        LogicNode::Not(Box::new(n))
+    }
+
+    fn and(l: LogicNode, r: LogicNode) -> LogicNode {
+        LogicNode::And(Box::new(l), Box::new(r))
+    }
+
+    fn or(l: LogicNode, r: LogicNode) -> LogicNode {
+        LogicNode::Or(Box::new(l), Box::new(r))
+    }
+
+    fn imp(l: LogicNode, r: LogicNode) -> LogicNode {
+        LogicNode::Impl(Box::new(l), Box::new(r))
+    }
+
+    fn equiv(l: LogicNode, r: LogicNode) -> LogicNode {
+        LogicNode::Equiv(Box::new(l), Box::new(r))
+    }
+
+    fn v1() -> LogicNode {
+        var("a")
+    }
+
+    fn v2() -> LogicNode {
+        var("MyTestVar")
+    }
+
+    fn v3() -> LogicNode {
+        var("MyT35tV4r")
+    }
+
+    fn n1() -> LogicNode {
+        not(var("a"))
+    }
+
+    fn n2() -> LogicNode {
+        not(equiv(not(not(var("b"))), var("a")))
+    }
+
+    fn n3() -> LogicNode {
+        not(and(or(var("a"), not(var("a"))), not(var("c"))))
+    }
+
+    fn a1() -> LogicNode {
+        and(not(var("a")), and(var("b"), imp(var("b"), var("a"))))
+    }
+
+    fn a2() -> LogicNode {
+        and(var("a"), not(var("a")))
+    }
+
+    fn a3() -> LogicNode {
+        and(or(var("a"), not(var("a"))), var("b"))
+    }
+
+    fn o1() -> LogicNode {
+        or(var("a"), var("b"))
+    }
+
+    fn o2() -> LogicNode {
+        or(or(var("a"), not(var("b"))), equiv(var("a"), var("b")))
+    }
+
+    fn o3() -> LogicNode {
+        or(
+            not(and(var("a"), var("b"))),
+            not(imp(var("b"), not(var("b")))),
+        )
+    }
+
+    #[test]
+    fn test_var() {
+        session(|| {
+            assert_eq!("{vara}", format!("{}", v1().tseytin_cnf().unwrap()));
+            assert_eq!("{varMyTestVar}", format!("{}", v2().tseytin_cnf().unwrap()));
+            assert_eq!("{varMyT35tV4r}", format!("{}", v3().tseytin_cnf().unwrap()));
+        })
+    }
+
+    #[test]
+    fn test_not() {
+        session(|| {
+            assert_eq!(
+                "{not0}, {!vara, !not0}, {vara, not0}",
+                format!("{}", n1().tseytin_cnf().unwrap())
+            );
+            assert_eq!("{not0}, {!varb, !not3}, {varb, not3}, {!not3, !not2}, {not3, not2}, {not2, !vara, !equiv1}, {!not2, vara, !equiv1}, {!not2, !vara, equiv1}, {not2, vara, equiv1}, {!equiv1, !not0}, {equiv1, not0}", format!("{}", n2().tseytin_cnf().unwrap()));
+            assert_eq!("{not0}, {!vara, !not4}, {vara, not4}, {!vara, or2}, {!not4, or2}, {vara, not4, !or2}, {!varc, !not6}, {varc, not6}, {or2, !and1}, {not6, !and1}, {!or2, !not6, and1}, {!and1, !not0}, {and1, not0}", format!("{}", n3().tseytin_cnf().unwrap()));
+        })
+    }
+
+    #[test]
+    fn test_and() {
+        session(|| {
+            assert_eq!(
+                "{and0}, {!vara, !not1}, {vara, not1}, {varb, impl5}, {!vara, impl5}, {!varb, vara, !impl5}, {varb, !and3}, {impl5, !and3}, {!varb, !impl5, and3}, {not1, !and0}, {and3, !and0}, {!not1, !and3, and0}",
+                format!("{}", a1().tseytin_cnf().unwrap())
+            );
+            assert_eq!("{and0}, {!vara, !not2}, {vara, not2}, {vara, !and0}, {not2, !and0}, {!vara, !not2, and0}", format!("{}", a2().tseytin_cnf().unwrap()));
+            assert_eq!("{and0}, {!vara, !not3}, {vara, not3}, {!vara, or1}, {!not3, or1}, {vara, not3, !or1}, {or1, !and0}, {varb, !and0}, {!or1, !varb, and0}", format!("{}", a3().tseytin_cnf().unwrap()));
+        })
+    }
+
+    #[test]
+    fn test_or() {
+        session(|| {
+            assert_eq!(
+                "{or0}, {!vara, or0}, {!varb, or0}, {vara, varb, !or0}",
+                format!("{}", o1().tseytin_cnf().unwrap())
+            );
+            assert_eq!("{or0}, {!varb, !not3}, {varb, not3}, {!vara, or1}, {!not3, or1}, {vara, not3, !or1}, {vara, !varb, !equiv5}, {!vara, varb, !equiv5}, {!vara, !varb, equiv5}, {vara, varb, equiv5}, {!or1, or0}, {!equiv5, or0}, {or1, equiv5, !or0}", format!("{}", o2().tseytin_cnf().unwrap()));
+            assert_eq!("{or0}, {vara, !and2}, {varb, !and2}, {!vara, !varb, and2}, {!and2, !not1}, {and2, not1}, {!varb, !not8}, {varb, not8}, {varb, impl6}, {!not8, impl6}, {!varb, not8, !impl6}, {!impl6, !not5}, {impl6, not5}, {!not1, or0}, {!not5, or0}, {not1, not5, !or0}", format!("{}", o3().tseytin_cnf().unwrap()));
+        })
+    }
+}

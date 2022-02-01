@@ -11,6 +11,18 @@ pub fn parse_fo_formula<'f>(formula: &'f str) -> ParseResult<LogicNode> {
     FOParser::parse(formula)
 }
 
+pub fn parse_fo_term<'f>(term: &'f str) -> ParseResult<FOTerm> {
+    let mut parser = FOParser::new_term_parser(term);
+    let res = parser.parse_term()?;
+    match parser.tokens.next() {
+        Some(_) => Err(ParseErr::Expected(
+            "end of input".to_string(),
+            parser.got_msg(),
+        )),
+        None => Ok(res),
+    }
+}
+
 struct FOParser<'t> {
     tokens: Peekable<Tokenizer<'t>>,
     quantifier_scope: Vec<Vec<Symbol>>,
@@ -23,6 +35,14 @@ impl<'t> FOParser<'t> {
             tokens: Tokenizer::new(formula, false).peekable(),
             quantifier_scope: Vec::new(),
             bind_quant_vars: true,
+        }
+    }
+
+    fn new_term_parser(term: &'t str) -> Self {
+        Self {
+            tokens: Tokenizer::new(term, true).peekable(),
+            quantifier_scope: Vec::new(),
+            bind_quant_vars: false,
         }
     }
 

@@ -41,6 +41,42 @@ pub enum FOTerm {
     Function(Symbol, Vec<FOTerm>),
 }
 
+impl FOTerm {
+    pub fn syn_eq(&self, t: &FOTerm) -> bool {
+        match (self, t) {
+            (FOTerm::QuantifiedVar(s1), FOTerm::QuantifiedVar(s2)) => *s1 == *s2,
+            (FOTerm::Const(s1), FOTerm::Const(s2)) => *s1 == *s2,
+            (FOTerm::Function(s1, args1), FOTerm::Function(s2, args2)) => {
+                *s1 == *s2
+                    && args1.len() == args2.len()
+                    && args1.iter().zip(args2).all(|(t1, t2)| t1.syn_eq(t2))
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        match self {
+            FOTerm::QuantifiedVar(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_const(&self) -> bool {
+        match self {
+            FOTerm::Const(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_fn(&self) -> bool {
+        match self {
+            FOTerm::Function(_, _) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Serialize for FOTerm {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -77,5 +113,42 @@ impl<'l> fmt::Display for FOTerm {
                 write!(f, "{}({})", name, arg_str)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parse::fo::parse_fo_term, session};
+    use std::vec;
+
+    #[test]
+    fn eq_terms() {
+        session(|| {
+            for (a, b) in vec![
+                ("f(g(f(q)), c)", "f(g(f(q)), c)"),
+                ("a", "a"),
+                ("f(X)", "f(X)"),
+            ] {
+                let (a, b) = (parse_fo_term(a).unwrap(), parse_fo_term(b).unwrap());
+                assert!(a.syn_eq(&b))
+            }
+        })
+    }
+
+    #[test]
+    fn neq_terms() {
+        session(|| {
+            for (a, b) in vec![
+                ("f(g(f(q)), c)", "f(g(f(q)), d)"),
+                ("a", "d"),
+                ("f(X)", "f(X, X)"),
+                ("f(g(f(c)))", "f(g(f(g(c))))"),
+                ("X", "Y"),
+                ("X", "x"),
+            ] {
+                let (a, b) = (parse_fo_term(a).unwrap(), parse_fo_term(b).unwrap());
+                assert!(!a.syn_eq(&b), "{}={}", a, b)
+            }
+        })
     }
 }

@@ -38,7 +38,7 @@ pub trait LogicNodeVisitor {
     fn visit_ex(&mut self, var: Symbol, child: &LogicNode, bound_vars: &Vec<Symbol>) -> Self::Ret;
 }
 
-pub trait FOTermVisitor {
+pub trait MutFOTermVisitor {
     type Ret;
 
     fn visit(&mut self, term: &FOTerm) -> Self::Ret {
@@ -54,4 +54,22 @@ pub trait FOTermVisitor {
     fn visit_const(&mut self, s: Symbol) -> Self::Ret;
 
     fn visit_fn(&mut self, name: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
+}
+
+pub trait FOTermVisitor {
+    type Ret;
+
+    fn visit(&self, term: &FOTerm) -> Self::Ret {
+        match term {
+            FOTerm::QuantifiedVar(s) => self.visit_quantified_var(*s),
+            FOTerm::Const(s) => self.visit_const(*s),
+            FOTerm::Function(name, args) => self.visit_fn(*name, args),
+        }
+    }
+
+    fn visit_quantified_var(&self, s: Symbol) -> Self::Ret;
+
+    fn visit_const(&self, s: Symbol) -> Self::Ret;
+
+    fn visit_fn(&self, name: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
 }

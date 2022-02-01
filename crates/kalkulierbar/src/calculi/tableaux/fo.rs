@@ -3,10 +3,15 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    clause::Atom, clause::ClauseSet, logic::fo::FOTerm, logic::fo::Relation,
-    logic::transform::term_manipulator::VariableInstantiator,
-    logic::transform::term_manipulator::VariableSuffixAppend,
-    logic::transform::visitor::FOTermVisitor, logic::unify, symbol::Symbol, Calculus,
+    clause::Atom,
+    clause::ClauseSet,
+    logic::fo::FOTerm,
+    logic::fo::Relation,
+    logic::transform::{term_manipulator::VariableSuffixAppend, visitor::FOTermVisitor},
+    logic::unify,
+    logic::{transform::term_manipulator::VariableInstantiator, unify::Unifier},
+    symbol::Symbol,
+    Calculus,
 };
 
 use super::{TableauxErr, TableauxNode, TableauxState, TableauxType};
@@ -147,7 +152,8 @@ impl<'f> FOTabState<'f> {
     }
 
     fn apply_var_instantiation(&mut self, var_assign: HashMap<Symbol, FOTerm>) {
-        let mut instantiator = VariableInstantiator(var_assign);
+        let u = Unifier::from_map(var_assign);
+        let mut instantiator = VariableInstantiator(&u);
 
         self.nodes = self
             .nodes
