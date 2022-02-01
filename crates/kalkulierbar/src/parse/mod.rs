@@ -13,10 +13,7 @@ pub mod prop;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
 
-pub fn parse_flexible<'f>(
-    formula: &'f str,
-    strategy: CNFStrategy,
-) -> ParseResult<ClauseSet<Symbol>> {
+pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<ClauseSet<Symbol>> {
     let likely_formula = formula.contains(|c| match c {
         '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
         _ => false,
