@@ -24,7 +24,7 @@ pub fn prenex_normal(n: &LogicNode) -> Result<LogicNode, PrenixNormalFormErr> {
     Ok(n)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PrenixNormalFormErr(Symbol);
 
 impl fmt::Display for PrenixNormalFormErr {

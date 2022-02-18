@@ -110,7 +110,7 @@ pub struct PropTableauxState {
 }
 
 impl ProtectedState for PropTableauxState {
-    fn info(&self) -> String {
+    fn compute_seal_info(&self) -> String {
         let opts = format!(
             "{}|{}|{}|{}",
             self.ty.to_string().to_uppercase(),
@@ -143,12 +143,6 @@ impl ProtectedState for PropTableauxState {
             "tableauxstate|{}|{}|[{}]|[{}]",
             opts, clause_set, nodes, history
         )
-    }
-    fn seal(&self) -> &String {
-        &self.seal
-    }
-    fn set_seal(&mut self, seal: String) {
-        self.seal = seal;
     }
 }
 
@@ -260,9 +254,7 @@ impl PropTableauxState {
 
     pub fn all_children_closed(&self, node_id: usize) -> bool {
         let node = &self.nodes[node_id];
-        node.children
-            .iter()
-            .all(|e| self.nodes[*e].is_closed())
+        node.children.iter().all(|e| self.nodes[*e].is_closed())
     }
 
     pub fn get_close_msg(&self) -> CloseMsg {
@@ -503,7 +495,7 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
 
         let clauses = parse_flexible(formula, cnf_strategy)?;
         let mut state = PropTableauxState::new(clauses, tab_type, regular, backtracking);
-        state.compute_seal();
+        state.compute_seal_info();
         Ok(state)
     }
 
@@ -516,7 +508,7 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
             Undo => apply_undo(state),
         };
         let mut state = r?;
-        state.compute_seal();
+        state.compute_seal_info();
         Ok(state)
     }
 
@@ -674,7 +666,9 @@ fn verify_expand_connectedness(state: &PropTableauxState, leaf_id: usize) -> Pro
             Err(PropTabError::WouldMakeUnconnected)
         }
         TableauxType::StronglyConnected
-            if !children.iter().any(|id| state.node_is_directly_closable(*id).unwrap()) =>
+            if !children
+                .iter()
+                .any(|id| state.node_is_directly_closable(*id).unwrap()) =>
         {
             Err(PropTabError::WouldMakeNotStronglyConnected(
                 leaf.to_string(),
@@ -690,7 +684,9 @@ fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
         true
     } else {
         let strong = ty == TableauxType::StronglyConnected;
-        start.iter().all(|id| check_connectedness_subtree(state, *id, strong))
+        start
+            .iter()
+            .all(|id| check_connectedness_subtree(state, *id, strong))
     }
 }
 
@@ -731,7 +727,9 @@ fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: b
 fn check_regularity(state: &PropTableauxState) -> bool {
     let start = &state.root().children;
 
-    start.iter().all(|id| check_regularity_subtree(state, *id, vec![]))
+    start
+        .iter()
+        .all(|id| check_regularity_subtree(state, *id, vec![]))
 }
 
 fn check_regularity_subtree(
@@ -1048,12 +1046,12 @@ mod tests {
                 let mut state = PropTableaux::parse_formula("a,b;c;!a", Some(opts())).unwrap();
                 state.used_backtracking = true;
 
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
                 state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
 
-                assert_eq!(info, state.info());
+                assert_eq!(info, state.compute_seal_info());
             })
         }
 
@@ -1066,12 +1064,12 @@ mod tests {
                 state = PropTableaux::apply_move(state, PropTableauxMove::Expand(0, 0)).unwrap();
                 state = PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
 
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 state = PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
                 state = PropTableaux::apply_move(state, PropTableauxMove::Undo).unwrap();
 
-                assert_eq!(info, state.info());
+                assert_eq!(info, state.compute_seal_info());
             })
         }
 
@@ -1081,7 +1079,7 @@ mod tests {
         ) -> (PropTableauxState, String) {
             let msg = r#move.to_string();
             let state = PropTableaux::apply_move(state, r#move).expect(&msg);
-            let info = state.info();
+            let info = state.compute_seal_info();
             (state, info)
         }
 
@@ -1092,7 +1090,7 @@ mod tests {
                     PropTableaux::parse_formula("a,b,c;!a;!b;!c", Some(opts())).unwrap();
                 state.used_backtracking = true;
 
-                let e6 = state.info();
+                let e6 = state.compute_seal_info();
                 let (state, e5) = move_and_info(state, PropTableauxMove::Expand(0, 0));
                 let (state, e4) = move_and_info(state, PropTableauxMove::Expand(1, 1));
                 let (state, e3) = move_and_info(state, PropTableauxMove::AutoClose(4, 1));
@@ -1140,7 +1138,7 @@ mod tests {
                 assert_eq!(4, state.nodes.len());
                 assert_eq!(3, state.nodes[0].children.len());
 
-                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.info());
+                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -1154,7 +1152,7 @@ mod tests {
                 assert_eq!(2, state.nodes.len());
                 assert_eq!(1, state.nodes[0].children.len());
 
-                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1)|d;p;0;-;l;o;()]|[]", state.info());
+                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1)|d;p;0;-;l;o;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -1171,7 +1169,7 @@ mod tests {
                 assert_eq!(3, state.nodes[0].children.len());
                 assert_eq!(1, state.nodes[3].children.len());
 
-                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4)|d;p;3;-;l;o;()]|[]", state.info());
+                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {d}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;i;o;(4)|d;p;3;-;l;o;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -1179,7 +1177,7 @@ mod tests {
         fn leaf_index_invalid() {
             session(|| {
                 let state = PropTableaux::parse_formula("a,b;c", Some(opts())).unwrap();
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(1, 0))
                     .unwrap_err();
@@ -1189,7 +1187,7 @@ mod tests {
                     .unwrap_err();
                 assert_eq!(PropTabError::InvalidNodeId(15), res);
 
-                assert_eq!(info, state.info())
+                assert_eq!(info, state.compute_seal_info())
             })
         }
 
@@ -1197,7 +1195,7 @@ mod tests {
         fn clause_index_invalid() {
             session(|| {
                 let state = PropTableaux::parse_formula("a,b;c", Some(opts())).unwrap();
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(0, 2))
                     .unwrap_err();
@@ -1207,7 +1205,7 @@ mod tests {
                     .unwrap_err();
                 assert_eq!(PropTabError::InvalidClauseId(15), res);
 
-                assert_eq!(info, state.info())
+                assert_eq!(info, state.compute_seal_info())
             })
         }
 
@@ -1221,7 +1219,7 @@ mod tests {
                 let state =
                     PropTableaux::apply_move(state, PropTableauxMove::Expand(1, 1)).unwrap();
 
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(0, 0))
                     .unwrap_err();
@@ -1231,7 +1229,7 @@ mod tests {
                     .unwrap_err();
                 assert_eq!(PropTabError::ExpectedLeaf(1), res);
 
-                assert_eq!(info, state.info())
+                assert_eq!(info, state.compute_seal_info())
             })
         }
 
@@ -1247,13 +1245,13 @@ mod tests {
                 let state =
                     PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
 
-                let info = state.info();
+                let info = state.compute_seal_info();
 
                 let res = PropTableaux::apply_move(state.clone(), PropTableauxMove::Expand(2, 0))
                     .unwrap_err();
                 assert_eq!(PropTabError::AlreadyClosed(2), res);
 
-                assert_eq!(info, state.info())
+                assert_eq!(info, state.compute_seal_info())
             })
         }
     }
@@ -1393,9 +1391,8 @@ mod tests {
                     .unwrap_err();
                 assert_eq!(PropTabError::ExpectedLeaf(0), res);
 
-                let res =
-                    PropTableaux::apply_move(state, PropTableauxMove::Lemma(usize::MAX, 0))
-                        .unwrap_err();
+                let res = PropTableaux::apply_move(state, PropTableauxMove::Lemma(usize::MAX, 0))
+                    .unwrap_err();
                 assert_eq!(PropTabError::InvalidNodeId(usize::MAX), res);
             })
         }
@@ -1431,7 +1428,7 @@ mod tests {
 
                 assert!(state.nodes[3].is_closed);
                 assert_eq!(2, state.nodes[3].close_ref.unwrap());
-                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b}, {!b}|[true;p;null;-;i;o;(1,2)|a;p;0;-;l;o;()|b;p;0;-;i;c;(3)|b;n;2;2;l;c;()]|[]", state.info());
+                assert_eq!("tableauxstate|UNCONNECTED|false|false|false|{a, b}, {!b}|[true;p;null;-;i;o;(1,2)|a;p;0;-;l;o;()|b;p;0;-;i;c;(3)|b;n;2;2;l;c;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -1458,7 +1455,7 @@ mod tests {
                 assert_eq!(1, state.nodes[3].close_ref.unwrap());
                 assert_eq!(
                 "tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1)|b;n;0;-;i;o;(2,3,4)|a;p;1;-;l;o;()|b;p;1;1;l;c;()|c;p;1;-;l;o;()]|[]",
-                state.info()
+                state.compute_seal_info()
             );
             })
         }
@@ -1490,7 +1487,7 @@ mod tests {
                 assert_eq!(2, state.nodes[5].close_ref.unwrap());
                 assert_eq!(
                 "tableauxstate|UNCONNECTED|false|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;i;c;(4)|b;p;0;-;i;c;(5)|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;n;2;2;l;c;()]|[]",
-                state.info()
+                state.compute_seal_info()
             );
             })
         }
@@ -1594,8 +1591,7 @@ mod tests {
                     PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap();
 
                 let res =
-                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1))
-                        .unwrap_err();
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap_err();
 
                 assert_eq!(PropTabError::AlreadyClosed(2), res);
             })
@@ -1614,8 +1610,7 @@ mod tests {
                 let state = super::create_artificial_expand_state(state, nodes);
 
                 let res =
-                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1))
-                        .unwrap_err();
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(2, 1)).unwrap_err();
 
                 assert_eq!(PropTabError::ExpectedSameSpelling(2, 1), res);
             })
@@ -1631,8 +1626,7 @@ mod tests {
                 let state = super::create_artificial_expand_state(state, nodes);
 
                 let res =
-                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(1, 0))
-                        .unwrap_err();
+                    PropTableaux::apply_move(state, PropTableauxMove::AutoClose(1, 0)).unwrap_err();
 
                 assert_eq!(PropTabError::CloseRoot, res);
             })
@@ -1845,7 +1839,7 @@ mod tests {
                 let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
                 assert!(is_connected);
 
-                assert_eq!("tableauxstate|WEAKLYCONNECTED|false|false|false|{a, b, c}, {!a, b}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;i;o;(4,5)|b;p;0;-;l;o;()|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;p;1;-;i;o;(6,7)|a;n;5;1;l;c;()|b;p;5;-;l;o;()]|[]", state.info());
+                assert_eq!("tableauxstate|WEAKLYCONNECTED|false|false|false|{a, b, c}, {!a, b}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;i;o;(4,5)|b;p;0;-;l;o;()|c;p;0;-;l;o;()|a;n;1;1;l;c;()|b;p;1;-;i;o;(6,7)|a;n;5;1;l;c;()|b;p;5;-;l;o;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -1867,7 +1861,7 @@ mod tests {
                 let is_connected = check_connectedness(&state, TableauxType::WeaklyConnected);
                 assert!(is_connected);
 
-                assert_eq!("tableauxstate|WEAKLYCONNECTED|false|false|false|{!a, b}, {a}|[true;p;null;-;i;o;(1)|a;p;0;-;i;o;(2,3)|a;n;1;1;l;c;()|b;p;1;-;i;o;(4,5)|a;n;3;1;l;c;()|b;p;3;-;l;o;()]|[]", state.info());
+                assert_eq!("tableauxstate|WEAKLYCONNECTED|false|false|false|{!a, b}, {a}|[true;p;null;-;i;o;(1)|a;p;0;-;i;o;(2,3)|a;n;1;1;l;c;()|b;p;1;-;i;o;(4,5)|a;n;3;1;l;c;()|b;p;3;-;l;o;()]|[]", state.compute_seal_info());
             })
         }
 
@@ -2118,7 +2112,7 @@ mod tests {
 
                 assert_eq!(
                 "tableauxstate|UNCONNECTED|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1,2,3)|a;p;0;-;l;o;()|b;p;0;-;l;o;()|c;p;0;-;l;o;()]|[]", 
-                state.info()
+                state.compute_seal_info()
             );
             })
         }
@@ -2134,7 +2128,7 @@ mod tests {
 
                 assert_eq!(
                 "tableauxstate|UNCONNECTED|true|false|false|{a, b, c}, {!a}, {!b}, {!c}|[true;p;null;-;i;o;(1)|a;n;0;-;i;o;(2,3,4)|a;p;1;-;l;o;()|b;p;1;-;l;o;()|c;p;1;-;l;o;()]|[]", 
-                state.info()
+                state.compute_seal_info()
             );
             })
         }

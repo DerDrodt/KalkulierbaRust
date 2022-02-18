@@ -17,6 +17,10 @@ impl<L: fmt::Display + Clone> Atom<L> {
         &self.lit
     }
 
+    pub fn take_lit(self) -> L {
+        self.lit
+    }
+
     pub fn negated(&self) -> bool {
         self.negated
     }
@@ -90,6 +94,72 @@ impl<L: fmt::Display + Clone> fmt::Display for Clause<L> {
         }
 
         write!(f, "{{{}}}", atoms)
+    }
+}
+
+impl<L> IntoIterator for Clause<L>
+where
+    L: Clone + fmt::Display,
+{
+    type Item = Atom<L>;
+
+    type IntoIter = ClauseIntoIterator<L>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        self.atoms.reverse();
+        ClauseIntoIterator(self)
+    }
+}
+
+pub struct ClauseIntoIterator<L>(Clause<L>)
+where
+    L: Clone + fmt::Display;
+
+impl<L> Iterator for ClauseIntoIterator<L>
+where
+    L: Clone + fmt::Display,
+{
+    type Item = Atom<L>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.atoms.pop()
+    }
+}
+
+impl<'a, L> IntoIterator for &'a Clause<L>
+where
+    L: Clone + fmt::Display,
+{
+    type Item = &'a Atom<L>;
+
+    type IntoIter = ClauseIterator<'a, L>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ClauseIterator {
+            clause: &self,
+            idx: 0,
+        }
+    }
+}
+
+pub struct ClauseIterator<'a, L>
+where
+    L: Clone + fmt::Display,
+{
+    clause: &'a Clause<L>,
+    idx: usize,
+}
+
+impl<'a, L> Iterator for ClauseIterator<'a, L>
+where
+    L: Clone + fmt::Display,
+{
+    type Item = &'a Atom<L>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = self.clause.atoms.get(self.idx);
+        self.idx += 1;
+        res
     }
 }
 

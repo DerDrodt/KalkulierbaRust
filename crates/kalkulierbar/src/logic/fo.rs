@@ -1,12 +1,22 @@
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Serialize,
+};
 
 use crate::symbol::Symbol;
 
-#[derive(Clone, Debug, Serialize)]
+use super::{
+    transform::{term_manipulator::VariableInstantiator, visitor::FOTermVisitor},
+    unify::Unifier,
+};
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Relation {
     pub spelling: Symbol,
+    #[serde(rename = "arguments")]
     pub args: Vec<FOTerm>,
 }
 
@@ -14,14 +24,16 @@ impl Relation {
     pub fn new(spelling: Symbol, args: Vec<FOTerm>) -> Self {
         Self { spelling, args }
     }
-}
 
-impl<'de: 'l, 'l> Deserialize<'de> for Relation {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
+    pub fn syn_eq(&self, r: &Relation) -> bool {
+        self.spelling == r.spelling
+            && self.args.len() == r.args.len()
+            && self.args.iter().zip(&r.args).all(|(t1, t2)| t1.syn_eq(t2))
+    }
+
+    pub fn apply_unifier(&mut self, u: &Unifier) {
+        let instantiator = VariableInstantiator(u);
+        self.args = self.args.iter().map(|a| instantiator.visit(a)).collect();
     }
 }
 
@@ -81,6 +93,14 @@ impl FOTerm {
             _ => false,
         }
     }
+
+    pub fn spelling(&self) -> Symbol {
+        match self {
+            FOTerm::QuantifiedVar(c) => *c,
+            FOTerm::Const(c) => *c,
+            FOTerm::Function(c, _) => *c,
+        }
+    }
 }
 
 impl Serialize for FOTerm {
@@ -88,7 +108,19 @@ impl Serialize for FOTerm {
     where
         S: serde::Serializer,
     {
-        todo!()
+        let num_fields = if self.is_fn() { 3 } else { 2 };
+        let mut state = serializer.serialize_struct("FirstOrderTerm", num_fields)?;
+        let ty = match self {
+            FOTerm::QuantifiedVar(_) => "QuantifiedVariable",
+            FOTerm::Const(_) => "Constant",
+            FOTerm::Function(..) => "Function",
+        };
+        state.serialize_field("type", ty)?;
+        state.serialize_field("spelling", &self.spelling())?;
+        if let FOTerm::Function(_, args) = self {
+            state.serialize_field("arguments", args)?;
+        }
+        state.end()
     }
 }
 
@@ -97,7 +129,73 @@ impl<'de> Deserialize<'de> for FOTerm {
     where
         D: serde::Deserializer<'de>,
     {
-        todo!()
+        #[derive(Deserialize)]
+        enum Field {
+            #[serde(rename = "type")]
+            Ty,
+            #[serde(rename = "spelling")]
+            Spelling,
+            #[serde(rename = "arguments")]
+            Args,
+        }
+
+        struct TermVisitor;
+
+        impl<'de> Visitor<'de> for TermVisitor {
+            type Value = FOTerm;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct FOTerm")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<FOTerm, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut ty: Option<String> = None;
+                let mut spelling: Option<Symbol> = None;
+                let mut arguments: Option<Vec<FOTerm>> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Ty => {
+                            if ty.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            ty = Some(map.next_value()?);
+                        }
+                        Field::Spelling => {
+                            if spelling.is_some() {
+                                return Err(de::Error::duplicate_field("spelling"));
+                            }
+                            spelling = Some(map.next_value()?);
+                        }
+                        Field::Args => {
+                            if arguments.is_some() {
+                                return Err(de::Error::duplicate_field("arguments"));
+                            }
+                            arguments = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
+                let spelling = spelling.ok_or_else(|| de::Error::missing_field("spelling"))?;
+                Ok(if ty == "Function" {
+                    let args = arguments.ok_or_else(|| de::Error::missing_field("arguments"))?;
+                    FOTerm::Function(spelling, args)
+                } else {
+                    let ty: &str = &ty;
+                    match ty {
+                        "QuantifiedVariable" => FOTerm::QuantifiedVar(spelling),
+                        "Constant" => FOTerm::Const(spelling),
+                        _ => todo!(),
+                    }
+                })
+            }
+        }
+        const FIELDS: &[&str] = &["type", "spelling", "arguments"];
+        deserializer.deserialize_struct("FOTerm", FIELDS, TermVisitor)
     }
 }
 

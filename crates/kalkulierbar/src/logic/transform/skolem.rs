@@ -18,7 +18,7 @@ pub fn skolemize(n: &LogicNode) -> Result<LogicNode, SkolemizationErr> {
     Skolemization::new(used_symbols).visit(n)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SkolemizationErr;
 
 impl fmt::Display for SkolemizationErr {

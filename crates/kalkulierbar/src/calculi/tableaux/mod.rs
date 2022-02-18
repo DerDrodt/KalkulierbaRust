@@ -32,6 +32,29 @@ pub enum TableauxType {
     StronglyConnected,
 }
 
+impl TableauxType {
+    pub fn is_unconnected(&self) -> bool {
+        match self {
+            TableauxType::Unconnected => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_weakly_connected(&self) -> bool {
+        match self {
+            TableauxType::WeaklyConnected => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_strongly_connected(&self) -> bool {
+        match self {
+            TableauxType::StronglyConnected => true,
+            _ => false,
+        }
+    }
+}
+
 impl fmt::Display for TableauxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
@@ -95,10 +118,7 @@ where
 
     fn all_children_closed(&self, id: usize) -> bool {
         match self.node(id) {
-            Ok(n) => n
-                .children()
-                .iter()
-                .all(|e| self.nodes()[*e].is_closed()),
+            Ok(n) => n.children().iter().all(|e| self.nodes()[*e].is_closed()),
             Err(_) => false,
         }
     }

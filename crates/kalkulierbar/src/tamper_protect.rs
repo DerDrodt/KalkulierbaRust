@@ -1,16 +1,10 @@
 use sha3::{Digest, Sha3_256};
 
 pub trait ProtectedState {
-    fn info(&self) -> String;
-    fn seal(&self) -> &String;
-    fn set_seal(&mut self, seal: String);
+    fn compute_seal_info(&self) -> String;
 
-    fn compute_seal(&mut self) {
-        self.set_seal(seal(self.info()))
-    }
-
-    fn verify_seal(&self) -> bool {
-        verify(self.info(), self.seal())
+    fn verify_seal(&self, seal: &str) -> bool {
+        verify(self.compute_seal_info(), seal)
     }
 }
 

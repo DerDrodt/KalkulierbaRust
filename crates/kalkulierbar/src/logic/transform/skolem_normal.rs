@@ -8,7 +8,7 @@ use super::{
     unique_vars::unique_vars,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkolemNormalFormErr {
     NNFErr(&'static str),
     SkolemErr(SkolemizationErr),

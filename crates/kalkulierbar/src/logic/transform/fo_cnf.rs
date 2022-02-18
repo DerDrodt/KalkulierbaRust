@@ -17,7 +17,7 @@ pub fn fo_cnf(formula: LogicNode) -> Result<ClauseSet<Relation>, FOCNFErr> {
     cnf.visit(&skolem_normal_form(formula)?)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FOCNFErr {
     UnknownNode,
     HeavyBlowUp,

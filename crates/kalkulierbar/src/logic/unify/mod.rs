@@ -1,4 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
+
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Deserializer, Serialize,
+};
 
 use crate::Symbol;
 
@@ -7,7 +12,7 @@ use super::{
     transform::{term_manipulator::TermContainsVariableChecker, visitor::FOTermVisitor},
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum UnificationErr {
     DifferentRels(Relation, Relation),
     DifferentNum(Relation, Relation),
@@ -15,6 +20,7 @@ pub enum UnificationErr {
     CannotBeUnified(FOTerm, FOTerm),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unifier(HashMap<Symbol, FOTerm>);
 
 impl Unifier {
@@ -48,6 +54,61 @@ impl Unifier {
         }
         m.insert(s, t);
         self.0 = m
+    }
+}
+
+impl fmt::Display for Unifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let mut contents = String::new();
+        for (i, (k, v)) in self.0.iter().enumerate() {
+            contents.push_str(&format!("{}={}", k, v));
+            if i < self.0.len() - 1 {
+                contents.push_str(", ");
+            }
+        }
+        write!(f, "{{{}}}", contents)
+    }
+}
+
+impl Serialize for Unifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        Serialize::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Unifier {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MapVisitor;
+
+        impl<'de> Visitor<'de> for MapVisitor {
+            type Value = Unifier;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map")
+            }
+
+            #[inline]
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = HashMap::new();
+
+                while let Some((key, value)) = map.next_entry()? {
+                    values.insert(key, value);
+                }
+
+                Ok(Unifier::from_map(values))
+            }
+        }
+
+        deserializer.deserialize_map(MapVisitor)
     }
 }
 
