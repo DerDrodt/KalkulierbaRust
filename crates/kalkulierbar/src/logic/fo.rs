@@ -74,24 +74,15 @@ impl FOTerm {
     }
 
     pub fn is_var(&self) -> bool {
-        match self {
-            FOTerm::QuantifiedVar(_) => true,
-            _ => false,
-        }
+        matches!(self, FOTerm::QuantifiedVar(_))
     }
 
     pub fn is_const(&self) -> bool {
-        match self {
-            FOTerm::Const(_) => true,
-            _ => false,
-        }
+        matches!(self, FOTerm::Const(_))
     }
 
     pub fn is_fn(&self) -> bool {
-        match self {
-            FOTerm::Function(_, _) => true,
-            _ => false,
-        }
+        matches!(self, FOTerm::Function(_, _))
     }
 
     pub fn spelling(&self) -> Symbol {

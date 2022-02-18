@@ -51,6 +51,12 @@ impl PrenexNormalForm {
     }
 }
 
+impl Default for PrenexNormalForm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MutLogicNodeVisitor for PrenexNormalForm {
     type Ret = Result<LogicNode, PrenixNormalFormErr>;
 
@@ -106,8 +112,8 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
         ))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        Ok(LogicNode::Rel(spelling, args.clone()))
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+        Ok(LogicNode::Rel(spelling, args.to_vec()))
     }
 
     fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {

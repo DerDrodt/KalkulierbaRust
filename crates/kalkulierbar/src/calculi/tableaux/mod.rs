@@ -34,24 +34,15 @@ pub enum TableauxType {
 
 impl TableauxType {
     pub fn is_unconnected(&self) -> bool {
-        match self {
-            TableauxType::Unconnected => true,
-            _ => false,
-        }
+        matches!(self, TableauxType::Unconnected)
     }
 
     pub fn is_weakly_connected(&self) -> bool {
-        match self {
-            TableauxType::WeaklyConnected => true,
-            _ => false,
-        }
+        matches!(self, TableauxType::WeaklyConnected)
     }
 
     pub fn is_strongly_connected(&self) -> bool {
-        match self {
-            TableauxType::StronglyConnected => true,
-            _ => false,
-        }
+        matches!(self, TableauxType::StronglyConnected)
     }
 }
 
@@ -97,7 +88,7 @@ where
         }
     }
 
-    fn mark_node_closed<'a>(&'a mut self, leaf: usize) {
+    fn mark_node_closed(&mut self, leaf: usize) {
         let mut id = leaf;
         while self.is_leaf(id) || self.all_children_closed(id) {
             let node = &mut self.node_mut(id).unwrap();
@@ -177,7 +168,7 @@ where
 
     fn node_is_directly_closable(&self, id: usize) -> bool;
 
-    fn clause_expand_preprocessing<'c>(&self, clause: &'c Clause<L>) -> Vec<Atom<L>>;
+    fn clause_expand_preprocessing(&self, clause: &Clause<L>) -> Vec<Atom<L>>;
 }
 
 pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> {

@@ -13,7 +13,7 @@ use super::{
 };
 
 pub fn fo_cnf(formula: LogicNode) -> Result<ClauseSet<Relation>, FOCNFErr> {
-    let mut cnf = FOCNF;
+    let mut cnf = FOcnf;
     cnf.visit(&skolem_normal_form(formula)?)
 }
 
@@ -40,9 +40,9 @@ impl From<SkolemNormalFormErr> for FOCNFErr {
     }
 }
 
-struct FOCNF;
+struct FOcnf;
 
-impl MutLogicNodeVisitor for FOCNF {
+impl MutLogicNodeVisitor for FOcnf {
     type Ret = Result<ClauseSet<Relation>, FOCNFErr>;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
@@ -117,8 +117,8 @@ impl MutLogicNodeVisitor for FOCNF {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        let atom = Atom::new(Relation::new(spelling, args.clone()), false);
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+        let atom = Atom::new(Relation::new(spelling, args.to_vec()), false);
         let clause = Clause::new(vec![atom]);
         Ok(ClauseSet::new(vec![clause]))
     }

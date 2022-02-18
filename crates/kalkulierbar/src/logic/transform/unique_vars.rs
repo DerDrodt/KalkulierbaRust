@@ -90,7 +90,7 @@ impl MutLogicNodeVisitor for UniqueVars {
         LogicNode::Equiv(Box::new(left.clone()), Box::new(right.clone()))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         let renamer = VariableRenamer::new(&self.replacements);
         LogicNode::Rel(spelling, args.iter().map(|a| renamer.visit(a)).collect())
     }
@@ -161,7 +161,7 @@ impl<'a> FOTermVisitor for VariableRenamer<'a> {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&self, name: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_fn(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         FOTerm::Function(name, args.iter().map(|a| self.visit(a)).collect())
     }
 }

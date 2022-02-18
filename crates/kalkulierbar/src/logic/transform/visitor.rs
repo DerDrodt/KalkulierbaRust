@@ -31,7 +31,7 @@ pub trait MutLogicNodeVisitor {
 
     fn visit_equiv(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
+    fn visit_rel(&mut self, spelling: Symbol, args: &[FOTerm]) -> Self::Ret;
 
     fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
@@ -67,7 +67,7 @@ pub trait LogicNodeVisitor {
 
     fn visit_equiv(&self, left: &LogicNode, right: &LogicNode) -> Self::Ret;
 
-    fn visit_rel(&self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
+    fn visit_rel(&self, spelling: Symbol, args: &[FOTerm]) -> Self::Ret;
 
     fn visit_all(&self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
@@ -89,7 +89,7 @@ pub trait MutFOTermVisitor {
 
     fn visit_const(&mut self, s: Symbol) -> Self::Ret;
 
-    fn visit_fn(&mut self, name: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
+    fn visit_fn(&mut self, name: Symbol, args: &[FOTerm]) -> Self::Ret;
 }
 
 pub trait FOTermVisitor {
@@ -107,5 +107,5 @@ pub trait FOTermVisitor {
 
     fn visit_const(&self, s: Symbol) -> Self::Ret;
 
-    fn visit_fn(&self, name: Symbol, args: &Vec<FOTerm>) -> Self::Ret;
+    fn visit_fn(&self, name: Symbol, args: &[FOTerm]) -> Self::Ret;
 }

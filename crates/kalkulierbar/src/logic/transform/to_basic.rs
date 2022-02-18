@@ -48,8 +48,8 @@ impl<'a> MutLogicNodeVisitor for ToBasicOps {
         LogicNode::Or(both_t, both_f)
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        LogicNode::Rel(spelling, args.clone())
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+        LogicNode::Rel(spelling, args.to_vec())
     }
 
     fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
@@ -60,6 +60,12 @@ impl<'a> MutLogicNodeVisitor for ToBasicOps {
     fn visit_ex(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
         let child = self.visit(child).into();
         LogicNode::Ex(var, child)
+    }
+}
+
+impl Default for ToBasicOps {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

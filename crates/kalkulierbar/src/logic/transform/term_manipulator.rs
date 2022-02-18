@@ -22,7 +22,7 @@ impl<'a> FOTermVisitor for VariableInstantiator<'a> {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&self, name: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_fn(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         let args = args.iter().map(|a| self.visit(a)).collect();
 
         FOTerm::Function(name, args)
@@ -49,7 +49,7 @@ impl FOTermVisitor for VariableSuffixAppend {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&self, name: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_fn(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         let args = args.iter().map(|a| self.visit(a)).collect();
 
         FOTerm::Function(name, args)
@@ -69,7 +69,7 @@ impl FOTermVisitor for TermContainsVariableChecker {
         false
     }
 
-    fn visit_fn(&self, _: Symbol, args: &Vec<FOTerm>) -> Self::Ret {
+    fn visit_fn(&self, _: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         args.iter().any(|t| self.visit(t))
     }
 }

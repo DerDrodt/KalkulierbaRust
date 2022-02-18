@@ -125,7 +125,7 @@ impl MutLogicNodeVisitor for Skolemization {
         ))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         let mut replacer = SkolemTermReplacer::new(&self.replacement_map);
         Ok(LogicNode::Rel(
             spelling,
@@ -189,7 +189,7 @@ impl<'a> MutFOTermVisitor for SkolemTermReplacer<'a> {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&mut self, name: Symbol, args: &Vec<FOTerm>) -> Self::Ret {
+    fn visit_fn(&mut self, name: Symbol, args: &[FOTerm]) -> Self::Ret {
         FOTerm::Function(name, args.iter().map(|a| self.visit(a)).collect())
     }
 }

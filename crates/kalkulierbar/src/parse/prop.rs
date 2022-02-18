@@ -8,7 +8,7 @@ use crate::{
 
 use super::Tokenizer;
 
-pub fn parse_prop_formula<'f>(formula: &'f str) -> ParseResult<LogicNode> {
+pub fn parse_prop_formula(formula: &str) -> ParseResult<LogicNode> {
     PropParser::parse(formula)
 }
 

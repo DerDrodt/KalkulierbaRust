@@ -14,6 +14,12 @@ impl NaiveCNF {
     }
 }
 
+impl Default for NaiveCNF {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct FormulaConversionErr;
 
@@ -109,7 +115,7 @@ impl MutLogicNodeVisitor for NaiveCNF {
         self.visit(&n)
     }
 
-    fn visit_rel(&mut self, _spelling: Symbol, _args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, _spelling: Symbol, _args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 

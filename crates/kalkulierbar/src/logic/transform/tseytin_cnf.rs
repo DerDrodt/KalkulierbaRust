@@ -20,11 +20,11 @@ impl TseytinCNF {
     }
 
     #[inline]
-    fn name<'a>(&self, kind: &'a str) -> Symbol {
+    fn name(&self, kind: &str) -> Symbol {
         Symbol::intern(&format!("{}{}", kind, self.idx))
     }
 
-    pub fn node_name<'n>(&self, node: &'n LogicNode) -> Symbol {
+    pub fn node_name(&self, node: &LogicNode) -> Symbol {
         let name = match node {
             LogicNode::Not(_) => "not",
             LogicNode::And(..) => "and",
@@ -36,6 +36,12 @@ impl TseytinCNF {
         };
 
         self.name(name)
+    }
+}
+
+impl Default for TseytinCNF {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -157,7 +163,7 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_d);
     }
 
-    fn visit_rel(&mut self, _spelling: Symbol, _args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, _spelling: Symbol, _args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 

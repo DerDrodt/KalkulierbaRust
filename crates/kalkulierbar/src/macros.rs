@@ -56,17 +56,13 @@ macro_rules! newtype_index {
             #[inline]
             $v fn from_usize(value: usize) -> Self {
                 assert!(value <= ($max as usize));
-                unsafe {
-                    $type::from_u32_unchecked(value as u32)
-                }
+                $type::from_u32_unchecked(value as u32)
             }
 
             #[inline]
             $v const fn from_u32(value: u32) -> Self {
                 assert!(value <= $max);
-                unsafe {
-                    $type::from_u32_unchecked(value)
-                }
+                $type::from_u32_unchecked(value)
             }
 
             /// Hacky variant of `from_u32` for use in constants.
@@ -88,8 +84,8 @@ macro_rules! newtype_index {
             }
 
             #[inline]
-            $v const unsafe fn from_u32_unchecked(value: u32) -> Self {
-                unsafe { $type { private: value } }
+            $v const fn from_u32_unchecked(value: u32) -> Self {
+                $type { private: value }
             }
 
             /// Extracts the value of this index as an integer.

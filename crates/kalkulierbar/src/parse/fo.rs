@@ -7,11 +7,11 @@ use crate::{
 
 use super::{ParseErr, ParseResult, Token, TokenKind, Tokenizer};
 
-pub fn parse_fo_formula<'f>(formula: &'f str) -> ParseResult<LogicNode> {
+pub fn parse_fo_formula(formula: &str) -> ParseResult<LogicNode> {
     FOParser::parse(formula)
 }
 
-pub fn parse_fo_term<'f>(term: &'f str) -> ParseResult<FOTerm> {
+pub fn parse_fo_term(term: &str) -> ParseResult<FOTerm> {
     let mut parser = FOParser::new_term_parser(term);
     let res = parser.parse_term()?;
     match parser.tokens.next() {

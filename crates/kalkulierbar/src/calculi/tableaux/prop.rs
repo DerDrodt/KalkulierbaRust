@@ -236,7 +236,7 @@ impl PropTableauxState {
         Ok(false)
     }
 
-    pub fn mark_node_closed<'a>(&'a mut self, leaf: usize) {
+    pub fn mark_node_closed(&mut self, leaf: usize) {
         let mut id = leaf;
         while self.is_leaf(id) || self.all_children_closed(id) {
             let node = &mut self.nodes[id];
@@ -494,7 +494,7 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
         } = params.unwrap_or_default();
 
         let clauses = parse_flexible(formula, cnf_strategy)?;
-        let mut state = PropTableauxState::new(clauses, tab_type, regular, backtracking);
+        let state = PropTableauxState::new(clauses, tab_type, regular, backtracking);
         state.compute_seal_info();
         Ok(state)
     }
@@ -507,7 +507,7 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
             Lemma(leaf, lemma) => apply_lemma(state, leaf, lemma),
             Undo => apply_undo(state),
         };
-        let mut state = r?;
+        let state = r?;
         state.compute_seal_info();
         Ok(state)
     }
@@ -865,10 +865,7 @@ impl Serialize for PropTableauxMove {
     where
         S: Serializer,
     {
-        let is_undo = match self {
-            PropTableauxMove::Undo => true,
-            _ => false,
-        };
+        let is_undo = matches!(self, PropTableauxMove::Undo);
         let mut state = serializer.serialize_struct("PropTabMove", if is_undo { 1 } else { 3 })?;
         let ty = match self {
             PropTableauxMove::Undo => "tableaux-undo",

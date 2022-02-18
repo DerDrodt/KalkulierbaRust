@@ -136,7 +136,7 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         ClauseIterator {
-            clause: &self,
+            clause: self,
             idx: 0,
         }
     }
@@ -163,7 +163,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ClauseSet<L: fmt::Display + Clone> {
     clauses: Vec<Clause<L>>,
 }

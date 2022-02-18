@@ -20,7 +20,7 @@ pub enum UnificationErr {
     CannotBeUnified(FOTerm, FOTerm),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Unifier(HashMap<Symbol, FOTerm>);
 
 impl Unifier {
@@ -148,7 +148,7 @@ fn find_terms_to_unify<'a>(
     Ok(())
 }
 
-fn unify_terms<'a>(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, UnificationErr> {
+fn unify_terms(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, UnificationErr> {
     let mut mgu = Unifier::new();
 
     while let Some((ot1, ot2)) = terms.pop() {

@@ -6,6 +6,7 @@ mod consts;
 pub mod logic;
 #[macro_use]
 mod macros;
+#[allow(clippy::all)]
 mod arena;
 pub mod parse;
 pub mod symbol;
@@ -32,6 +33,12 @@ impl SessionGlobals {
         SessionGlobals {
             symbol_interner: symbol::Interner::fresh(),
         }
+    }
+}
+
+impl Default for SessionGlobals {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

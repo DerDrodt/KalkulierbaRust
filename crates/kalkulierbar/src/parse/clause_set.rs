@@ -16,7 +16,7 @@ pub enum CNFStrategy {
     Optimal,
 }
 
-pub fn parse_clause_set<'f>(formula: &'f str) -> ParseResult<ClauseSet<Symbol>> {
+pub fn parse_clause_set(formula: &str) -> ParseResult<ClauseSet<Symbol>> {
     ClauseSetParser::parse(formula)
 }
 

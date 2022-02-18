@@ -363,10 +363,10 @@ fn verify_expand_connectedness(state: &FOTabState, leaf_id: usize) -> FOTabResul
         if !children.iter().any(|c| state.node_is_closable(*c)) {
             return Err(FOTabErr::WouldMakeNotWeaklyUnconnected);
         }
-    } else if state.ty.is_strongly_connected() {
-        if !children.iter().any(|c| state.node_is_directly_closable(*c)) {
-            return Err(FOTabErr::WouldMakeNotStronglyUnconnected(leaf.clone()));
-        }
+    } else if state.ty.is_strongly_connected()
+        && !children.iter().any(|c| state.node_is_directly_closable(*c))
+    {
+        return Err(FOTabErr::WouldMakeNotStronglyUnconnected(leaf.clone()));
     }
     Ok(())
 }
@@ -682,15 +682,12 @@ impl TableauxState<Relation> for FOTabState {
 
         let parent = &self.nodes[node.parent.unwrap()];
 
-        match unify::unify(&node.relation, &parent.relation) {
-            Ok(_) => true,
-            _ => false,
-        }
+        matches!(unify::unify(&node.relation, &parent.relation), Ok(_))
     }
 
-    fn clause_expand_preprocessing<'c>(
+    fn clause_expand_preprocessing(
         &self,
-        clause: &'c crate::clause::Clause<Relation>,
+        clause: &crate::clause::Clause<Relation>,
     ) -> Vec<crate::clause::Atom<Relation>> {
         let suffix_appender =
             VariableSuffixAppend(Symbol::intern(&format!("_{}", self.expansion_counter + 1)));
@@ -1478,7 +1475,7 @@ mod tests {
 
                 let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(6, 2, u.clone())).unwrap();
                 let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(5, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(5, 2, u)).unwrap();
 
                 assert!(s.nodes[2].is_closed);
                 assert!(s.nodes[4].is_closed);

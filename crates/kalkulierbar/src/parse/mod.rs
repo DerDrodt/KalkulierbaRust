@@ -14,10 +14,8 @@ pub mod prop;
 pub type ParseResult<T> = Result<T, ParseErr>;
 
 pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<ClauseSet<Symbol>> {
-    let likely_formula = formula.contains(|c| match c {
-        '&' | '|' | '\\' | '>' | '<' | '=' | '-' => true,
-        _ => false,
-    });
+    let likely_formula =
+        formula.contains(|c| matches!(c, '&' | '|' | '\\' | '>' | '<' | '=' | '-'));
     /* let likely_clause_set = formula.contains(|c| match c {
         ';' | ',' => true,
         _ => false,

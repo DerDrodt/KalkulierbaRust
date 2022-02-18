@@ -18,6 +18,12 @@ impl SymbolCollector {
     }
 }
 
+impl Default for SymbolCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MutLogicNodeVisitor for SymbolCollector {
     type Ret = ();
 
@@ -63,7 +69,7 @@ impl MutLogicNodeVisitor for SymbolCollector {
         self.visit(right)
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         self.0.insert(spelling);
         for a in args {
             TermSymbolCollector(&mut self.0).visit(a);
@@ -94,7 +100,7 @@ impl<'a> MutFOTermVisitor for TermSymbolCollector<'a> {
         self.0.insert(s);
     }
 
-    fn visit_fn(&mut self, name: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
+    fn visit_fn(&mut self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
         self.0.insert(name);
         for a in args {
             self.visit(a);

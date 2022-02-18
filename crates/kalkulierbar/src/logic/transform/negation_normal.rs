@@ -87,8 +87,8 @@ impl LogicNodeVisitor for NegationNormalForm {
         Err("Unknown LogicNode encountered during Negation Normal Form transformation")
     }
 
-    fn visit_rel(&self, name: Symbol, args: &Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        Ok(LogicNode::Rel(name, args.clone()))
+    fn visit_rel(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+        Ok(LogicNode::Rel(name, args.to_vec()))
     }
 
     fn visit_all(&self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
