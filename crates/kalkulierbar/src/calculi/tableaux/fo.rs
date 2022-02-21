@@ -1652,19 +1652,19 @@ mod tests {
                 let state = manual_state(0);
                 // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
                 let u = unifier!("B_1", "c"; "A_2", "c"; "B_2", "c");
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(4, 2, u.clone()))
+                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(4, 2, u.clone()))
                         .unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(5, 2, u.clone()))
+                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(5, 2, u.clone()))
                         .unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(6, 2, u)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(6, 2, u)).unwrap();
 
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[7].lemma_source.unwrap());
                 assert!(state.nodes[7].negated);
@@ -1676,17 +1676,17 @@ mod tests {
             session(|| {
                 let state = auto_state(0);
                 // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(6, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(6, 2)).unwrap();
 
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[7].lemma_source.unwrap());
                 assert!(state.nodes[7].negated);
@@ -1698,17 +1698,17 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[6].lemma_source.unwrap());
                 assert!(state.nodes[6].negated);
@@ -1723,18 +1723,18 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
-                FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(6, 2)).unwrap();
+                FOTableaux::apply_move(state, FOTabMove::Lemma(6, 2)).unwrap();
             });
         }
 
@@ -1743,20 +1743,20 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
-                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
                 let state =
-                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
-                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(5, 3)).is_err());
+                assert!(FOTableaux::apply_move(state, FOTabMove::Lemma(5, 3)).is_err());
             });
         }
 
@@ -1767,7 +1767,7 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 0)).is_err());
                 assert!(
-                    FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(usize::MAX, 0)).is_err()
+                    FOTableaux::apply_move(state, FOTabMove::Lemma(usize::MAX, 0)).is_err()
                 );
             })
         }
@@ -1995,7 +1995,7 @@ mod tests {
                 let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
 
                 let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(3, 2, u.clone())).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u)).unwrap();
 
                 assert_eq!("R(A_1)", &s.nodes[2].spelling());
                 assert_eq!("R(A_1)", &s.nodes[3].spelling());

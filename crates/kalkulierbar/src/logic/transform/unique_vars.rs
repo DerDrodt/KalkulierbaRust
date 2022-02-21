@@ -55,7 +55,7 @@ impl MutLogicNodeTransformer for UniqueVars {
     }
 
     fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
-        LogicNode::Not(Box::new(child.clone()))
+        LogicNode::Not(Box::new(child))
     }
 
     fn visit_and(
@@ -63,7 +63,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::And(Box::new(left.clone()), Box::new(right.clone()))
+        LogicNode::And(Box::new(left), Box::new(right))
     }
 
     fn visit_or(
@@ -71,7 +71,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Or(Box::new(left.clone()), Box::new(right.clone()))
+        LogicNode::Or(Box::new(left), Box::new(right))
     }
 
     fn visit_impl(
@@ -79,7 +79,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Impl(Box::new(left.clone()), Box::new(right.clone()))
+        LogicNode::Impl(Box::new(left), Box::new(right))
     }
 
     fn visit_equiv(
@@ -87,7 +87,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Equiv(Box::new(left.clone()), Box::new(right.clone()))
+        LogicNode::Equiv(Box::new(left), Box::new(right))
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {

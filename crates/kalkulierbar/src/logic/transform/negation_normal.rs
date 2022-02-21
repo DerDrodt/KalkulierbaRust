@@ -21,28 +21,28 @@ impl LogicNodeTransformer for NegationNormalForm {
             LogicNode::Not(c) => self.visit(*c),
             LogicNode::And(l, r) => {
                 let n = LogicNode::Or(
-                    LogicNode::Not(l.clone()).into(),
-                    LogicNode::Not(r.clone()).into(),
+                    LogicNode::Not(l).into(),
+                    LogicNode::Not(r).into(),
                 );
                 Ok(self.visit(n)?)
             }
             LogicNode::Or(l, r) => {
                 let n = LogicNode::And(
-                    LogicNode::Not(l.clone()).into(),
-                    LogicNode::Not(r.clone()).into(),
+                    LogicNode::Not(l).into(),
+                    LogicNode::Not(r).into(),
                 );
                 Ok(self.visit(n)?)
             }
             LogicNode::Rel(name, args) => {
-                Ok(LogicNode::Not(Box::new(LogicNode::Rel(name, args.clone()))))
+                Ok(LogicNode::Not(Box::new(LogicNode::Rel(name, args))))
             }
             LogicNode::All(var, c) => Ok(LogicNode::Ex(
                 var,
-                self.visit(LogicNode::Not(c.clone()))?.into(),
+                self.visit(LogicNode::Not(c))?.into(),
             )),
             LogicNode::Ex(var, c) => Ok(LogicNode::All(
                 var,
-                self.visit(LogicNode::Not(c.clone()))?.into(),
+                self.visit(LogicNode::Not(c))?.into(),
             )),
             _ => Err("Unknown LogicNode encountered during Negation Normal Form transformation"),
         }

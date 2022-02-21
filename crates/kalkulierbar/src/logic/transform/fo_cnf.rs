@@ -52,7 +52,7 @@ impl MutLogicNodeTransformer for FOcnf {
     fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
         match child {
             LogicNode::Rel(name, args) => {
-                let atom = Atom::new(Relation::new(name, args.clone()), true);
+                let atom = Atom::new(Relation::new(name, args), true);
                 let clause = Clause::new(vec![atom]);
                 Ok(ClauseSet::new(vec![clause]))
             }
