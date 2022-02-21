@@ -7,6 +7,7 @@ use serde::{
 };
 
 use crate::{
+    calculus::CloseMsg,
     clause::Atom,
     clause::{Clause, ClauseSet},
     logic::transform::{term_manipulator::VariableSuffixAppend, visitor::FOTermVisitor},
@@ -23,7 +24,7 @@ use crate::{
     Calculus,
 };
 
-use super::{TableauxErr, TableauxNode, TableauxState, TableauxType};
+use super::{TableauxErr, TableauxNode, TableauxType};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FOTabErr {
@@ -31,40 +32,26 @@ pub enum FOTabErr {
     CNF(FOCNFErr),
     InvalidNodeId(usize),
     InvalidClauseId(usize),
-    ExpectedLeaf(usize),
-    AlreadyClosed(usize),
-    ExpectedClosed(usize),
-    LemmaRoot(usize),
-    LemmaLeaf(usize),
-    ExpectedSiblings(usize, usize),
+    ExpectedLeaf(FOTabNode),
+    AlreadyClosed(FOTabNode),
+    ExpectedClosed(FOTabNode),
+    LemmaRoot,
+    LemmaLeaf,
+    ExpectedSiblings(FOTabNode, FOTabNode),
     AutoCloseNotEnabled,
-    ExpectedSameLit(usize, usize),
+    ExpectedSameLit(FOTabNode, FOTabNode),
     CloseRoot,
-    ExpectedParent(usize, usize),
-    CloseBothNeg(usize, usize),
-    CloseBothPos(usize, usize),
+    ExpectedParent(FOTabNode, FOTabNode),
+    CloseBothNeg(FOTabNode, FOTabNode),
+    CloseBothPos(FOTabNode, FOTabNode),
     Unification(UnificationErr),
     UnEqAfterInst(FOTabNode, FOTabNode),
     InstWouldViolateReg,
-    WouldMakeIrregular(String),
+    WouldMakeIrregular(Atom<Relation>),
     WouldMakeNotWeaklyUnconnected,
     WouldMakeNotStronglyUnconnected(FOTabNode),
     NotConnected,
     BacktrackingDisabled,
-}
-
-impl From<TableauxErr> for FOTabErr {
-    fn from(e: TableauxErr) -> Self {
-        match e {
-            TableauxErr::InvalidNodeId(i) => FOTabErr::InvalidNodeId(i),
-            TableauxErr::ExpectedLeaf(i) => FOTabErr::ExpectedLeaf(i),
-            TableauxErr::AlreadyClosed(i) => FOTabErr::AlreadyClosed(i),
-            TableauxErr::ExpectedClosed(i) => FOTabErr::ExpectedClosed(i),
-            TableauxErr::LemmaRoot(i) => FOTabErr::LemmaRoot(i),
-            TableauxErr::LemmaLeaf(i) => FOTabErr::LemmaLeaf(i),
-            TableauxErr::ExpectedSiblings(i1, i2) => FOTabErr::ExpectedSiblings(i1, i2),
-        }
-    }
 }
 
 impl From<ParseErr> for FOTabErr {
@@ -85,12 +72,57 @@ impl From<UnificationErr> for FOTabErr {
     }
 }
 
+impl fmt::Display for FOTabErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FOTabErr::Parse(e) => fmt::Display::fmt(e, f),
+            FOTabErr::CNF(e) => fmt::Display::fmt(e, f),
+            FOTabErr::InvalidNodeId(id) => write!(f, "Node with ID {id} does not exist"),
+            FOTabErr::InvalidClauseId(id) => write!(f, "Clause with ID {id} does not exist"),
+            FOTabErr::ExpectedLeaf(n) => write!(f, "Node '{n}' is not a leaf"),
+            FOTabErr::AlreadyClosed(n) => write!(f, "Node '{n}' is already closed"),
+            FOTabErr::ExpectedClosed(n) => {
+                write!(f, "Node '{n}' is not the root of a closed subtableaux")
+            }
+            FOTabErr::LemmaRoot => write!(f, "Root node cannot be used for lemma creation"),
+            FOTabErr::LemmaLeaf => write!(f, "Cannot create lemma from a leaf"),
+            FOTabErr::ExpectedSiblings(n1, n2) => {
+                write!(f, "Nodes '{n1}' and '{n2}' are not siblings")
+            }
+            FOTabErr::AutoCloseNotEnabled => write!(f, "Auto-close is not enabled for this proof"),
+            FOTabErr::ExpectedSameLit(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' do not reference the same literal"),
+            FOTabErr::CloseRoot => write!(f, "The root node cannot be used for branch closure"),
+            FOTabErr::ExpectedParent(node, leaf) => write!(f, "Node '{node}' is not an ancestor of leaf '{leaf}'"),
+            FOTabErr::CloseBothNeg(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but both of them are negated"),
+            FOTabErr::CloseBothPos(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but neither of them are negated"),
+            FOTabErr::Unification(e) => fmt::Display::fmt(e, f),
+            FOTabErr::UnEqAfterInst(n1, n2) => write!(
+                f,
+                "Nodes '{n1}' and '{n2}' are not equal after variable instantiation"
+            ),
+            FOTabErr::InstWouldViolateReg => write!(
+                f,
+                "This variable instantiation would violate the proof regularity"
+            ),
+            FOTabErr::WouldMakeIrregular(a) => write!(f, "Expanding this clause would introduce a duplicate node {a} on the branch, making the tree irregular"),
+            FOTabErr::WouldMakeNotWeaklyUnconnected => write!(f, "No literal in this clause would be closeable, making the tree unconnected"),
+            FOTabErr::WouldMakeNotStronglyUnconnected(n) => write!(f, "No literal in this clause would be closeable with '{n}', making the tree not strongly connected"),
+            FOTabErr::NotConnected => write!(f, "The proof tree is currently not sufficiently connected, please close branches first to restore connectedness before expanding more leaves"),
+            FOTabErr::BacktrackingDisabled => write!(f, "Backtracking is not enabled for this proof"),
+        }
+    }
+}
+
 pub type FOTabResult<T> = Result<T, FOTabErr>;
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FOTabParams {
+    #[serde(rename = "type")]
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
+    #[serde(rename = "manualVarAssign")]
     manual_var_assign: bool,
 }
 
@@ -353,7 +385,7 @@ fn verify_expand_regularity(
 
     for atom in clause {
         if lst.contains(atom) {
-            return Err(FOTabErr::WouldMakeIrregular(atom.to_string()));
+            return Err(FOTabErr::WouldMakeIrregular(atom.clone()));
         }
     }
 
@@ -435,15 +467,15 @@ fn ensure_basic_closeability(
     let node = state.node(node_id)?;
 
     if !leaf.is_leaf() {
-        return Err(FOTabErr::ExpectedLeaf(leaf_id));
+        return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
     }
 
     if leaf.is_closed {
-        return Err(FOTabErr::AlreadyClosed(leaf_id));
+        return Err(FOTabErr::AlreadyClosed(leaf.clone()));
     }
 
     if leaf.lit_stem() != node.lit_stem() {
-        return Err(FOTabErr::ExpectedSameLit(leaf_id, node_id));
+        return Err(FOTabErr::ExpectedSameLit(leaf.clone(), node.clone()));
     }
 
     if node_id == 0 {
@@ -451,12 +483,12 @@ fn ensure_basic_closeability(
     }
 
     if !state.node_is_parent_of(node_id, leaf_id)? {
-        return Err(FOTabErr::ExpectedParent(node_id, leaf_id));
+        return Err(FOTabErr::ExpectedParent(node.clone(), leaf.clone()));
     }
 
     match (leaf.negated, node.negated) {
-        (true, true) => Err(FOTabErr::CloseBothNeg(leaf_id, node_id)),
-        (false, false) => Err(FOTabErr::CloseBothPos(leaf_id, node_id)),
+        (true, true) => Err(FOTabErr::CloseBothNeg(leaf.clone(), node.clone())),
+        (false, false) => Err(FOTabErr::CloseBothPos(leaf.clone(), node.clone())),
         _ => Ok(()),
     }
 }
@@ -500,10 +532,10 @@ fn ensure_expandable(state: &FOTabState, leaf_id: usize, clause_id: usize) -> FO
     let leaf = &state.nodes[leaf_id];
 
     if !leaf.is_leaf() {
-        return Err(FOTabErr::ExpectedLeaf(leaf_id));
+        return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
     }
     if leaf.is_closed() {
-        return Err(FOTabErr::AlreadyClosed(leaf_id));
+        return Err(FOTabErr::AlreadyClosed(leaf.clone()));
     }
 
     let clause = &state.clause_set.clauses()[clause_id];
@@ -612,99 +644,79 @@ impl FOTabState {
         }
     }
 
-    fn node_ancestry_contains_unifiable(&self, id: usize, atom: Atom<Relation>) -> bool {
-        let mut node = match self.node(id) {
-            Ok(n) => n,
-            _ => {
-                return false;
-            }
-        };
-
-        while node.parent.is_some() {
-            node = &self.nodes[node.parent.unwrap()];
-
-            if node.negated != atom.negated()
-                && node.relation.spelling == atom.lit().spelling
-                && unify::unify(&node.relation, atom.lit()).is_ok()
-            {
-                return true;
-            }
-        }
-
-        false
+    fn root(&self) -> &FOTabNode {
+        self.node(0).unwrap()
     }
 
-    fn apply_unifier(&mut self, u: Unifier) {
-        for n in &mut self.nodes {
-            n.apply_unifier(&u);
-        }
-    }
-
-    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> FOTabResult<Atom<Relation>> {
-        let leaf = self.node(leaf_id)?;
-        let lemma = self.node(lemma_id)?;
-
-        if !leaf.is_leaf() {
-            return Err(FOTabErr::ExpectedLeaf(leaf_id));
-        }
-
-        if leaf.is_closed() {
-            return Err(FOTabErr::AlreadyClosed(leaf_id));
-        }
-
-        if !lemma.is_closed() {
-            return Err(FOTabErr::ExpectedClosed(lemma_id));
-        }
-
-        if lemma.parent().is_none() {
-            return Err(FOTabErr::LemmaRoot(lemma_id));
-        }
-
-        if lemma.is_leaf() {
-            return Err(FOTabErr::LemmaLeaf(lemma_id));
-        }
-
-        let common_parent = lemma.parent().unwrap();
-
-        if !self.node_is_parent_of(common_parent, leaf_id)? {
-            return Err(FOTabErr::ExpectedSiblings(leaf_id, lemma_id));
-        }
-
-        let atom: Atom<Relation> = lemma.into();
-        let atom = atom.not();
-
-        if self.regular {
-            verify_expand_regularity(self, leaf_id, &Clause::new(vec![atom.clone()]))?;
-        }
-
-        Ok(atom)
-    }
-}
-
-impl TableauxState<Relation> for FOTabState {
-    type Node = FOTabNode;
-
-    fn regular(&self) -> bool {
-        self.regular
-    }
-
-    fn nodes(&self) -> &Vec<Self::Node> {
+    fn nodes(&self) -> &Vec<FOTabNode> {
         &self.nodes
     }
 
-    fn node(&self, id: usize) -> super::TableauxResult<&Self::Node> {
+    fn node(&self, id: usize) -> FOTabResult<&FOTabNode> {
         if let Some(node) = self.nodes.get(id) {
             Ok(node)
         } else {
-            Err(TableauxErr::InvalidNodeId(id))
+            Err(FOTabErr::InvalidNodeId(id))
         }
     }
 
-    fn node_mut(&mut self, id: usize) -> super::TableauxResult<&mut Self::Node> {
+    fn node_mut(&mut self, id: usize) -> super::TableauxResult<&mut FOTabNode> {
         if let Some(node) = self.nodes.get_mut(id) {
             Ok(node)
         } else {
             Err(TableauxErr::InvalidNodeId(id))
+        }
+    }
+
+    fn node_is_parent_of(&self, parent_id: usize, child: usize) -> FOTabResult<bool> {
+        let child = self.node(child)?;
+        if let Some(parent) = child.parent() {
+            if parent == parent_id {
+                Ok(true)
+            } else {
+                self.node_is_parent_of(parent_id, parent)
+            }
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn mark_node_closed(&mut self, leaf: usize) {
+        let mut id = leaf;
+        while self.is_leaf(id) || self.all_children_closed(id) {
+            let node = &mut self.node_mut(id).unwrap();
+            node.mark_closed();
+            if node.parent().is_none() {
+                break;
+            }
+            id = node.parent().unwrap();
+        }
+    }
+
+    fn is_leaf(&self, id: usize) -> bool {
+        match self.node(id) {
+            Ok(n) => n.is_leaf(),
+            Err(_) => false,
+        }
+    }
+
+    fn all_children_closed(&self, id: usize) -> bool {
+        match self.node(id) {
+            Ok(n) => n.children().iter().all(|e| self.nodes()[*e].is_closed()),
+            Err(_) => false,
+        }
+    }
+
+    fn get_close_msg(&self) -> CloseMsg {
+        let msg = if self.root().is_closed() {
+            "The proof tree is not closed".to_string()
+        } else {
+            "The proof is closed and valid in a $connectedness ${regularity}tableaux $withWithoutBT backtracking".to_string()
+        };
+
+        CloseMsg {
+            closed: self.root().is_closed(),
+            msg,
         }
     }
 
@@ -753,6 +765,74 @@ impl TableauxState<Relation> for FOTabState {
         }
 
         atom_list
+    }
+
+    fn node_ancestry_contains_unifiable(&self, id: usize, atom: Atom<Relation>) -> bool {
+        let mut node = match self.node(id) {
+            Ok(n) => n,
+            _ => {
+                return false;
+            }
+        };
+
+        while node.parent.is_some() {
+            node = &self.nodes[node.parent.unwrap()];
+
+            if node.negated != atom.negated()
+                && node.relation.spelling == atom.lit().spelling
+                && unify::unify(&node.relation, atom.lit()).is_ok()
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn apply_unifier(&mut self, u: Unifier) {
+        for n in &mut self.nodes {
+            n.apply_unifier(&u);
+        }
+    }
+
+    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> FOTabResult<Atom<Relation>> {
+        let leaf = self.node(leaf_id)?;
+        let lemma = self.node(lemma_id)?;
+
+        if !leaf.is_leaf() {
+            return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
+        }
+
+        if leaf.is_closed() {
+            return Err(FOTabErr::AlreadyClosed(leaf.clone()));
+        }
+
+        if !lemma.is_closed() {
+            return Err(FOTabErr::ExpectedClosed(lemma.clone()));
+        }
+
+        if lemma.parent().is_none() {
+            return Err(FOTabErr::LemmaRoot);
+        }
+
+        if lemma.is_leaf() {
+            return Err(FOTabErr::LemmaLeaf);
+        }
+
+        let common_parent = lemma.parent().unwrap();
+
+        if !self.node_is_parent_of(common_parent, leaf_id)? {
+            return Err(FOTabErr::ExpectedSiblings(leaf.clone(), lemma.clone()));
+        }
+
+        let atom: Atom<Relation> = lemma.into();
+        let atom = atom.not();
+
+        if self.regular {
+            verify_expand_regularity(self, leaf_id, &Clause::new(vec![atom.clone()]))?;
+        }
+
+        Ok(atom)
     }
 }
 
@@ -878,6 +958,16 @@ impl<'f> TableauxNode<Relation> for FOTabNode {
 
     fn to_atom(&self) -> Atom<Relation> {
         self.into()
+    }
+}
+
+impl fmt::Display for FOTabNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.negated {
+            write!(f, "!{}", self.relation)
+        } else {
+            write!(f, "{}", self.relation)
+        }
     }
 }
 
@@ -1298,14 +1388,8 @@ mod tests {
                 assert!(s.nodes[6].is_closed);
                 assert_eq!(2, s.nodes[6].close_ref.unwrap());
 
-                assert_eq!(
-                    FOTabErr::AlreadyClosed(4),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(4, 1)).unwrap_err()
-                );
-                assert_eq!(
-                    FOTabErr::AlreadyClosed(4),
-                    FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 3)).unwrap_err()
-                );
+                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(4, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 3)).is_err());
             })
         }
 
@@ -1325,14 +1409,8 @@ mod tests {
                 assert!(s.nodes[9].is_closed);
                 assert_eq!(4, s.nodes[9].close_ref.unwrap());
 
-                assert_eq!(
-                    FOTabErr::ExpectedParent(1, 5),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(5, 1)).unwrap_err()
-                );
-                assert_eq!(
-                    FOTabErr::AlreadyClosed(6),
-                    FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 3)).unwrap_err()
-                );
+                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(5, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 3)).is_err());
             })
         }
 
@@ -1350,14 +1428,8 @@ mod tests {
 
                 assert!(s.nodes[1].is_closed);
 
-                assert_eq!(
-                    FOTabErr::AlreadyClosed(3),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(3, 1)).unwrap_err()
-                );
-                assert_eq!(
-                    FOTabErr::ExpectedLeaf(2),
-                    FOTableaux::apply_move(s, FOTabMove::AutoClose(2, 1)).unwrap_err()
-                );
+                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(3, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(2, 1)).is_err());
             })
         }
 
@@ -1372,10 +1444,7 @@ mod tests {
                     FOTabErr::InvalidNodeId(42),
                     FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(6, 42)).unwrap_err()
                 );
-                assert_eq!(
-                    FOTabErr::ExpectedSameLit(6, 0),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(6, 0)).unwrap_err()
-                );
+                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(6, 0)).is_err());
                 assert_eq!(
                     FOTabErr::InvalidNodeId(777),
                     FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(777, 2)).unwrap_err()
@@ -1656,13 +1725,10 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(4, 2, u.clone()))
-                        .unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
                 let state =
-                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(5, 2, u.clone()))
-                        .unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(6, 2, u)).unwrap();
+                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(5, 2, u.clone())).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::CloseAssign(6, 2, u)).unwrap();
 
                 let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
@@ -1679,12 +1745,9 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
 
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(6, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(6, 2)).unwrap();
 
                 let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
@@ -1701,12 +1764,9 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
 
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
                 let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
 
@@ -1727,12 +1787,9 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
 
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
                 FOTableaux::apply_move(state, FOTabMove::Lemma(6, 2)).unwrap();
             });
@@ -1747,12 +1804,9 @@ mod tests {
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
 
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state =
-                    FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
 
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
@@ -1766,9 +1820,7 @@ mod tests {
                 let state = auto_state(0);
                 let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
                 assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 0)).is_err());
-                assert!(
-                    FOTableaux::apply_move(state, FOTabMove::Lemma(usize::MAX, 0)).is_err()
-                );
+                assert!(FOTableaux::apply_move(state, FOTabMove::Lemma(usize::MAX, 0)).is_err());
             })
         }
     }

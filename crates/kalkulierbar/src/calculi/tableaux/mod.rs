@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::calculus::CloseMsg;
-use crate::clause::{Atom, Clause};
+use crate::clause::Atom;
 use std::fmt;
 
 pub mod fo;
@@ -17,7 +16,7 @@ pub enum TableauxErr {
     ExpectedLeaf(usize),
     AlreadyClosed(usize),
     ExpectedClosed(usize),
-    LemmaRoot(usize),
+    LemmaRoot,
     LemmaLeaf(usize),
     ExpectedSiblings(usize, usize),
 }
@@ -57,84 +56,7 @@ impl fmt::Display for TableauxType {
     }
 }
 
-pub trait TableauxState<L>
-where
-    L: fmt::Display + Clone,
-{
-    type Node: TableauxNode<L> + Into<Atom<L>>;
-
-    fn root(&self) -> &Self::Node {
-        self.node(0).unwrap()
-    }
-
-    fn regular(&self) -> bool;
-
-    fn nodes(&self) -> &Vec<Self::Node>;
-
-    fn node(&self, id: usize) -> TableauxResult<&Self::Node>;
-
-    fn node_mut(&mut self, id: usize) -> TableauxResult<&mut Self::Node>;
-
-    fn node_is_parent_of(&self, parent_id: usize, child: usize) -> TableauxResult<bool> {
-        let child = self.node(child)?;
-        if let Some(parent) = child.parent() {
-            if parent == parent_id {
-                Ok(true)
-            } else {
-                self.node_is_parent_of(parent_id, parent)
-            }
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn mark_node_closed(&mut self, leaf: usize) {
-        let mut id = leaf;
-        while self.is_leaf(id) || self.all_children_closed(id) {
-            let node = &mut self.node_mut(id).unwrap();
-            node.mark_closed();
-            if node.parent().is_none() {
-                break;
-            }
-            id = node.parent().unwrap();
-        }
-    }
-
-    fn is_leaf(&self, id: usize) -> bool {
-        match self.node(id) {
-            Ok(n) => n.is_leaf(),
-            Err(_) => false,
-        }
-    }
-
-    fn all_children_closed(&self, id: usize) -> bool {
-        match self.node(id) {
-            Ok(n) => n.children().iter().all(|e| self.nodes()[*e].is_closed()),
-            Err(_) => false,
-        }
-    }
-
-    fn get_close_msg(&self) -> CloseMsg {
-        let msg = if self.root().is_closed() {
-            "The proof tree is not closed".to_string()
-        } else {
-            "The proof is closed and valid in a $connectedness ${regularity}tableaux $withWithoutBT backtracking".to_string()
-        };
-
-        CloseMsg {
-            closed: self.root().is_closed(),
-            msg,
-        }
-    }
-
-    fn node_is_closable(&self, id: usize) -> bool;
-
-    fn node_is_directly_closable(&self, id: usize) -> bool;
-
-    fn clause_expand_preprocessing(&self, clause: &Clause<L>) -> Vec<Atom<L>>;
-}
-
-pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> {
+pub trait TableauxNode<L: fmt::Display + Clone>: Into<Atom<L>> + fmt::Display {
     fn parent(&self) -> Option<usize>;
 
     fn spelling(&self) -> String;

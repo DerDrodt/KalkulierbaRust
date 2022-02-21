@@ -25,6 +25,24 @@ pub enum UnificationErr {
     CannotBeUnified(FOTerm, FOTerm),
 }
 
+impl fmt::Display for UnificationErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnificationErr::DifferentRels(r1, r2) => {
+                write!(f, "Relations '{r1}' and '{r2}' have different names")
+            }
+            UnificationErr::DifferentNum(r1, r2) => write!(
+                f,
+                "Relations '{r1}' and '{r2}' have different numbers of arguments"
+            ),
+            UnificationErr::Occurs(v, t) => write!(f, "Variable '{v}' appears in '{t}'"),
+            UnificationErr::CannotBeUnified(t1, t2) => {
+                write!(f, "'{t1}' and '{t2}' cannot be unified")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Unifier(HashMap<Symbol, FOTerm>);
 

@@ -47,6 +47,14 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/prop-tableaux/move", web::post().to(tableaux::prop_move))
             .route("/prop-tableaux/close", web::post().to(tableaux::prop_close))
+            .route("/fo-tableaux", web::get().to(tableaux::fo))
+            .route("/fo-tableaux/parse", web::post().to(tableaux::fo_parse))
+            .route(
+                "/fo-tableaux/validate",
+                web::post().to(tableaux::fo_validate),
+            )
+            .route("/fo-tableaux/move", web::post().to(tableaux::fo_move))
+            .route("/fo-tableaux/close", web::post().to(tableaux::fo_close))
     })
     .bind("127.0.0.1:7000")?
     .run()
