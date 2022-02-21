@@ -14,7 +14,7 @@ use crate::{
     logic::{
         fo::Relation,
         transform::fo_cnf::fo_cnf,
-        unify::{unify, UnificationErr},
+        unify::{unifier_eq::is_mgu_or_not_unifiable, unify, UnificationErr},
     },
     logic::{transform::fo_cnf::FOCNFErr, unify},
     parse::{fo::parse_fo_formula, ParseErr},
@@ -169,12 +169,20 @@ pub fn apply_auto_close(
 }
 
 pub fn apply_close_assign(
-    state: FOTabState,
+    mut state: FOTabState,
     leaf_id: usize,
     node_id: usize,
     unifier: Unifier,
 ) -> FOTabResult<FOTabState> {
     ensure_basic_closeability(&state, leaf_id, node_id)?;
+
+    if !is_mgu_or_not_unifiable(
+        unifier.clone(),
+        state.nodes[leaf_id].relation.clone(),
+        state.nodes[node_id].relation.clone(),
+    ) {
+        state.status_msg = Some("The unifier you specified is not an MGU".to_string());
+    }
 
     close_branch_common(state, leaf_id, node_id, unifier)
 }
@@ -630,6 +638,46 @@ impl FOTabState {
         for n in &mut self.nodes {
             n.apply_unifier(&u);
         }
+    }
+
+    pub fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> FOTabResult<Atom<Relation>> {
+        let leaf = self.node(leaf_id)?;
+        let lemma = self.node(lemma_id)?;
+
+        if !leaf.is_leaf() {
+            return Err(FOTabErr::ExpectedLeaf(leaf_id));
+        }
+
+        if leaf.is_closed() {
+            return Err(FOTabErr::AlreadyClosed(leaf_id));
+        }
+
+        if !lemma.is_closed() {
+            return Err(FOTabErr::ExpectedClosed(lemma_id));
+        }
+
+        if lemma.parent().is_none() {
+            return Err(FOTabErr::LemmaRoot(lemma_id));
+        }
+
+        if lemma.is_leaf() {
+            return Err(FOTabErr::LemmaLeaf(lemma_id));
+        }
+
+        let common_parent = lemma.parent().unwrap();
+
+        if !self.node_is_parent_of(common_parent, leaf_id)? {
+            return Err(FOTabErr::ExpectedSiblings(leaf_id, lemma_id));
+        }
+
+        let atom: Atom<Relation> = lemma.into();
+        let atom = atom.not();
+
+        if self.regular {
+            verify_expand_regularity(self, leaf_id, &Clause::new(vec![atom.clone()]))?;
+        }
+
+        Ok(atom)
     }
 }
 
@@ -1544,6 +1592,445 @@ mod tests {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":{\"spelling\":\"R\",\"arguments\":[{\"type\":\"Constant\",\"spelling\":\"sk1\"}]},\"negated\":false}]}]},\"formula\":\"\\\\ex X: R(X)\",\"type\":\"UNCONNECTED\",\"regular\":false,\"backtracking\":false,\"manualVarAssign\":false,\"tree\":[{\"parent\":null,\"relation\":{\"spelling\":\"true\",\"arguments\":[]},\"negated\":false,\"lemmaSource\":null,\"isClosed\":false,\"closeRef\":null,\"children\":[],\"spelling\":\"true()\"}],\"moveHistory\":[],\"usedBacktracking\":false,\"expansionCounter\":0,\"seal\":\"22B8CEDC626EBF36DAAA3E50356CD328C075805A0538EA0F91B4C88658D8C465\",\"renderedClauseSet\":[\"R(sk1)\"],\"statusMessage\":null}";
                 assert!(serde_json::from_str::<FOTabState>(json).is_err())
+            });
+        }
+    }
+
+    mod lemma {
+        use super::*;
+        use crate::parse::fo::parse_fo_term;
+        use crate::session;
+        use std::collections::HashMap;
+
+        fn auto_param() -> Option<FOTabParams> {
+            Some(FOTabParams {
+                ty: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                manual_var_assign: false,
+            })
+        }
+
+        fn manual_param() -> Option<FOTabParams> {
+            Some(FOTabParams {
+                ty: TableauxType::Unconnected,
+                regular: false,
+                backtracking: false,
+                manual_var_assign: true,
+            })
+        }
+
+        fn formula(i: u8) -> &'static str {
+            match i {
+                0 => r"\all A: (\all B: (R(A) -> R(B) & !R(A) | !R(B)))",
+                1 => "\\all A: (R(A) -> !\\ex B: (R(A) & !R(B) -> R(B) & R(A)))",
+                _ => panic!(),
+            }
+        }
+
+        fn auto_state(i: u8) -> FOTabState {
+            FOTableaux::parse_formula(formula(i), auto_param()).unwrap()
+        }
+
+        fn manual_state(i: u8) -> FOTabState {
+            FOTableaux::parse_formula(formula(i), manual_param()).unwrap()
+        }
+
+        macro_rules! unifier {
+            ($( $f:expr, $t:expr );*) => {{
+                let mut map = HashMap::new();
+                $(
+                    map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
+                )*
+                Unifier::from_map(map)
+            }};
+        }
+
+        #[test]
+        fn valid1() {
+            session(|| {
+                let state = manual_state(0);
+                // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
+                let u = unifier!("B_1", "c"; "A_2", "c"; "B_2", "c");
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 1)).unwrap();
+
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(4, 2, u.clone()))
+                        .unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(5, 2, u.clone()))
+                        .unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::CloseAssign(6, 2, u)).unwrap();
+
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+
+                assert_eq!(2, state.nodes[7].lemma_source.unwrap());
+                assert!(state.nodes[7].negated);
+            });
+        }
+
+        #[test]
+        fn valid2() {
+            session(|| {
+                let state = auto_state(0);
+                // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 1)).unwrap();
+
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(6, 2)).unwrap();
+
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+
+                assert_eq!(2, state.nodes[7].lemma_source.unwrap());
+                assert!(state.nodes[7].negated);
+            });
+        }
+
+        #[test]
+        fn valid3() {
+            session(|| {
+                let state = auto_state(1);
+                // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
+
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(1, 2)).unwrap();
+
+                assert_eq!(2, state.nodes[6].lemma_source.unwrap());
+                assert!(state.nodes[6].negated);
+
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(6, 0)).unwrap();
+                FOTableaux::apply_move(state, FOTabMove::AutoClose(8, 6)).unwrap();
+            });
+        }
+
+        #[test]
+        fn valid4() {
+            session(|| {
+                let state = auto_state(1);
+                // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(1, 1)).unwrap();
+
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+
+                FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(6, 2)).unwrap();
+            });
+        }
+
+        #[test]
+        fn invalid() {
+            session(|| {
+                let state = auto_state(1);
+                // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state.clone(), FOTabMove::Expand(1, 1)).unwrap();
+
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(3, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(4, 2)).unwrap();
+                let state =
+                    FOTableaux::apply_move(state.clone(), FOTabMove::AutoClose(5, 2)).unwrap();
+
+                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
+                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
+                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(5, 3)).is_err());
+            });
+        }
+
+        #[test]
+        fn special_case() {
+            session(|| {
+                let state = auto_state(0);
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 0)).is_err());
+                assert!(
+                    FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(usize::MAX, 0)).is_err()
+                );
+            })
+        }
+    }
+
+    mod mgu_warning {
+        use super::*;
+        use crate::parse::fo::parse_fo_term;
+        use crate::session;
+        use std::collections::HashMap;
+
+        macro_rules! unifier {
+            ($( $f:expr, $t:expr );*) => {{
+                let mut map = HashMap::new();
+                $(
+                    map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
+                )*
+                Unifier::from_map(map)
+            }};
+        }
+
+        #[test]
+        fn non_mgu() {
+            session(|| {
+                let state =
+                    FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "c"; "Y_2", "c"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert!(state.status_msg.is_some())
+            });
+        }
+
+        #[test]
+        fn valid_mgu() {
+            session(|| {
+                let state = FOTableaux::parse_formula("/all X: R(X) & !R(c)", None).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "c"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert_eq!(None, state.status_msg);
+
+                let state =
+                    FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("Y_2", "X_1"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert_eq!(None, state.status_msg)
+            });
+        }
+
+        #[test]
+        fn ambiguous_mgu() {
+            session(|| {
+                let state =
+                    FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "X_1"; "Y_2", "X_1"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert_eq!(None, state.status_msg);
+
+                let state =
+                    FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "Y_2"; "Y_2", "Y_2"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert_eq!(None, state.status_msg)
+            });
+        }
+
+        #[test]
+        fn extra_vars() {
+            session(|| {
+                let state =
+                    FOTableaux::parse_formula("/all X: /all Z: (R(X)|Q(Z)) & /all Y: !R(Y)", None)
+                        .unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 0)).unwrap();
+
+                let r#move = FOTabMove::CloseAssign(
+                    2,
+                    1,
+                    unifier!("X_2", "X_2"; "Y_1", "X_2"; "Z_2", "X_2"),
+                );
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+
+                assert_eq!(None, state.status_msg);
+            });
+        }
+
+        #[test]
+        fn msg_reset() {
+            session(|| {
+                let state =
+                    FOTableaux::parse_formula("/all X: (R(X)|Q(c)) & /all Y: !R(Y)", None).unwrap();
+                assert_eq!(None, state.status_msg);
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 1)).unwrap();
+                assert_eq!(None, state.status_msg);
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 0)).unwrap();
+                assert_eq!(None, state.status_msg);
+
+                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_2", "c"; "Y_1", "c"));
+                let state = FOTableaux::apply_move(state, r#move).unwrap();
+                assert!(state.status_msg.is_some());
+
+                let state = FOTableaux::apply_move(state, FOTabMove::Expand(3, 1)).unwrap();
+                assert_eq!(None, state.status_msg)
+            });
+        }
+    }
+
+    mod undo {
+        use super::*;
+        use crate::parse::fo::parse_fo_term;
+        use crate::session;
+        use std::collections::HashMap;
+
+        fn param() -> Option<FOTabParams> {
+            Some(FOTabParams {
+                ty: TableauxType::Unconnected,
+                regular: false,
+                backtracking: true,
+                manual_var_assign: false,
+            })
+        }
+
+        fn manual_param() -> Option<FOTabParams> {
+            Some(FOTabParams {
+                ty: TableauxType::Unconnected,
+                regular: false,
+                backtracking: true,
+                manual_var_assign: true,
+            })
+        }
+
+        fn formula(i: u8) -> &'static str {
+            match i {
+                0 => "\\all X: R(X) & R(c) & !R(c)",
+                1 => "\\all A: (\\all B: (R(A) -> R(B) & !R(A) | !R(B)))",
+                2 => "\\all A: (R(A) -> !\\ex B: (R(A) & !R(B) -> R(B) | R(A)))",
+                _ => panic!(),
+            }
+        }
+
+        fn state(i: u8) -> FOTabState {
+            FOTableaux::parse_formula(formula(i), param()).unwrap()
+        }
+
+        fn manual_state(i: u8) -> FOTabState {
+            FOTableaux::parse_formula(formula(i), manual_param()).unwrap()
+        }
+
+        macro_rules! unifier {
+            ($( $f:expr, $t:expr );*) => {{
+                let mut map = HashMap::new();
+                $(
+                    map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
+                )*
+                Unifier::from_map(map)
+            }};
+        }
+
+        #[test]
+        fn true_node() {
+            session(|| {
+                let state = state(0);
+                assert!(!state.used_backtracking);
+
+                let state = FOTableaux::apply_move(state, FOTabMove::Undo).unwrap();
+                assert_eq!(1, state.nodes.len());
+                assert!(state.moves.is_empty());
+                assert!(!state.used_backtracking);
+            });
+        }
+
+        #[test]
+        fn undo1() {
+            session(|| {
+                // {!R(a), R(b), !R(b)}, {!R(a), !R(a), !R(b)}
+                let s = state(1);
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(5, 2)).unwrap();
+
+                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+
+                assert!(s.nodes[6].is_closed);
+                assert_eq!(2, s.nodes[6].close_ref.unwrap());
+
+                assert!(!s.nodes[2].is_closed);
+                assert!(!s.nodes[4].is_closed);
+                assert!(s.nodes[4].close_ref.is_none());
+                assert!(!s.nodes[5].is_closed);
+                assert!(s.nodes[5].close_ref.is_none());
+
+                assert!(s.used_backtracking);
+            });
+        }
+
+        #[test]
+        fn undo2() {
+            session(|| {
+                let u = unifier!("B_2", "A_1"; "A_2", "A_1");
+                // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B)}, {!R(A), !R(A)}
+                let s = manual_state(2);
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+
+                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(3, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
+
+                assert_eq!("R(A_1)", &s.nodes[2].spelling());
+                assert_eq!("R(A_1)", &s.nodes[3].spelling());
+                assert_eq!("R(A_1)", &s.nodes[4].spelling());
+
+                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+
+                assert_eq!("R(A_1)", &s.nodes[2].spelling());
+                assert_eq!("R(A_2)", &s.nodes[3].spelling());
+                assert_eq!("R(B_2)", &s.nodes[4].spelling());
+
+                assert!(!s.nodes[2].is_closed);
+                assert!(!s.nodes[3].is_closed);
+                assert!(s.nodes[3].close_ref.is_none());
+                assert!(!s.nodes[4].is_closed);
+                assert!(s.nodes[4].close_ref.is_none());
+
+                assert!(s.used_backtracking);
+            });
+        }
+
+        #[test]
+        fn undo_expand3() {
+            session(|| {
+                // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B)}, {!R(A), !R(A)}
+                let s = state(2);
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+
+                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+
+                assert_eq!(1, s.moves.len());
+                assert!(s.used_backtracking);
+                assert_eq!(3, s.nodes.len());
             });
         }
     }

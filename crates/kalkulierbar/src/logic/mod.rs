@@ -10,7 +10,8 @@ use fo::FOTerm;
 
 pub use transform::Lit;
 
-use self::transform::{to_basic::ToBasicOps, visitor::MutLogicNodeVisitor};
+use self::transform::to_basic::ToBasicOps;
+use self::transform::transformer::MutLogicNodeTransformer;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {
@@ -27,7 +28,7 @@ pub enum LogicNode {
 
 impl LogicNode {
     pub fn to_basic_ops(self) -> Self {
-        ToBasicOps::new().visit(&self)
+        ToBasicOps::new().visit(self)
     }
 }
 

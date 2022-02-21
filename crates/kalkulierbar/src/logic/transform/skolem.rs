@@ -10,11 +10,11 @@ use crate::{
 
 use super::{
     collectors::collect_symbols,
-    visitor::{MutFOTermVisitor, MutLogicNodeVisitor},
+    transformer::{MutFOTermTransformer, MutLogicNodeTransformer},
 };
 
-pub fn skolemize(n: &LogicNode) -> Result<LogicNode, SkolemizationErr> {
-    let used_symbols = collect_symbols(n);
+pub fn skolemize(n: LogicNode) -> Result<LogicNode, SkolemizationErr> {
+    let used_symbols = collect_symbols(&n);
     Skolemization::new(used_symbols).visit(n)
 }
 
@@ -70,21 +70,21 @@ impl Skolemization {
     }
 }
 
-impl MutLogicNodeVisitor for Skolemization {
+impl MutLogicNodeTransformer for Skolemization {
     type Ret = Result<LogicNode, SkolemizationErr>;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
         panic!("Unknown LogicNode encountered during Skolemization")
     }
 
-    fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
         Ok(LogicNode::Not(Box::new(self.visit(child)?)))
     }
 
     fn visit_and(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::And(
             Box::new(self.visit(left)?),
@@ -94,8 +94,8 @@ impl MutLogicNodeVisitor for Skolemization {
 
     fn visit_or(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Or(
             Box::new(self.visit(left)?),
@@ -105,8 +105,8 @@ impl MutLogicNodeVisitor for Skolemization {
 
     fn visit_impl(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Impl(
             Box::new(self.visit(left)?),
@@ -116,8 +116,8 @@ impl MutLogicNodeVisitor for Skolemization {
 
     fn visit_equiv(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Equiv(
             Box::new(self.visit(left)?),
@@ -125,15 +125,15 @@ impl MutLogicNodeVisitor for Skolemization {
         ))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         let mut replacer = SkolemTermReplacer::new(&self.replacement_map);
         Ok(LogicNode::Rel(
             spelling,
-            args.iter().map(|a| replacer.visit(a)).collect(),
+            args.into_iter().map(|a| replacer.visit(a)).collect(),
         ))
     }
 
-    fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         if self.quantified_vars.contains(&var) {
             return Err(SkolemizationErr);
         }
@@ -145,7 +145,7 @@ impl MutLogicNodeVisitor for Skolemization {
         Ok(LogicNode::All(var, Box::new(child)))
     }
 
-    fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         let term = self.get_skolem_term();
 
         let old = self.replacement_map.insert(var, term);
@@ -172,10 +172,8 @@ impl<'a> SkolemTermReplacer<'a> {
     }
 }
 
-impl<'a> MutFOTermVisitor for SkolemTermReplacer<'a> {
-    type Ret = FOTerm;
-
-    fn visit_quantified_var(&mut self, s: Symbol) -> Self::Ret {
+impl<'a> MutFOTermTransformer for SkolemTermReplacer<'a> {
+    fn visit_quantified_var(&mut self, s: Symbol) -> FOTerm {
         if self.replacement_map.contains_key(&s) {
             let skolem_term = self.replacement_map.get(&s).unwrap().clone();
 
@@ -185,11 +183,11 @@ impl<'a> MutFOTermVisitor for SkolemTermReplacer<'a> {
         }
     }
 
-    fn visit_const(&mut self, s: Symbol) -> Self::Ret {
+    fn visit_const(&mut self, s: Symbol) -> FOTerm {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&mut self, name: Symbol, args: &[FOTerm]) -> Self::Ret {
-        FOTerm::Function(name, args.iter().map(|a| self.visit(a)).collect())
+    fn visit_fn(&mut self, name: Symbol, args: Vec<FOTerm>) -> FOTerm {
+        FOTerm::Function(name, args.into_iter().map(|a| self.visit(a)).collect())
     }
 }

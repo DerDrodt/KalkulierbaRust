@@ -4,7 +4,7 @@ use crate::{
     symbol::Symbol,
 };
 
-use super::visitor::MutLogicNodeVisitor;
+use super::transformer::MutLogicNodeTransformer;
 
 pub struct TseytinCNF {
     pub clause_set: ClauseSet<Symbol>,
@@ -45,17 +45,17 @@ impl Default for TseytinCNF {
     }
 }
 
-impl MutLogicNodeVisitor for TseytinCNF {
+impl MutLogicNodeTransformer for TseytinCNF {
     type Ret = ();
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
         self.idx += 1;
     }
 
-    fn visit_not(&mut self, child: &LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: LogicNode) -> Self::Ret {
         let self_var = self.name("not");
         self.idx += 1;
-        let child_var = self.node_name(child);
+        let child_var = self.node_name(&child);
         self.visit(child);
 
         let clause_a: Clause<Symbol> =
@@ -69,12 +69,12 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_b);
     }
 
-    fn visit_and(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_and(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let self_var = self.name("and");
         self.idx += 1;
-        let left_var = self.node_name(left);
+        let left_var = self.node_name(&left);
         self.visit(left);
-        let right_var = self.node_name(right);
+        let right_var = self.node_name(&right);
         self.visit(right);
 
         let clause_a = Clause::new(vec![Atom::new(left_var, false), Atom::new(self_var, true)]);
@@ -89,12 +89,12 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_c);
     }
 
-    fn visit_or(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_or(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let self_var = self.name("or");
         self.idx += 1;
-        let left_var = self.node_name(left);
+        let left_var = self.node_name(&left);
         self.visit(left);
-        let right_var = self.node_name(right);
+        let right_var = self.node_name(&right);
         self.visit(right);
 
         let clause_a = Clause::new(vec![Atom::new(left_var, true), Atom::new(self_var, false)]);
@@ -109,12 +109,12 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_c);
     }
 
-    fn visit_impl(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_impl(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let self_var = self.name("impl");
         self.idx += 1;
-        let left_var = self.node_name(left);
+        let left_var = self.node_name(&left);
         self.visit(left);
-        let right_var = self.node_name(right);
+        let right_var = self.node_name(&right);
         self.visit(right);
 
         let clause_a = Clause::new(vec![Atom::new(left_var, false), Atom::new(self_var, false)]);
@@ -129,12 +129,12 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_c);
     }
 
-    fn visit_equiv(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_equiv(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let self_var = self.name("equiv");
         self.idx += 1;
-        let left_var = self.node_name(left);
+        let left_var = self.node_name(&left);
         self.visit(left);
-        let right_var = self.node_name(right);
+        let right_var = self.node_name(&right);
         self.visit(right);
 
         let clause_a = Clause::new(vec![
@@ -163,15 +163,15 @@ impl MutLogicNodeVisitor for TseytinCNF {
         self.clause_set.add(clause_d);
     }
 
-    fn visit_rel(&mut self, _spelling: Symbol, _args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, _spelling: Symbol, _args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 
-    fn visit_all(&mut self, _var: Symbol, _child: &LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, _var: Symbol, _child: LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 
-    fn visit_ex(&mut self, _var: Symbol, _child: &LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, _var: Symbol, _child: LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
 }

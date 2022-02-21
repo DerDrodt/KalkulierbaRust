@@ -2,14 +2,14 @@ use std::{collections::HashSet, fmt};
 
 use crate::{logic::LogicNode, Symbol};
 
-use super::visitor::MutLogicNodeVisitor;
+use super::transformer::MutLogicNodeTransformer;
 
 enum QuantifierType {
     All,
     Ex,
 }
 
-pub fn prenex_normal(n: &LogicNode) -> Result<LogicNode, PrenixNormalFormErr> {
+pub fn prenex_normal(n: LogicNode) -> Result<LogicNode, PrenixNormalFormErr> {
     let mut instance = PrenexNormalForm::new();
     let mut n = instance.visit(n)?;
 
@@ -57,21 +57,21 @@ impl Default for PrenexNormalForm {
     }
 }
 
-impl MutLogicNodeVisitor for PrenexNormalForm {
+impl MutLogicNodeTransformer for PrenexNormalForm {
     type Ret = Result<LogicNode, PrenixNormalFormErr>;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
         panic!()
     }
 
-    fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
         Ok(LogicNode::Not(Box::new(self.visit(child)?)))
     }
 
     fn visit_and(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::And(
             Box::new(self.visit(left)?),
@@ -81,8 +81,8 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
 
     fn visit_or(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Or(
             Box::new(self.visit(left)?),
@@ -92,8 +92,8 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
 
     fn visit_impl(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Impl(
             Box::new(self.visit(left)?),
@@ -103,8 +103,8 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
 
     fn visit_equiv(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         Ok(LogicNode::Equiv(
             Box::new(self.visit(left)?),
@@ -112,11 +112,11 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
         ))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         Ok(LogicNode::Rel(spelling, args.to_vec()))
     }
 
-    fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         if self.seen.contains(&var) {
             Err(PrenixNormalFormErr(var))
         } else {
@@ -126,7 +126,7 @@ impl MutLogicNodeVisitor for PrenexNormalForm {
         }
     }
 
-    fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         if self.seen.contains(&var) {
             Err(PrenixNormalFormErr(var))
         } else {

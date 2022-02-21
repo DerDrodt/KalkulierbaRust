@@ -9,12 +9,12 @@ use crate::{
 
 use super::{
     skolem_normal::{skolem_normal_form, SkolemNormalFormErr},
-    visitor::MutLogicNodeVisitor,
+    transformer::MutLogicNodeTransformer,
 };
 
 pub fn fo_cnf(formula: LogicNode) -> Result<ClauseSet<Relation>, FOCNFErr> {
     let mut cnf = FOcnf;
-    cnf.visit(&skolem_normal_form(formula)?)
+    cnf.visit(skolem_normal_form(formula)?)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -42,17 +42,17 @@ impl From<SkolemNormalFormErr> for FOCNFErr {
 
 struct FOcnf;
 
-impl MutLogicNodeVisitor for FOcnf {
+impl MutLogicNodeTransformer for FOcnf {
     type Ret = Result<ClauseSet<Relation>, FOCNFErr>;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 
-    fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
         match child {
             LogicNode::Rel(name, args) => {
-                let atom = Atom::new(Relation::new(*name, args.clone()), true);
+                let atom = Atom::new(Relation::new(name, args.clone()), true);
                 let clause = Clause::new(vec![atom]);
                 Ok(ClauseSet::new(vec![clause]))
             }
@@ -62,8 +62,8 @@ impl MutLogicNodeVisitor for FOcnf {
 
     fn visit_and(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         let mut left = self.visit(left)?;
         let right = self.visit(right)?;
@@ -73,8 +73,8 @@ impl MutLogicNodeVisitor for FOcnf {
 
     fn visit_or(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         let left = self.visit(left)?;
         let right = self.visit(right)?;
@@ -101,33 +101,25 @@ impl MutLogicNodeVisitor for FOcnf {
         Ok(cs)
     }
 
-    fn visit_impl(
-        &mut self,
-        _: &crate::logic::LogicNode,
-        _: &crate::logic::LogicNode,
-    ) -> Self::Ret {
+    fn visit_impl(&mut self, _: crate::logic::LogicNode, _: crate::logic::LogicNode) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 
-    fn visit_equiv(
-        &mut self,
-        _: &crate::logic::LogicNode,
-        _: &crate::logic::LogicNode,
-    ) -> Self::Ret {
+    fn visit_equiv(&mut self, _: crate::logic::LogicNode, _: crate::logic::LogicNode) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         let atom = Atom::new(Relation::new(spelling, args.to_vec()), false);
         let clause = Clause::new(vec![atom]);
         Ok(ClauseSet::new(vec![clause]))
     }
 
-    fn visit_all(&mut self, _: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, _: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         self.visit(child)
     }
 
-    fn visit_ex(&mut self, _: Symbol, _: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, _: Symbol, _: crate::logic::LogicNode) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
 }

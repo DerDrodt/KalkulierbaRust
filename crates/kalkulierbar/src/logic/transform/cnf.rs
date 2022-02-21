@@ -7,6 +7,7 @@ use serde::{
 
 use super::super::LogicNode;
 use super::naive_cnf::{FormulaConversionErr, NaiveCNF};
+use super::transformer::MutLogicNodeTransformer;
 use super::tseytin_cnf::TseytinCNF;
 use super::visitor::MutLogicNodeVisitor;
 use crate::clause::{Atom, Clause, ClauseSet};
@@ -97,10 +98,10 @@ impl LogicNode {
         NaiveCNF::new().visit(self)
     }
 
-    pub fn tseytin_cnf(&self) -> Result<ClauseSet<Symbol>, FormulaConversionErr> {
+    pub fn tseytin_cnf(self) -> Result<ClauseSet<Symbol>, FormulaConversionErr> {
         let mut t = TseytinCNF::new();
         let mut res = ClauseSet::new(vec![]);
-        let root = Clause::new(vec![Atom::new(t.node_name(self), false)]);
+        let root = Clause::new(vec![Atom::new(t.node_name(&self), false)]);
         res.add(root);
 
         t.visit(self);
@@ -120,8 +121,9 @@ mod tests {
             $(
                 session(|| {
                     let parsed = parse::parse_prop_formula($f).unwrap();
+                    let ps = parsed.to_string();
                     let res: ClauseSet<Symbol> = parsed.$func().unwrap();
-                    assert_eq!($e, res.to_string(), "Parsed: {}", parsed.to_string());
+                    assert_eq!($e, res.to_string(), "Parsed: {}", ps);
                 });
             )*
         }};

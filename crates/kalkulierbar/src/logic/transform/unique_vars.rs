@@ -5,9 +5,9 @@ use crate::{
     Symbol,
 };
 
-use super::visitor::{FOTermVisitor, MutLogicNodeVisitor};
+use super::transformer::{FOTermTransformer, MutLogicNodeTransformer};
 
-pub fn unique_vars(n: &LogicNode) -> LogicNode {
+pub fn unique_vars(n: LogicNode) -> LogicNode {
     UniqueVars::new().visit(n)
 }
 
@@ -47,55 +47,58 @@ impl UniqueVars {
     }
 }
 
-impl MutLogicNodeVisitor for UniqueVars {
+impl MutLogicNodeTransformer for UniqueVars {
     type Ret = LogicNode;
 
     fn visit_var(&mut self, _: Symbol) -> Self::Ret {
         panic!("Called unique variable transformer on propositional formula")
     }
 
-    fn visit_not(&mut self, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
         LogicNode::Not(Box::new(child.clone()))
     }
 
     fn visit_and(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         LogicNode::And(Box::new(left.clone()), Box::new(right.clone()))
     }
 
     fn visit_or(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         LogicNode::Or(Box::new(left.clone()), Box::new(right.clone()))
     }
 
     fn visit_impl(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         LogicNode::Impl(Box::new(left.clone()), Box::new(right.clone()))
     }
 
     fn visit_equiv(
         &mut self,
-        left: &crate::logic::LogicNode,
-        right: &crate::logic::LogicNode,
+        left: crate::logic::LogicNode,
+        right: crate::logic::LogicNode,
     ) -> Self::Ret {
         LogicNode::Equiv(Box::new(left.clone()), Box::new(right.clone()))
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         let renamer = VariableRenamer::new(&self.replacements);
-        LogicNode::Rel(spelling, args.iter().map(|a| renamer.visit(a)).collect())
+        LogicNode::Rel(
+            spelling,
+            args.into_iter().map(|a| renamer.visit(a)).collect(),
+        )
     }
 
-    fn visit_all(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         let disamb = self.handle_var_binding(var);
 
         let old = self.replacements.insert(var, disamb);
@@ -109,7 +112,7 @@ impl MutLogicNodeVisitor for UniqueVars {
         LogicNode::All(disamb, Box::new(child))
     }
 
-    fn visit_ex(&mut self, var: Symbol, child: &crate::logic::LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         let disamb = self.handle_var_binding(var);
 
         let old = self.replacements.insert(var, disamb);
@@ -138,10 +141,8 @@ impl<'a> VariableRenamer<'a> {
     }
 }
 
-impl<'a> FOTermVisitor for VariableRenamer<'a> {
-    type Ret = FOTerm;
-
-    fn visit_quantified_var(&self, s: Symbol) -> Self::Ret {
+impl<'a> FOTermTransformer for VariableRenamer<'a> {
+    fn visit_quantified_var(&self, s: Symbol) -> FOTerm {
         FOTerm::QuantifiedVar(match self.replacement_map.get(&s) {
             Some(s) => *s,
             None => {
@@ -157,11 +158,11 @@ impl<'a> FOTermVisitor for VariableRenamer<'a> {
         })
     }
 
-    fn visit_const(&self, s: Symbol) -> Self::Ret {
+    fn visit_const(&self, s: Symbol) -> FOTerm {
         FOTerm::Const(s)
     }
 
-    fn visit_fn(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
-        FOTerm::Function(name, args.iter().map(|a| self.visit(a)).collect())
+    fn visit_fn(&self, name: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> FOTerm {
+        FOTerm::Function(name, args.into_iter().map(|a| self.visit(a)).collect())
     }
 }

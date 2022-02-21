@@ -8,6 +8,7 @@ pub mod skolem;
 pub mod skolem_normal;
 pub mod term_manipulator;
 pub mod to_basic;
+pub mod transformer;
 pub mod tseytin_cnf;
 pub mod unique_vars;
 pub mod visitor;

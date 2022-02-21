@@ -44,14 +44,9 @@ impl fmt::Display for SkolemNormalFormErr {
 }
 
 pub fn skolem_normal_form(formula: LogicNode) -> Result<LogicNode, SkolemNormalFormErr> {
-    println!("Start {}", formula);
     let nnf = transform::negation_normal_form(formula)?;
-    println!("NNF {}", nnf);
-    let uniq = unique_vars(&nnf);
-    println!("uniq {}", uniq);
-    let skol = skolemize(&uniq)?;
-    println!("skol {}", skol);
-    let pre = prenex_normal(&skol)?;
-    println!("pre {}", pre);
+    let uniq = unique_vars(nnf);
+    let skol = skolemize(uniq)?;
+    let pre = prenex_normal(skol)?;
     Ok(pre)
 }

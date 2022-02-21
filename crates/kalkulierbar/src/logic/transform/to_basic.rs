@@ -1,9 +1,9 @@
 use crate::symbol::Symbol;
 
 use super::super::LogicNode;
-use super::visitor::MutLogicNodeVisitor;
+use super::transformer::MutLogicNodeTransformer;
 
-pub struct ToBasicOps {}
+pub struct ToBasicOps;
 
 impl ToBasicOps {
     pub fn new() -> Self {
@@ -11,32 +11,32 @@ impl ToBasicOps {
     }
 }
 
-impl<'a> MutLogicNodeVisitor for ToBasicOps {
+impl<'a> MutLogicNodeTransformer for ToBasicOps {
     type Ret = LogicNode;
 
     fn visit_var(&mut self, spelling: Symbol) -> Self::Ret {
         LogicNode::Var(spelling)
     }
 
-    fn visit_not(&mut self, child: &LogicNode) -> Self::Ret {
+    fn visit_not(&mut self, child: LogicNode) -> Self::Ret {
         LogicNode::Not(self.visit(child).into())
     }
 
-    fn visit_and(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_and(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         LogicNode::And(self.visit(left).into(), self.visit(right).into())
     }
 
-    fn visit_or(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_or(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         LogicNode::Or(self.visit(left).into(), self.visit(right).into())
     }
 
-    fn visit_impl(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_impl(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let left = self.visit(left).into();
         let right = self.visit(right).into();
         LogicNode::Or(LogicNode::Not(left).into(), right)
     }
 
-    fn visit_equiv(&mut self, left: &LogicNode, right: &LogicNode) -> Self::Ret {
+    fn visit_equiv(&mut self, left: LogicNode, right: LogicNode) -> Self::Ret {
         let left = self.visit(left);
         let right = self.visit(right);
         let not_left = LogicNode::Not(left.clone().into()).into();
@@ -48,16 +48,16 @@ impl<'a> MutLogicNodeVisitor for ToBasicOps {
         LogicNode::Or(both_t, both_f)
     }
 
-    fn visit_rel(&mut self, spelling: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+    fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
         LogicNode::Rel(spelling, args.to_vec())
     }
 
-    fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
+    fn visit_all(&mut self, var: Symbol, child: LogicNode) -> Self::Ret {
         let child = self.visit(child).into();
         LogicNode::All(var, child)
     }
 
-    fn visit_ex(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret {
+    fn visit_ex(&mut self, var: Symbol, child: LogicNode) -> Self::Ret {
         let child = self.visit(child).into();
         LogicNode::Ex(var, child)
     }

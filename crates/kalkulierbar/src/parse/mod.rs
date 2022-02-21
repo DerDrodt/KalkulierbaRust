@@ -32,7 +32,7 @@ pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<Claus
 
     let formula_parse = match parse_prop_formula(formula) {
         Ok(res) => {
-            return Ok(to_cnf(&res, strategy).unwrap());
+            return Ok(to_cnf(res, strategy).unwrap());
         }
         Err(e) => e,
     };
@@ -45,7 +45,7 @@ pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<Claus
 }
 
 fn to_cnf(
-    node: &LogicNode,
+    node: LogicNode,
     strategy: CNFStrategy,
 ) -> Result<ClauseSet<Symbol>, FormulaConversionErr> {
     match strategy {
@@ -192,10 +192,10 @@ impl<'f> Tokenizer<'f> {
 
                 (TokenKind::Equiv, spelling, 3)
             }
-            '\\' => {
-                if self.formula.starts_with("\\ex") {
+            '\\' | '/' => {
+                if self.formula.starts_with("\\ex") | self.formula.starts_with("/ex") {
                     (TokenKind::Ex, "\\ex", 3)
-                } else if self.formula.starts_with("\\all") {
+                } else if self.formula.starts_with("\\all") | self.formula.starts_with("/all") {
                     (TokenKind::All, "\\all", 4)
                 } else {
                     return Some(Err(ParseErr::Expected(

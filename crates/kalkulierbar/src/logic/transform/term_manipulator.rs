@@ -12,7 +12,7 @@ impl<'a> FOTermVisitor for VariableInstantiator<'a> {
 
     fn visit_quantified_var(&self, s: Symbol) -> Self::Ret {
         if self.0.contains(s) {
-            self.0.get(s).clone()
+            self.0.get_unwrap(s).clone()
         } else {
             FOTerm::QuantifiedVar(s)
         }

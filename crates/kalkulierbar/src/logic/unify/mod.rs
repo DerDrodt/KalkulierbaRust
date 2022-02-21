@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{hash_map::Keys, HashMap},
+    fmt,
+};
 
 use serde::{
     de::{MapAccess, Visitor},
@@ -11,6 +14,8 @@ use super::{
     fo::{FOTerm, Relation},
     transform::{term_manipulator::TermContainsVariableChecker, visitor::FOTermVisitor},
 };
+
+pub mod unifier_eq;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UnificationErr {
@@ -42,7 +47,11 @@ impl Unifier {
         self.0.contains_key(&s)
     }
 
-    pub fn get(&self, s: Symbol) -> &FOTerm {
+    pub fn get(&self, s: &Symbol) -> Option<&FOTerm> {
+        self.0.get(s)
+    }
+
+    pub fn get_unwrap(&self, s: Symbol) -> &FOTerm {
         self.0.get(&s).unwrap()
     }
 
@@ -54,6 +63,10 @@ impl Unifier {
         }
         m.insert(s, t);
         self.0 = m
+    }
+
+    pub fn keys(&self) -> Keys<Symbol, FOTerm> {
+        self.0.keys()
     }
 }
 
@@ -222,7 +235,12 @@ mod tests {
             assert_eq!(map.len(), mgu.0.len());
 
             for (key, val) in map {
-                assert!(val.syn_eq(mgu.get(key)), "{}!={}", val, mgu.get(key))
+                assert!(
+                    val.syn_eq(mgu.get_unwrap(key)),
+                    "{}!={}",
+                    val,
+                    mgu.get_unwrap(key)
+                )
             }
         })
     }

@@ -127,43 +127,6 @@ where
         }
     }
 
-    fn get_lemma(&self, leaf_id: usize, lemma_id: usize) -> TableauxResult<Atom<L>> {
-        let leaf = self.node(leaf_id)?;
-        let lemma = self.node(lemma_id)?;
-
-        if !leaf.is_leaf() {
-            return Err(TableauxErr::ExpectedLeaf(leaf_id));
-        }
-
-        if leaf.is_closed() {
-            return Err(TableauxErr::AlreadyClosed(leaf_id));
-        }
-
-        if !lemma.is_closed() {
-            return Err(TableauxErr::ExpectedClosed(lemma_id));
-        }
-
-        if lemma.parent().is_none() {
-            return Err(TableauxErr::LemmaRoot(lemma_id));
-        }
-
-        if lemma.is_leaf() {
-            return Err(TableauxErr::LemmaLeaf(lemma_id));
-        }
-
-        let common_parent = lemma.parent().unwrap();
-
-        if !self.node_is_parent_of(common_parent, leaf_id)? {
-            return Err(TableauxErr::ExpectedSiblings(leaf_id, lemma_id));
-        }
-
-        let atom: Atom<L> = lemma.to_atom();
-
-        if self.regular() {}
-
-        Ok(atom)
-    }
-
     fn node_is_closable(&self, id: usize) -> bool;
 
     fn node_is_directly_closable(&self, id: usize) -> bool;
