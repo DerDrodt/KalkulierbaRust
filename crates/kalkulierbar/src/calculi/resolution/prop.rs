@@ -485,7 +485,7 @@ impl Serialize for PropResMove {
             PropResMove::Resolve(..) => ("res-resolve", 4),
             PropResMove::Hide(_) => ("res-hide", 2),
             PropResMove::Show => ("res-show", 1),
-            PropResMove::Hyper(_, _) => ("res-hyper", 3),
+            PropResMove::Hyper(..) => ("res-hyper", 3),
             PropResMove::Factorize(_) => ("res-factorize", 2),
         };
         let mut state = serializer.serialize_struct("PropResMove", num_fields)?;

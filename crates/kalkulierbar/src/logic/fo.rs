@@ -6,7 +6,7 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::symbol::Symbol;
+use crate::{symbol::Symbol, SynEq};
 
 use super::{
     transform::{term_manipulator::VariableInstantiator, visitor::FOTermVisitor},
@@ -34,6 +34,14 @@ impl Relation {
     pub fn apply_unifier(&mut self, u: &Unifier) {
         let instantiator = VariableInstantiator(u);
         self.args = self.args.iter().map(|a| instantiator.visit(a)).collect();
+    }
+}
+
+impl SynEq for Relation {
+    fn syn_eq(&self, r: &Relation) -> bool {
+        self.spelling == r.spelling
+            && self.args.len() == r.args.len()
+            && self.args.iter().zip(&r.args).all(|(t1, t2)| t1.syn_eq(t2))
     }
 }
 
