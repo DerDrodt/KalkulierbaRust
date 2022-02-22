@@ -89,7 +89,7 @@ where
             }
             _ => false,
         })
-        .map(|a| *a)
+        .copied()
         .collect();
 
     if shared.is_empty() {
