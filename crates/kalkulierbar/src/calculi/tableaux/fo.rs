@@ -1223,7 +1223,7 @@ impl Serialize for FOTabMove {
             FOTabMove::CloseAssign(..) => 4,
             _ => 3,
         };
-        let mut state = serializer.serialize_struct("PropTabMove", num_fields)?;
+        let mut state = serializer.serialize_struct("FOTabMove", num_fields)?;
         let ty = match self {
             FOTabMove::Undo => "tableaux-undo",
             FOTabMove::AutoClose(..) => "tableaux-close",

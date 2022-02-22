@@ -16,6 +16,12 @@ pub enum CNFStrategy {
     Optimal,
 }
 
+impl Default for CNFStrategy {
+    fn default() -> Self {
+        Self::Optimal
+    }
+}
+
 pub fn parse_clause_set(formula: &str) -> ParseResult<ClauseSet<Symbol>> {
     ClauseSetParser::parse(formula)
 }

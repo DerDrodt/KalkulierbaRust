@@ -62,3 +62,7 @@ where
 {
     SESSION_GLOBALS.with(f)
 }
+
+pub trait SynEq {
+    fn syn_eq(&self, o: &Self) -> bool;
+}

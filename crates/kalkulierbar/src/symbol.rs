@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt, hash::Hash, sync::Mutex};
 
-use crate::{arena::DroplessArena, with_session_globals};
+use crate::{arena::DroplessArena, with_session_globals, SynEq};
 
 newtype_index! {
     pub struct SymbolIndex { .. }
@@ -47,6 +47,12 @@ impl fmt::Debug for Symbol {
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.as_str(), f)
+    }
+}
+
+impl SynEq for Symbol {
+    fn syn_eq(&self, o: &Self) -> bool {
+        self == o
     }
 }
 

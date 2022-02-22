@@ -74,6 +74,21 @@ impl<L: fmt::Display + Clone> Clause<L> {
     pub fn atoms(&self) -> &Vec<Atom<L>> {
         &self.atoms
     }
+
+    pub fn take_atoms(self) -> Vec<Atom<L>> {
+        self.atoms
+    }
+}
+
+impl<L: fmt::Display + Clone + PartialEq> Clause<L> {
+    pub fn find_negation_of(&self, a: &Atom<L>) -> Option<usize> {
+        for (i, atom) in self.atoms.iter().enumerate() {
+            if atom.negated != a.negated && a.lit == atom.lit {
+                return Some(i);
+            }
+        }
+        None
+    }
 }
 
 impl<L: fmt::Display + Clone> From<Clause<L>> for Vec<Atom<L>> {
@@ -195,6 +210,18 @@ impl<L: fmt::Display + Clone> ClauseSet<L> {
 
     pub fn clauses(&self) -> &Vec<Clause<L>> {
         &self.clauses
+    }
+
+    pub fn clear(&mut self) {
+        self.clauses.clear();
+    }
+
+    pub fn remove(&mut self, idx: usize) -> Clause<L> {
+        self.clauses.remove(idx)
+    }
+
+    pub fn insert(&mut self, idx: usize, c: Clause<L>) {
+        self.clauses.insert(idx, c)
     }
 }
 
