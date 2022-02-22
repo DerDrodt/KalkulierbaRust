@@ -5,6 +5,7 @@ use crate::{
     SynEq,
 };
 
+#[derive(Debug)]
 pub enum UtilErr<L>
 where
     L: fmt::Display + Clone,

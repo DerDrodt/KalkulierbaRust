@@ -88,6 +88,7 @@ pub enum PropResMove {
     Factorize(usize),
 }
 
+#[derive(Debug)]
 pub enum PropResErr {
     Parse(ParseErr),
     InvalidClauseId(usize),
@@ -114,9 +115,39 @@ impl From<UtilErr<Symbol>> for PropResErr {
     }
 }
 
+impl fmt::Display for PropResErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PropResErr::Parse(e) => fmt::Display::fmt(e, f),
+            PropResErr::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
+            PropResErr::NothingToFactorize => write!(f, "Nothing to factorize"),
+            PropResErr::SameIds => write!(f, "Both ids refer to the same clause"),
+            PropResErr::UtilErr(e) => fmt::Display::fmt(e, f),
+            PropResErr::NoSuchAtomInMain(c, id) => write!(
+                f,
+                "There is no atom with id {id} in (main premiss) clause '{c}'"
+            ),
+            PropResErr::NoSuchAtomInSide(c, id) => write!(
+                f,
+                "There is no atom with id {id} in (side premiss) clause '{c}'"
+            ),
+            PropResErr::EmptyHyperMap => {
+                write!(f, "Please select side premisses for hyper resolution")
+            }
+            PropResErr::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
+            PropResErr::MainAtomNotNeg(a) => {
+                write!(f, "Literal '{a}' in main premiss has to be negative")
+            }
+            PropResErr::ResultingMainNotPos(c) => {
+                write!(f, "Resulting clause '{c}' is not positive")
+            }
+        }
+    }
+}
+
 pub type PropResResult<T> = Result<T, PropResErr>;
 
-struct PropResolution;
+pub struct PropResolution;
 
 impl<'f> Calculus<'f> for PropResolution {
     type Params = PropResParam;

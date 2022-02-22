@@ -2,6 +2,7 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
 use serde::Deserialize;
 
+mod resolution;
 mod tableaux;
 
 #[derive(Deserialize)]
@@ -55,6 +56,23 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/fo-tableaux/move", web::post().to(tableaux::fo_move))
             .route("/fo-tableaux/close", web::post().to(tableaux::fo_close))
+            .route("/prop-resolution", web::get().to(resolution::prop))
+            .route(
+                "/prop-resolution/parse",
+                web::post().to(resolution::prop_parse),
+            )
+            .route(
+                "/prop-resolution/validate",
+                web::post().to(resolution::prop_validate),
+            )
+            .route(
+                "/prop-resolution/move",
+                web::post().to(resolution::prop_move),
+            )
+            .route(
+                "/prop-resolution/close",
+                web::post().to(resolution::prop_close),
+            )
     })
     .bind("127.0.0.1:7000")?
     .run()
