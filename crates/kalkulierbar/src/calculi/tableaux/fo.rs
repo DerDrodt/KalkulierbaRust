@@ -209,9 +209,9 @@ pub fn apply_close_assign(
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
     if !is_mgu_or_not_unifiable(
-        unifier.clone(),
-        state.nodes[leaf_id].relation.clone(),
-        state.nodes[node_id].relation.clone(),
+        &unifier,
+        &state.nodes[leaf_id].relation,
+        &state.nodes[node_id].relation,
     ) {
         state.status_msg = Some("The unifier you specified is not an MGU".to_string());
     }

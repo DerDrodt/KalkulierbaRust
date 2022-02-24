@@ -971,7 +971,7 @@ mod tests {
     use super::*;
     use crate::session;
 
-    fn create_artificial_expand_state<'l>(
+    fn create_artificial_expand_state(
         mut state: PropTableauxState,
         nodes: Vec<PropTabNode>,
     ) -> PropTableauxState {
@@ -1070,7 +1070,7 @@ mod tests {
             })
         }
 
-        fn move_and_info<'l>(
+        fn move_and_info(
             state: PropTableauxState,
             r#move: PropTableauxMove,
         ) -> (PropTableauxState, String) {

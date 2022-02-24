@@ -12,36 +12,14 @@ use crate::tamper_protect::ProtectedState;
 use crate::{Calculus, Symbol};
 
 use super::util::{build_clause, filter_clause, get_auto_res_candidate, UtilErr};
+use super::VisualHelp;
 
 #[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct PropResParam {
     cnf_strategy: CNFStrategy,
     visual_help: VisualHelp,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum VisualHelp {
-    None,
-    Hightlight,
-    Rearrange,
-}
-
-impl Default for VisualHelp {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl fmt::Display for VisualHelp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            VisualHelp::None => write!(f, "NONE"),
-            VisualHelp::Hightlight => write!(f, "HIGHLIGHT"),
-            VisualHelp::Rearrange => write!(f, "REARRANGE"),
-        }
-    }
 }
 
 pub struct PropResState {
@@ -490,20 +468,13 @@ impl<'de> Deserialize<'de> for PropResState {
 
         const FIELDS: &[&str] = &[
             "clause_set",
-            "formula",
-            "type",
-            "regular",
-            "backtracking",
-            "manualVarAssign",
-            "tree",
-            "moveHistory",
-            "usedBacktracking",
-            "expansionCounter",
+            "visualHelp",
+            "newestNode",
+            "lastMove",
+            "hiddenClauses",
             "seal",
-            "renderedClauseSet",
-            "statusMessage",
         ];
-        deserializer.deserialize_struct("FOTabState", FIELDS, StateVisitor)
+        deserializer.deserialize_struct("PropResState", FIELDS, StateVisitor)
     }
 }
 

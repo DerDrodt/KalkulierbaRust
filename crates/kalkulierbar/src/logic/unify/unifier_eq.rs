@@ -10,14 +10,14 @@ use crate::{
 
 use super::{unify, Unifier};
 
-pub fn is_mgu_or_not_unifiable(u: Unifier, r1: Relation, r2: Relation) -> bool {
-    match unify(&r1, &r2) {
-        Ok(mgu) => eq(mgu, u),
+pub fn is_mgu_or_not_unifiable(u: &Unifier, r1: &Relation, r2: &Relation) -> bool {
+    match unify(r1, r2) {
+        Ok(mgu) => eq(&mgu, u),
         Err(_) => true,
     }
 }
 
-fn eq(u1: Unifier, u2: Unifier) -> bool {
+fn eq(u1: &Unifier, u2: &Unifier) -> bool {
     let mut term_pairs = Vec::new();
     let keys = u1.keys();
 

@@ -56,6 +56,28 @@ impl FOTermVisitor for VariableSuffixAppend {
     }
 }
 
+pub struct VariableSuffixStripper(pub &'static str);
+
+impl FOTermVisitor for VariableSuffixStripper {
+    type Ret = FOTerm;
+
+    fn visit_quantified_var(&self, s: Symbol) -> Self::Ret {
+        let st = s.to_string();
+        let sp = st.split(self.0).next().unwrap();
+        FOTerm::QuantifiedVar(Symbol::intern(sp))
+    }
+
+    fn visit_const(&self, s: Symbol) -> Self::Ret {
+        FOTerm::Const(s)
+    }
+
+    fn visit_fn(&self, name: Symbol, args: &[crate::logic::fo::FOTerm]) -> Self::Ret {
+        let args = args.iter().map(|a| self.visit(a)).collect();
+
+        FOTerm::Function(name, args)
+    }
+}
+
 pub struct TermContainsVariableChecker(pub Symbol);
 
 impl FOTermVisitor for TermContainsVariableChecker {

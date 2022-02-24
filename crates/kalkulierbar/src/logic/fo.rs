@@ -35,6 +35,12 @@ impl Relation {
         let instantiator = VariableInstantiator(u);
         self.args = self.args.iter().map(|a| instantiator.visit(a)).collect();
     }
+
+    pub fn instantiate(&self, u: &Unifier) -> Self {
+        let mut r = self.clone();
+        r.apply_unifier(u);
+        r
+    }
 }
 
 impl SynEq for Relation {
