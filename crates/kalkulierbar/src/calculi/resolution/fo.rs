@@ -35,6 +35,7 @@ pub struct FOResParam {
     visual_help: VisualHelp,
 }
 
+#[derive(Debug)]
 pub enum FOResErr {
     ParseErr(ParseErr),
     CNFErr(FOCNFErr),
@@ -73,6 +74,44 @@ impl From<UnificationErr> for FOResErr {
 impl From<UtilErr<Relation>> for FOResErr {
     fn from(e: UtilErr<Relation>) -> Self {
         Self::UtilErr(e)
+    }
+}
+
+impl fmt::Display for FOResErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FOResErr::ParseErr(e) => fmt::Display::fmt(e, f),
+            FOResErr::CNFErr(e) => fmt::Display::fmt(e, f),
+            FOResErr::UnificationErr(e) => fmt::Display::fmt(e, f),
+            FOResErr::UtilErr(e) => fmt::Display::fmt(e, f),
+            FOResErr::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
+            FOResErr::NoSuchAtom(c, id) => {
+                write!(f, "There is no atom with id {id} in clause '{c}'")
+            }
+            FOResErr::TooFewAtoms => write!(f, "Please select more than 1 atom to factorize"),
+            FOResErr::NEAfterInst(a1, a2) => write!(
+                f,
+                "Atoms '${a1}' and '${a2}' are not equal after instantiation"
+            ),
+            FOResErr::NoSuchAtomInMain(c, id) => write!(
+                f,
+                "There is no atom with id {id} in (main premiss) clause '{c}'"
+            ),
+            FOResErr::NoSuchAtomInSide(c, id) => write!(
+                f,
+                "There is no atom with id {id} in (side premiss) clause '{c}'"
+            ),
+            FOResErr::EmptyHyperMap => {
+                write!(f, "Please select side premisses for hyper resolution")
+            }
+            FOResErr::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
+            FOResErr::MainAtomNotNeg(a) => {
+                write!(f, "Literal '{a}' in main premiss has to be negative")
+            }
+            FOResErr::ResultingMainNotPos(c) => {
+                write!(f, "Resulting clause '{c}' is not positive")
+            }
+        }
     }
 }
 

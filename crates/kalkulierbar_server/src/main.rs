@@ -40,6 +40,7 @@ async fn main() -> std::io::Result<()> {
                     .header("Access-Control-Allow-Origin", "*"),
             )
             .route("/", web::get().to(index))
+            // Prop Tableaux
             .route("/prop-tableaux", web::get().to(tableaux::prop))
             .route("/prop-tableaux/parse", web::post().to(tableaux::prop_parse))
             .route(
@@ -48,6 +49,7 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/prop-tableaux/move", web::post().to(tableaux::prop_move))
             .route("/prop-tableaux/close", web::post().to(tableaux::prop_close))
+            // FO Tableaux
             .route("/fo-tableaux", web::get().to(tableaux::fo))
             .route("/fo-tableaux/parse", web::post().to(tableaux::fo_parse))
             .route(
@@ -56,6 +58,7 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/fo-tableaux/move", web::post().to(tableaux::fo_move))
             .route("/fo-tableaux/close", web::post().to(tableaux::fo_close))
+            // Prop Resolution
             .route("/prop-resolution", web::get().to(resolution::prop))
             .route(
                 "/prop-resolution/parse",
@@ -73,6 +76,15 @@ async fn main() -> std::io::Result<()> {
                 "/prop-resolution/close",
                 web::post().to(resolution::prop_close),
             )
+            // FO Resolution
+            .route("/fo-resolution", web::get().to(resolution::fo))
+            .route("/fo-resolution/parse", web::post().to(resolution::fo_parse))
+            .route(
+                "/fo-resolution/validate",
+                web::post().to(resolution::fo_validate),
+            )
+            .route("/fo-resolution/move", web::post().to(resolution::fo_move))
+            .route("/fo-resolution/close", web::post().to(resolution::fo_close))
     })
     .bind("127.0.0.1:7000")?
     .run()
