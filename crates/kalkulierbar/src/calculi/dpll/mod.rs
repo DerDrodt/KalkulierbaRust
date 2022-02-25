@@ -141,24 +141,15 @@ pub enum NodeType {
 
 impl NodeType {
     pub fn is_annotation(&self) -> bool {
-        match self {
-            NodeType::Model | NodeType::Closed => true,
-            _ => false,
-        }
+        matches!(self, NodeType::Model | NodeType::Closed)
     }
 
     pub fn is_closed(&self) -> bool {
-        match self {
-            Self::Closed => true,
-            _ => false,
-        }
+        matches!(self, Self::Closed)
     }
 
     pub fn is_model(&self) -> bool {
-        match self {
-            Self::Model => true,
-            _ => false,
-        }
+        matches!(self, Self::Model)
     }
 }
 
@@ -449,7 +440,7 @@ fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
     // We remove items from the largest index to the smallest to keep the indices of the other
     // items in the list consistent
 
-    to_del.sort();
+    to_del.sort_unstable();
     for i in to_del.iter().rev() {
         state.nodes.remove(*i);
         for n in state.nodes.iter_mut() {
