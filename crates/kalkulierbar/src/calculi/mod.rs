@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 
+pub mod dpll;
 pub mod resolution;
 pub mod tableaux;
 
@@ -9,6 +10,7 @@ pub enum CalculusKind {
     FOTableaux,
     PropResolution,
     FOResolution,
+    DPLL,
 }
 
 impl fmt::Display for CalculusKind {
@@ -21,6 +23,7 @@ impl fmt::Display for CalculusKind {
                 CalculusKind::FOTableaux => "fo-tableaux",
                 CalculusKind::PropResolution => "prop-resolution",
                 CalculusKind::FOResolution => "fo-resolution",
+                CalculusKind::DPLL => "dpll",
             }
         )
     }
@@ -35,6 +38,7 @@ impl<'a> TryFrom<&'a str> for CalculusKind {
             "fo-tableaux" => Ok(CalculusKind::FOTableaux),
             "prop-resolution" => Ok(CalculusKind::PropResolution),
             "fo-resolution" => Ok(CalculusKind::FOResolution),
+            "dpll" => Ok(CalculusKind::DPLL),
             _ => Err("Unknown calculus"),
         }
     }

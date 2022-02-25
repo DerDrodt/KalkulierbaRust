@@ -533,7 +533,7 @@ impl Serialize for FOResState {
         state.serialize_field("clauseCounter", &self.clause_counter)?;
         state.serialize_field("statusMessage", &self.status_msg)?;
         state.serialize_field("lastMove", &self.last_move)?;
-        state.serialize_field("seal", &self.compute_seal_info())?;
+        state.serialize_field("seal", &self.seal())?;
         state.end()
     }
 }
@@ -569,7 +569,7 @@ impl<'de> Deserialize<'de> for FOResState {
             type Value = FOResState;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct FOTabState")
+                formatter.write_str("struct FOResState")
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<FOResState, V::Error>

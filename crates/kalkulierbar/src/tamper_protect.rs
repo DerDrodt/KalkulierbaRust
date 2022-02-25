@@ -3,8 +3,12 @@ use sha3::{Digest, Sha3_256};
 pub trait ProtectedState {
     fn compute_seal_info(&self) -> String;
 
+    fn seal(&self) -> String {
+        seal(self.compute_seal_info())
+    }
+
     fn verify_seal(&self, seal: &str) -> bool {
-        verify(self.compute_seal_info(), seal)
+        verify(self.seal(), seal)
     }
 }
 

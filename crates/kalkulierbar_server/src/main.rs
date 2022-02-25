@@ -2,6 +2,7 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
 use serde::Deserialize;
 
+mod dpll;
 mod resolution;
 mod tableaux;
 
@@ -85,6 +86,12 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/fo-resolution/move", web::post().to(resolution::fo_move))
             .route("/fo-resolution/close", web::post().to(resolution::fo_close))
+            // DPLL
+            .route("/dpll", web::get().to(dpll::dpll))
+            .route("/dpll/parse", web::post().to(dpll::parse))
+            .route("/dpll/validate", web::post().to(dpll::validate))
+            .route("/dpll/move", web::post().to(dpll::r#move))
+            .route("/dpll/close", web::post().to(dpll::close))
     })
     .bind("127.0.0.1:7000")?
     .run()

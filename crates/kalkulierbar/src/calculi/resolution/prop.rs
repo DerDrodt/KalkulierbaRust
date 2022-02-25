@@ -341,7 +341,7 @@ impl Serialize for PropResState {
         )?;
         state.serialize_field("hiddenClauses", &self.hidden_clauses)?;
         state.serialize_field("lastMove", &self.last_move)?;
-        state.serialize_field("seal", &self.compute_seal_info())?;
+        state.serialize_field("seal", &self.seal())?;
         state.end()
     }
 }
@@ -373,7 +373,7 @@ impl<'de> Deserialize<'de> for PropResState {
             type Value = PropResState;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct FOTabState")
+                formatter.write_str("struct PropResState")
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<PropResState, V::Error>

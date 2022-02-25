@@ -146,14 +146,14 @@ impl fmt::Display for TokenKind {
     }
 }
 
-struct Tokenizer<'f> {
+pub(crate) struct Tokenizer<'f> {
     formula: &'f str,
     pos: usize,
     extended: bool,
 }
 
 impl<'f> Tokenizer<'f> {
-    fn new(formula: &'f str, extended: bool) -> Self {
+    pub(crate) fn new(formula: &'f str, extended: bool) -> Self {
         Self {
             formula,
             pos: 0,

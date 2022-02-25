@@ -89,6 +89,10 @@ impl<L: fmt::Display + Clone> Clause<L> {
     pub fn take_atoms(self) -> Vec<Atom<L>> {
         self.atoms
     }
+
+    pub fn remove(&mut self, idx: usize) {
+        self.atoms.remove(idx);
+    }
 }
 
 impl Clause<Relation> {
@@ -237,6 +241,10 @@ impl<L: fmt::Display + Clone> ClauseSet<L> {
 
     pub fn remove(&mut self, idx: usize) -> Clause<L> {
         self.clauses.remove(idx)
+    }
+
+    pub fn remove_atom(&mut self, c: usize, a: usize) {
+        self.clauses[c].remove(a);
     }
 
     pub fn insert(&mut self, idx: usize, c: Clause<L>) {
