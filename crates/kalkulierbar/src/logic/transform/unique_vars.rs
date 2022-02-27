@@ -91,7 +91,7 @@ impl MutLogicNodeTransformer for UniqueVars {
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
-        let renamer = VariableRenamer::new(&self.replacements);
+        let renamer = VariableRenamer::new_strict(&self.replacements);
         LogicNode::Rel(
             spelling,
             args.into_iter().map(|a| renamer.visit(a)).collect(),
@@ -127,15 +127,22 @@ impl MutLogicNodeTransformer for UniqueVars {
     }
 }
 
-struct VariableRenamer<'a> {
+pub(crate) struct VariableRenamer<'a> {
     strict: bool,
     replacement_map: &'a HashMap<Symbol, Symbol>,
 }
 
 impl<'a> VariableRenamer<'a> {
-    pub fn new(map: &'a HashMap<Symbol, Symbol>) -> Self {
+    pub fn new_strict(map: &'a HashMap<Symbol, Symbol>) -> Self {
         Self {
             strict: true,
+            replacement_map: map,
+        }
+    }
+
+    pub fn new(map: &'a HashMap<Symbol, Symbol>) -> Self {
+        Self {
+            strict: false,
             replacement_map: map,
         }
     }

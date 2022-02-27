@@ -8,10 +8,14 @@ use crate::symbol::Symbol;
 
 use fo::FOTerm;
 
+use serde::de::{self, MapAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize};
 pub use transform::Lit;
 
 use self::transform::to_basic::ToBasicOps;
 use self::transform::transformer::MutLogicNodeTransformer;
+use self::unify::Unifier;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {
@@ -29,6 +33,22 @@ pub enum LogicNode {
 impl LogicNode {
     pub fn to_basic_ops(self) -> Self {
         ToBasicOps::new().visit(self)
+    }
+
+    pub fn instantiate(&self, u: &Unifier) -> Self {
+        match self {
+            LogicNode::Var(_) => panic!(),
+            LogicNode::Not(c) => Self::Not(c.instantiate(u).into()),
+            LogicNode::And(l, r) => Self::And(l.instantiate(u).into(), r.instantiate(u).into()),
+            LogicNode::Or(l, r) => Self::Or(l.instantiate(u).into(), r.instantiate(u).into()),
+            LogicNode::Impl(l, r) => Self::Impl(l.instantiate(u).into(), r.instantiate(u).into()),
+            LogicNode::Equiv(l, r) => Self::Equiv(l.instantiate(u).into(), r.instantiate(u).into()),
+            LogicNode::Rel(s, args) => {
+                Self::Rel(*s, args.iter().map(|a| a.instantiate(u)).collect())
+            }
+            LogicNode::All(s, c) => Self::All(*s, c.instantiate(u).into()),
+            LogicNode::Ex(s, c) => Self::Ex(*s, c.instantiate(u).into()),
+        }
     }
 }
 
@@ -56,6 +76,222 @@ impl fmt::Display for LogicNode {
             LogicNode::All(var, child) => write!(f, "(∀{}: {})", var, child),
             LogicNode::Ex(var, child) => write!(f, "(∃{}: {})", var, child),
         }
+    }
+}
+
+impl Serialize for LogicNode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let (ty, len) = match self {
+            LogicNode::Var(_) => ("var", 2),
+            LogicNode::Not(_) => ("not", 2),
+            LogicNode::And(_, _) => ("and", 3),
+            LogicNode::Or(_, _) => ("or", 3),
+            LogicNode::Impl(_, _) => ("impl", 3),
+            LogicNode::Equiv(_, _) => ("equiv", 3),
+            LogicNode::Rel(_, _) => ("relation", 3),
+            LogicNode::All(_, _) => ("allquant", 3),
+            LogicNode::Ex(_, _) => ("exquant", 3),
+        };
+
+        let mut state = serializer.serialize_struct("LogicNode", len)?;
+        state.serialize_field("type", ty)?;
+        match self {
+            Self::Var(s) => {
+                state.serialize_field("spelling", s)?;
+            }
+            Self::Not(c) => {
+                state.serialize_field("child", c)?;
+            }
+            Self::And(l, r) | Self::Or(l, r) | Self::Impl(l, r) | Self::Equiv(l, r) => {
+                state.serialize_field("leftChild", l)?;
+                state.serialize_field("rightChild", r)?;
+            }
+            Self::Rel(s, args) => {
+                state.serialize_field("spelling", s)?;
+                state.serialize_field("arguments", args)?;
+            }
+            Self::All(v, c) | Self::Ex(v, c) => {
+                state.serialize_field("varName", v)?;
+                state.serialize_field("child", c)?;
+            }
+        }
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for LogicNode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        enum Field {
+            #[serde(rename = "type")]
+            Ty,
+            #[serde(rename = "spelling")]
+            Spelling,
+            #[serde(rename = "child")]
+            Child,
+            #[serde(rename = "leftChild")]
+            LeftChild,
+            #[serde(rename = "rightChild")]
+            RightChild,
+            #[serde(rename = "arguments")]
+            Arguments,
+            #[serde(rename = "varName")]
+            VarName,
+            #[serde(rename = "boundVariables")]
+            BoundVariables,
+        }
+
+        struct NodeVisitor;
+
+        impl<'de> Visitor<'de> for NodeVisitor {
+            type Value = LogicNode;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct LogicNode")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<LogicNode, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut ty: Option<String> = None;
+                let mut spelling: Option<Symbol> = None;
+                let mut child: Option<LogicNode> = None;
+                let mut left: Option<LogicNode> = None;
+                let mut right: Option<LogicNode> = None;
+                let mut args: Option<Vec<FOTerm>> = None;
+                let mut var_name: Option<Symbol> = None;
+                let mut bound_vars: Option<Vec<LogicNode>> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Ty => {
+                            if ty.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            ty = Some(map.next_value()?);
+                        }
+                        Field::Spelling => {
+                            if spelling.is_some() {
+                                return Err(de::Error::duplicate_field("spelling"));
+                            }
+                            spelling = Some(map.next_value()?);
+                        }
+                        Field::Child => {
+                            if child.is_some() {
+                                return Err(de::Error::duplicate_field("child"));
+                            }
+                            child = Some(map.next_value()?);
+                        }
+                        Field::LeftChild => {
+                            if left.is_some() {
+                                return Err(de::Error::duplicate_field("leftChild"));
+                            }
+                            left = Some(map.next_value()?);
+                        }
+                        Field::RightChild => {
+                            if right.is_some() {
+                                return Err(de::Error::duplicate_field("rightChild"));
+                            }
+                            right = Some(map.next_value()?);
+                        }
+                        Field::Arguments => {
+                            if args.is_some() {
+                                return Err(de::Error::duplicate_field("arguments"));
+                            }
+                            args = Some(map.next_value()?);
+                        }
+                        Field::VarName => {
+                            if var_name.is_some() {
+                                return Err(de::Error::duplicate_field("varName"));
+                            }
+                            var_name = Some(map.next_value()?);
+                        }
+                        Field::BoundVariables => {
+                            if bound_vars.is_some() {
+                                return Err(de::Error::duplicate_field("boundVars"));
+                            }
+                            bound_vars = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
+                let ty: &str = &ty;
+                Ok(match ty {
+                    "var" => LogicNode::Var(
+                        spelling.ok_or_else(|| de::Error::missing_field("spelling"))?,
+                    ),
+                    "not" => LogicNode::Not(
+                        child
+                            .ok_or_else(|| de::Error::missing_field("child"))?
+                            .into(),
+                    ),
+                    "and" => LogicNode::And(
+                        left.ok_or_else(|| de::Error::missing_field("leftChild"))?
+                            .into(),
+                        right
+                            .ok_or_else(|| de::Error::missing_field("rightChild"))?
+                            .into(),
+                    ),
+                    "or" => LogicNode::Or(
+                        left.ok_or_else(|| de::Error::missing_field("leftChild"))?
+                            .into(),
+                        right
+                            .ok_or_else(|| de::Error::missing_field("rightChild"))?
+                            .into(),
+                    ),
+                    "impl" => LogicNode::Impl(
+                        left.ok_or_else(|| de::Error::missing_field("leftChild"))?
+                            .into(),
+                        right
+                            .ok_or_else(|| de::Error::missing_field("rightChild"))?
+                            .into(),
+                    ),
+                    "equiv" => LogicNode::Equiv(
+                        left.ok_or_else(|| de::Error::missing_field("leftChild"))?
+                            .into(),
+                        right
+                            .ok_or_else(|| de::Error::missing_field("rightChild"))?
+                            .into(),
+                    ),
+                    "relation" => LogicNode::Rel(
+                        spelling.ok_or_else(|| de::Error::missing_field("spelling"))?,
+                        args.ok_or_else(|| de::Error::missing_field("arguments"))?,
+                    ),
+                    "allquant" => LogicNode::All(
+                        var_name.ok_or_else(|| de::Error::missing_field("varName"))?,
+                        child
+                            .ok_or_else(|| de::Error::missing_field("child"))?
+                            .into(),
+                    ),
+                    "exquant" => LogicNode::Ex(
+                        var_name.ok_or_else(|| de::Error::missing_field("varName"))?,
+                        child
+                            .ok_or_else(|| de::Error::missing_field("child"))?
+                            .into(),
+                    ),
+                    _ => todo!(),
+                })
+            }
+        }
+
+        const FIELDS: &[&str] = &[
+            "type",
+            "spelling",
+            "child",
+            "leftChild",
+            "rightChild",
+            "arguments",
+            "varName",
+            "boundVariables",
+        ];
+        deserializer.deserialize_struct("LogicNode", FIELDS, NodeVisitor)
     }
 }
 

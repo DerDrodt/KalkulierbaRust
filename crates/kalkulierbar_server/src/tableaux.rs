@@ -137,3 +137,70 @@ pub(crate) async fn fo_close(form: web::Form<StateForm>) -> Result<HttpResponse>
         Ok(HttpResponse::Ok().json(res))
     })
 }
+
+pub(crate) async fn nc() -> impl Responder {
+    HttpResponse::Ok().body(
+        "Calculus nc-tableaux loaded.
+Interact via the /parse /move /close and /validate endpoints"
+            .to_string(),
+    )
+}
+
+pub(crate) async fn nc_parse(form: web::Form<ParseForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::nc;
+
+    session(|| {
+        let ParseForm { formula, params } = form.0;
+        let params: Option<()> = match params {
+            Some(p) => Some(serde_json::from_str(&p)?),
+            None => None,
+        };
+
+        let state =
+            nc::NCTableaux::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+
+        Ok(HttpResponse::Ok().json(state))
+    })
+}
+
+pub(crate) async fn nc_validate(form: web::Form<StateForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::nc;
+
+    session(|| {
+        let StateForm { state } = form.0;
+
+        let state: nc::NCTabState = serde_json::from_str(&state)?;
+        let res = nc::NCTableaux::validate(state);
+
+        Ok(HttpResponse::Ok().json(res))
+    })
+}
+
+pub(crate) async fn nc_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::nc;
+
+    session(|| {
+        let MoveForm { state, r#move } = form.0;
+
+        let state: nc::NCTabState = serde_json::from_str(&state)?;
+        let r#move: nc::NCTabMove = serde_json::from_str(&r#move)?;
+
+        let state = nc::NCTableaux::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+
+        Ok(HttpResponse::Ok().json(state))
+    })
+}
+
+pub(crate) async fn nc_close(form: web::Form<StateForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::nc;
+
+    session(|| {
+        let StateForm { state } = form.0;
+
+        let state: nc::NCTabState = serde_json::from_str(&state)?;
+
+        let res = nc::NCTableaux::check_close(state);
+
+        Ok(HttpResponse::Ok().json(res))
+    })
+}

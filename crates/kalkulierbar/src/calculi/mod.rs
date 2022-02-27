@@ -11,6 +11,7 @@ pub enum CalculusKind {
     PropResolution,
     FOResolution,
     DPLL,
+    NCTableaux,
 }
 
 impl fmt::Display for CalculusKind {
@@ -24,6 +25,7 @@ impl fmt::Display for CalculusKind {
                 CalculusKind::PropResolution => "prop-resolution",
                 CalculusKind::FOResolution => "fo-resolution",
                 CalculusKind::DPLL => "dpll",
+                CalculusKind::NCTableaux => "nc-tableaux",
             }
         )
     }
@@ -39,6 +41,7 @@ impl<'a> TryFrom<&'a str> for CalculusKind {
             "prop-resolution" => Ok(CalculusKind::PropResolution),
             "fo-resolution" => Ok(CalculusKind::FOResolution),
             "dpll" => Ok(CalculusKind::DPLL),
+            "nc-tableaux" => Ok(CalculusKind::NCTableaux),
             _ => Err("Unknown calculus"),
         }
     }

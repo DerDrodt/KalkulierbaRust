@@ -14,7 +14,6 @@ pub trait Calculus<'f> {
 
     fn parse_formula(
         formula: &'f str,
-
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error>;
 

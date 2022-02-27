@@ -1,6 +1,7 @@
 pub mod cnf;
 pub mod collectors;
 pub mod fo_cnf;
+pub mod logic_node_manipulation;
 pub mod naive_cnf;
 pub mod negation_normal;
 pub mod prenex_normal;

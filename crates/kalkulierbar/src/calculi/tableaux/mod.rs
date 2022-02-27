@@ -4,6 +4,7 @@ use crate::clause::Atom;
 use std::fmt;
 
 pub mod fo;
+pub mod nc;
 pub mod prop;
 
 pub use prop::PropTableaux as Prop;

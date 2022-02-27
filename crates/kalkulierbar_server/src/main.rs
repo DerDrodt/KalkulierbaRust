@@ -92,6 +92,15 @@ async fn main() -> std::io::Result<()> {
             .route("/dpll/validate", web::post().to(dpll::validate))
             .route("/dpll/move", web::post().to(dpll::r#move))
             .route("/dpll/close", web::post().to(dpll::close))
+            // Non-clausal Tableaux
+            .route("/nc-tableaux", web::get().to(tableaux::nc))
+            .route("/nc-tableaux/parse", web::post().to(tableaux::nc_parse))
+            .route(
+                "/nc-tableaux/validate",
+                web::post().to(tableaux::nc_validate),
+            )
+            .route("/nc-tableaux/move", web::post().to(tableaux::nc_move))
+            .route("/nc-tableaux/close", web::post().to(tableaux::nc_close))
     })
     .bind("127.0.0.1:7000")?
     .run()

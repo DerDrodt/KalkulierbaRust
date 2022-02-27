@@ -8,7 +8,10 @@ use serde::{
     Deserialize, Deserializer, Serialize,
 };
 
-use crate::Symbol;
+use crate::{
+    parse::{fo::parse_fo_term, ParseErr},
+    Symbol,
+};
 
 use super::{
     fo::{FOTerm, Relation},
@@ -99,6 +102,17 @@ impl fmt::Display for Unifier {
         }
         write!(f, "{{{}}}", contents)
     }
+}
+
+pub fn try_to_parse_unifier(h: HashMap<Symbol, String>) -> Result<Unifier, ParseErr> {
+    let mut u = HashMap::new();
+
+    for (k, v) in h {
+        let t = parse_fo_term(&v)?;
+        u.insert(k, t);
+    }
+
+    Ok(Unifier::from_map(u))
 }
 
 impl Serialize for Unifier {
