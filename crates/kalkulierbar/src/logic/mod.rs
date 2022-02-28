@@ -5,6 +5,7 @@ pub mod unify;
 use std::fmt;
 
 use crate::symbol::Symbol;
+use crate::SynEq;
 
 use fo::FOTerm;
 
@@ -75,6 +76,26 @@ impl fmt::Display for LogicNode {
             }
             LogicNode::All(var, child) => write!(f, "(∀{}: {})", var, child),
             LogicNode::Ex(var, child) => write!(f, "(∃{}: {})", var, child),
+        }
+    }
+}
+
+impl SynEq for LogicNode {
+    fn syn_eq(&self, o: &Self) -> bool {
+        match (self, o) {
+            (Self::Var(s1), Self::Var(s2)) => s1 == s2,
+            (Self::And(l1, r1), Self::And(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
+            (Self::Or(l1, r1), Self::Or(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
+            (Self::Impl(l1, r1), Self::Impl(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
+            (Self::Equiv(l1, r1), Self::Equiv(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
+            (Self::Rel(s1, args1), Self::Rel(s2, args2)) => {
+                s1 == s2
+                    && args1.len() == args2.len()
+                    && args1.iter().zip(args2).all(|(a1, a2)| a1.syn_eq(a2))
+            }
+            (Self::All(v1, c1), Self::All(v2, c2)) => v1 == v2 && c1.syn_eq(c2),
+            (Self::Ex(v1, c1), Self::Ex(v2, c2)) => v1 == v2 && c1.syn_eq(c2),
+            _ => false,
         }
     }
 }

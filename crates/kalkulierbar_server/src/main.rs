@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 mod dpll;
 mod resolution;
+mod sequent;
 mod tableaux;
 
 #[derive(Deserialize)]
@@ -101,6 +102,15 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/nc-tableaux/move", web::post().to(tableaux::nc_move))
             .route("/nc-tableaux/close", web::post().to(tableaux::nc_close))
+            // Prop Sequent
+            .route("/prop-sequent", web::get().to(sequent::prop))
+            .route("/prop-sequent/parse", web::post().to(sequent::prop_parse))
+            .route(
+                "/prop-sequent/validate",
+                web::post().to(sequent::prop_validate),
+            )
+            .route("/prop-sequent/move", web::post().to(sequent::prop_move))
+            .route("/prop-sequent/close", web::post().to(sequent::prop_close))
     })
     .bind("127.0.0.1:7000")?
     .run()

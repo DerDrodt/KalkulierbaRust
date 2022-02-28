@@ -3,6 +3,7 @@ use std::fmt;
 
 pub mod dpll;
 pub mod resolution;
+pub mod sequent;
 pub mod tableaux;
 
 pub enum CalculusKind {

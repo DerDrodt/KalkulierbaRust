@@ -21,6 +21,9 @@ impl<'f> PropParser<'f> {
         let mut parser = PropParser {
             tokens: Tokenizer::new(formula, false).peekable(),
         };
+        if parser.tokens.peek().is_none() {
+            return Err(ParseErr::EmptyFormula);
+        }
         let node = parser.parse_equiv()?;
         match parser.tokens.next() {
             Some(_) => Err(ParseErr::Expected(

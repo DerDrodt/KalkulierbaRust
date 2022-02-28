@@ -5,6 +5,7 @@ pub mod logic_node_manipulation;
 pub mod naive_cnf;
 pub mod negation_normal;
 pub mod prenex_normal;
+pub mod remove_equivs;
 pub mod skolem;
 pub mod skolem_normal;
 pub mod term_manipulator;

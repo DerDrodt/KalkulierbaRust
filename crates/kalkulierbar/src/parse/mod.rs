@@ -10,6 +10,7 @@ use crate::{
 pub mod clause_set;
 pub mod fo;
 pub mod prop;
+pub mod sequent;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
 
@@ -68,6 +69,8 @@ pub enum ParseErr {
     UnboundVar(String),
     UnboundVars(Vec<String>),
     EmptyToken,
+    EmptyFormula,
+    EmptyFormulaAt(usize),
 }
 
 impl fmt::Display for ParseErr {
@@ -88,7 +91,9 @@ impl fmt::Display for ParseErr {
 
                 write!(f, "Unbound variables found: {}", vs)
             }
-            ParseErr::UnboundVar(v) => write!(f, "Unbound var {}",v)
+            ParseErr::UnboundVar(v) => write!(f, "Unbound var {}",v),
+            ParseErr::EmptyFormula => write!(f, "Expected a formula but got an empty String"),
+            ParseErr::EmptyFormulaAt(pos) => write!(f, "Empty formula at char {pos}"),
         }
     }
 }
