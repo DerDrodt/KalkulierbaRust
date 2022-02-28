@@ -76,6 +76,10 @@ impl Unifier {
         self.0.get(&s).unwrap()
     }
 
+    pub fn remove(&mut self, s: &Symbol) -> Option<FOTerm> {
+        self.0.remove(s)
+    }
+
     fn add(&mut self, s: Symbol, t: FOTerm) {
         let u = Unifier::from_value(s, t.clone());
         let mut m = HashMap::new();
@@ -88,6 +92,10 @@ impl Unifier {
 
     pub fn keys(&self) -> Keys<Symbol, FOTerm> {
         self.0.keys()
+    }
+
+    pub fn rendered_map(&self) -> HashMap<Symbol, String> {
+        self.0.iter().map(|(s, t)| (*s, t.to_string())).collect()
     }
 }
 

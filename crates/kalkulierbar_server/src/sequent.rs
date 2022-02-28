@@ -1,5 +1,5 @@
 use actix_web::{error, web, HttpResponse, Responder, Result};
-use kalkulierbar::{session, Calculus};
+use kalkulierbar::{calculi::sequent::prop::PropSeqMove, session, Calculus};
 
 use crate::{MoveForm, ParseForm, StateForm};
 
@@ -29,12 +29,12 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
 }
 
 pub(crate) async fn prop_validate(form: web::Form<StateForm>) -> Result<HttpResponse> {
-    use kalkulierbar::calculi::sequent::prop;
+    use kalkulierbar::calculi::sequent::{self, prop};
 
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropSeqState = serde_json::from_str(&state)?;
+        let state: sequent::SequentState<PropSeqMove> = serde_json::from_str(&state)?;
         let res = prop::PropSequent::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -42,12 +42,12 @@ pub(crate) async fn prop_validate(form: web::Form<StateForm>) -> Result<HttpResp
 }
 
 pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
-    use kalkulierbar::calculi::sequent::prop;
+    use kalkulierbar::calculi::sequent::{self, prop};
 
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: prop::PropSeqState = serde_json::from_str(&state)?;
+        let state: sequent::SequentState<PropSeqMove> = serde_json::from_str(&state)?;
         let r#move: prop::PropSeqMove = serde_json::from_str(&r#move)?;
 
         let state = prop::PropSequent::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
@@ -57,12 +57,12 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
 }
 
 pub(crate) async fn prop_close(form: web::Form<StateForm>) -> Result<HttpResponse> {
-    use kalkulierbar::calculi::sequent::prop;
+    use kalkulierbar::calculi::sequent::{self, prop};
 
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropSeqState = serde_json::from_str(&state)?;
+        let state: sequent::SequentState<PropSeqMove> = serde_json::from_str(&state)?;
 
         let res = prop::PropSequent::check_close(state);
 
