@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use serde::{
     de::{self, MapAccess, Visitor},
@@ -11,7 +11,7 @@ use crate::{
     clause::Atom,
     clause::{Clause, ClauseSet},
     logic::transform::{term_manipulator::VariableSuffixAppend, visitor::FOTermVisitor},
-    logic::unify::Unifier,
+    logic::unify::{try_to_parse_unifier, Unifier},
     logic::{
         fo::Relation,
         transform::fo_cnf::fo_cnf,
@@ -1244,7 +1244,7 @@ impl Serialize for FOTabMove {
             state.serialize_field("id2", id2)?;
         }
         if let FOTabMove::CloseAssign(_, _, u) = self {
-            state.serialize_field("varAssign", u)?;
+            state.serialize_field("varAssign", &u.rendered_map())?;
         }
         state.end()
     }
@@ -1283,7 +1283,7 @@ impl<'de> Deserialize<'de> for FOTabMove {
                 let mut ty: Option<String> = None;
                 let mut id1: Option<usize> = None;
                 let mut id2: Option<usize> = None;
-                let mut unifier: Option<Unifier> = None;
+                let mut unifier: Option<HashMap<Symbol, String>> = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -1329,6 +1329,10 @@ impl<'de> Deserialize<'de> for FOTabMove {
                         "tableaux-close-assign" => {
                             let unifier =
                                 unifier.ok_or_else(|| de::Error::missing_field("varAssign"))?;
+                            let unifier = match try_to_parse_unifier(unifier) {
+                                Ok(u) => u,
+                                Err(e) => return Err(de::Error::custom(e.to_string())),
+                            };
                             FOTabMove::CloseAssign(id1, id2, unifier)
                         }
                         _ => panic!(),

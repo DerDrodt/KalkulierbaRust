@@ -16,7 +16,10 @@ use crate::{
             term_manipulator::{VariableSuffixAppend, VariableSuffixStripper},
             visitor::FOTermVisitor,
         },
-        unify::{unifier_eq::is_mgu_or_not_unifiable, unify, unify_all, UnificationErr, Unifier},
+        unify::{
+            try_to_parse_unifier, unifier_eq::is_mgu_or_not_unifiable, unify, unify_all,
+            UnificationErr, Unifier,
+        },
     },
     parse::{fo::parse_fo_formula, ParseErr},
     tamper_protect::ProtectedState,
@@ -719,7 +722,7 @@ impl Serialize for FOResMove {
                 state.serialize_field("c2", c2)?;
                 state.serialize_field("l1", l1)?;
                 state.serialize_field("l2", l2)?;
-                state.serialize_field("varAssign", u)?;
+                state.serialize_field("varAssign", &u.rendered_map())?;
             }
             FOResMove::Hide(c1) => {
                 state.serialize_field("c1", c1)?;
@@ -783,7 +786,7 @@ impl<'de> Deserialize<'de> for FOResMove {
                 let mut c2: Option<usize> = None;
                 let mut l1: Option<usize> = None;
                 let mut l2: Option<usize> = None;
-                let mut var_assign: Option<Unifier> = None;
+                let mut var_assign: Option<HashMap<Symbol, String>> = None;
                 let mut main_id: Option<usize> = None;
                 let mut atom_map: Option<HashMap<usize, (usize, usize)>> = None;
                 let mut atoms: Option<Vec<usize>> = None;
@@ -861,7 +864,14 @@ impl<'de> Deserialize<'de> for FOResMove {
                         c2.ok_or_else(|| de::Error::missing_field("c2"))?,
                         l1.ok_or_else(|| de::Error::missing_field("l1"))?,
                         l2.ok_or_else(|| de::Error::missing_field("l2"))?,
-                        var_assign.ok_or_else(|| de::Error::missing_field("varAssign"))?,
+                        {
+                            let v =
+                                var_assign.ok_or_else(|| de::Error::missing_field("varAssign"))?;
+                            match try_to_parse_unifier(v) {
+                                Ok(u) => u,
+                                Err(e) => return Err(de::Error::custom(e.to_string())),
+                            }
+                        },
                     ),
                     "res-hide" => {
                         FOResMove::Hide(c1.ok_or_else(|| de::Error::missing_field("c1"))?)

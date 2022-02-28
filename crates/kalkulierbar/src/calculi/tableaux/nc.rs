@@ -942,7 +942,7 @@ impl Serialize for NCTabMove {
         }
         if let Self::Close(_, c_id, u) = self {
             state.serialize_field("closeID", c_id)?;
-            state.serialize_field("varAssign", u)?;
+            state.serialize_field("varAssign", &u.as_ref().map(|u| u.rendered_map()))?;
         }
         state.end()
     }
