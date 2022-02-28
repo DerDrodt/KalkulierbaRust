@@ -211,7 +211,7 @@ fn apply_all_r(
             .left_formulas
             .iter()
             .chain(&node.right_formulas)
-            .flat_map(|n| collect_symbols(n))
+            .flat_map(collect_symbols)
             .collect::<HashSet<_>>()
             .contains(&c)
         {
@@ -272,7 +272,7 @@ fn apply_ex_l(
             .left_formulas
             .iter()
             .chain(&node.right_formulas)
-            .flat_map(|n| collect_symbols(n))
+            .flat_map(collect_symbols)
             .collect::<HashSet<_>>()
             .contains(&c)
         {
