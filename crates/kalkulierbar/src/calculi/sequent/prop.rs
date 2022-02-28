@@ -50,7 +50,7 @@ impl fmt::Display for PropSeqErr {
                 )
             }
             PropSeqErr::RuleNotApplicable(rule, expected) => {
-                if expected.starts_with("i") {
+                if expected.starts_with('i') {
                     write!(f, "Rule {rule} can only be applied on an {expected}")
                 } else {
                     write!(f, "Rule {rule} can only be applied on a {expected}")
@@ -495,8 +495,9 @@ fn apply_undo(state: PropSeqState) -> PropSeqResult<PropSeqState> {
             break;
         }
         if let Some(p) = &n.parent {
-            state.nodes[*p].is_closed;
-            n_id = *p;
+            let p = *p;
+            state.nodes[p].is_closed = false;
+            n_id = p;
         } else {
             break;
         }

@@ -7,19 +7,11 @@ use crate::logic::LogicNode;
 pub mod fo;
 pub mod prop;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct SequentParams {
     pub show_only_applicable_rules: bool,
-}
-
-impl Default for SequentParams {
-    fn default() -> Self {
-        Self {
-            show_only_applicable_rules: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

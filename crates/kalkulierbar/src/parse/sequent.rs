@@ -38,7 +38,7 @@ fn parse_formulas<P>(formulas: &str, pos: usize, p: &P) -> ParseResult<Vec<Logic
 where
     P: Fn(&str) -> ParseResult<LogicNode>,
 {
-    let input: Vec<_> = formulas.split(",").collect();
+    let input: Vec<_> = formulas.split(',').collect();
     let len = input.len();
 
     input
