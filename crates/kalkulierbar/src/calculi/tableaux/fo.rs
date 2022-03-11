@@ -1402,16 +1402,16 @@ mod tests {
             session(|| {
                 let s = state(1);
                 let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(3, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(4, 3)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 3)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(9, 4)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(3, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::Expand(4, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(5, 3)).unwrap();
+                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(10, 4)).unwrap();
 
-                assert!(s.nodes[6].is_closed);
-                assert_eq!(3, s.nodes[6].close_ref.unwrap());
+                assert!(s.nodes[5].is_closed);
+                assert_eq!(3, s.nodes[5].close_ref.unwrap());
 
-                assert!(s.nodes[9].is_closed);
-                assert_eq!(4, s.nodes[9].close_ref.unwrap());
+                assert!(s.nodes[10].is_closed);
+                assert_eq!(4, s.nodes[10].close_ref.unwrap());
 
                 assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(5, 1)).is_err());
                 assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 3)).is_err());

@@ -358,7 +358,7 @@ mod tests {
 
             assert_eq!("¬a".to_string(), n1.to_basic_ops().to_string());
             assert_eq!(
-                "¬((¬¬b ∧ a) ∨ (¬¬¬b ∧ ¬a))".to_string(),
+                "¬((¬¬¬b ∨ a) ∧ (¬¬b ∨ ¬a))".to_string(),
                 n2.to_basic_ops().to_string()
             );
             assert_eq!(
@@ -432,7 +432,7 @@ mod tests {
 
             assert_eq!("(a ∨ b)".to_string(), o1.to_basic_ops().to_string());
             assert_eq!(
-                "((a ∨ ¬b) ∨ ((a ∧ b) ∨ (¬a ∧ ¬b)))".to_string(),
+                "((a ∨ ¬b) ∨ ((¬a ∨ b) ∧ (a ∨ ¬b)))".to_string(),
                 o2.to_basic_ops().to_string()
             );
             assert_eq!(

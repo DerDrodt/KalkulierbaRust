@@ -272,7 +272,7 @@ mod tests {
         session(|| {
             assert_eq!("{a, b}", format!("{}", o1().naive_cnf().unwrap()));
             assert_eq!(
-                "{a, !b, a, !a}, {a, !b, a, !b}, {a, !b, b, !a}, {a, !b, b, !b}",
+                "{a, !b, !a, b}, {a, !b, a, !b}",
                 format!("{}", o2().naive_cnf().unwrap())
             );
             assert_eq!(

@@ -42,10 +42,10 @@ impl<'a> MutLogicNodeTransformer for ToBasicOps {
         let not_left = LogicNode::Not(left.clone().into()).into();
         let not_right = LogicNode::Not(right.clone().into()).into();
 
-        let both_t = LogicNode::And(left.into(), right.into()).into();
-        let both_f = LogicNode::And(not_left, not_right).into();
+        let impl1 = LogicNode::Or(not_left, right.into()).into();
+        let impl2 = LogicNode::Or(left.into(), not_right).into();
 
-        LogicNode::Or(both_t, both_f)
+        LogicNode::And(impl1, impl2)
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
@@ -241,7 +241,7 @@ mod tests {
         session(|| {
             assert_eq!("¬a", format!("{}", n1().to_basic_ops()));
             assert_eq!(
-                "¬((¬¬b ∧ a) ∨ (¬¬¬b ∧ ¬a))",
+                "¬((¬¬¬b ∨ a) ∧ (¬¬b ∨ ¬a))",
                 format!("{}", n2().to_basic_ops())
             );
             assert_eq!("¬((a ∨ ¬a) ∧ ¬c)", format!("{}", n3().to_basic_ops()));
@@ -262,7 +262,7 @@ mod tests {
         session(|| {
             assert_eq!("(a ∨ b)", format!("{}", o1().to_basic_ops()));
             assert_eq!(
-                "((a ∨ ¬b) ∨ ((a ∧ b) ∨ (¬a ∧ ¬b)))",
+                "((a ∨ ¬b) ∨ ((¬a ∨ b) ∧ (a ∨ ¬b)))",
                 format!("{}", o2().to_basic_ops())
             );
             assert_eq!(
