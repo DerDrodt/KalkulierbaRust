@@ -1,11 +1,19 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{error, web, App, HttpResponse, HttpServer, Responder, Result};
 
+use kalkulierbar::CalculusKind;
 use serde::Deserialize;
+
+use crate::statekeeper::StateKeeper;
 
 mod dpll;
 mod resolution;
 mod sequent;
 mod tableaux;
+
+mod statekeeper;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[derive(Deserialize)]
 struct ParseForm {
@@ -24,6 +32,31 @@ struct MoveForm {
     r#move: String,
 }
 
+#[derive(Deserialize)]
+struct CheckCredForm {
+    mac: String,
+}
+
+#[derive(Deserialize)]
+struct SetCalculusForm {
+    calculus: CalculusKind,
+    enable: bool,
+    mac: String,
+}
+
+#[derive(Deserialize)]
+struct AddExampleForm {
+    example: String,
+    mac: String,
+}
+
+#[derive(Deserialize)]
+struct DelExampleForm {
+    #[serde(rename = "exampleID")]
+    example_id: usize,
+    mac: String,
+}
+
 async fn index() -> impl Responder {
     HttpResponse::Ok().body(
         "KalkulierbaR API Server
@@ -31,6 +64,66 @@ async fn index() -> impl Responder {
 Available calculus endpoints:
 prop-tableaux",
     )
+}
+
+pub(crate) async fn config(s_keeper: web::Data<StateKeeper>) -> Result<HttpResponse> {
+    Ok(HttpResponse::Ok().json(&s_keeper.get_config()))
+}
+
+pub(crate) async fn check_creds(
+    form: web::Form<CheckCredForm>,
+    s_keeper: web::Data<StateKeeper>,
+) -> Result<HttpResponse> {
+    let CheckCredForm { mac } = form.0;
+
+    let res = s_keeper
+        .check_credentials(&mac)
+        .map_err(error::ErrorBadRequest)?;
+
+    Ok(HttpResponse::Ok().json(res))
+}
+
+pub(crate) async fn set_calculus_state(
+    form: web::Form<SetCalculusForm>,
+    s_keeper: web::Data<StateKeeper>,
+) -> Result<HttpResponse> {
+    let SetCalculusForm {
+        calculus,
+        enable,
+        mac,
+    } = form.0;
+
+    let res = s_keeper
+        .set_calculus_state(calculus, enable, &mac)
+        .map_err(error::ErrorBadRequest)?;
+
+    Ok(HttpResponse::Ok().json(res))
+}
+
+pub(crate) async fn add_example(
+    form: web::Form<AddExampleForm>,
+    s_keeper: web::Data<StateKeeper>,
+) -> Result<HttpResponse> {
+    let AddExampleForm { example, mac } = form.0;
+
+    let res = s_keeper
+        .add_example(serde_json::from_str(&example)?, &example, &mac)
+        .map_err(error::ErrorBadRequest)?;
+
+    Ok(HttpResponse::Ok().json(res))
+}
+
+pub(crate) async fn del_example(
+    form: web::Form<DelExampleForm>,
+    s_keeper: web::Data<StateKeeper>,
+) -> Result<HttpResponse> {
+    let DelExampleForm { example_id, mac } = form.0;
+
+    let res = s_keeper
+        .remove_example(example_id, &mac)
+        .map_err(error::ErrorBadRequest)?;
+
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[actix_web::main]
@@ -42,6 +135,11 @@ async fn main() -> std::io::Result<()> {
                     .header("Access-Control-Allow-Origin", "*"),
             )
             .route("/", web::get().to(index))
+            .route("/config", web::get().to(config))
+            .route("/admin/checkCredentials", web::get().to(check_creds))
+            .route("/admin/setCalculusState", web::get().to(set_calculus_state))
+            .route("/admin/addExample", web::get().to(add_example))
+            .route("/admin/delExample", web::get().to(del_example))
             // Prop Tableaux
             .route("/prop-tableaux", web::get().to(tableaux::prop))
             .route("/prop-tableaux/parse", web::post().to(tableaux::prop_parse))
@@ -111,6 +209,7 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/prop-sequent/move", web::post().to(sequent::prop_move))
             .route("/prop-sequent/close", web::post().to(sequent::prop_close))
+            .app_data(StateKeeper::new())
     })
     .bind("127.0.0.1:7000")?
     .run()
