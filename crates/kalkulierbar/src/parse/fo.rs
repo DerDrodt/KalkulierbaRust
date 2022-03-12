@@ -136,6 +136,8 @@ impl<'t> FOParser<'t> {
 
         let sub = self.parse_not()?;
 
+        self.quantifier_scope.pop();
+
         Ok(Box::new(match kind {
             TokenKind::All => LogicNode::All(name, sub),
             TokenKind::Ex => LogicNode::Ex(name, sub),
