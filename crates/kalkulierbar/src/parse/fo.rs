@@ -128,21 +128,37 @@ impl<'t> FOParser<'t> {
             return Err(ParseErr::Expected("quantifier".to_string(), self.got_msg()));
         }
 
+        let mut names = Vec::new();
         let name = Symbol::intern(self.cur_token()?.spelling);
-        self.bump()?;
-        self.eat(TokenKind::Colon)?;
-
+        names.push(name);
         self.quantifier_scope.push(name);
+        self.bump()?;
+        while !self.next_is(TokenKind::Colon) {
+            self.eat(TokenKind::Comma)?;
+            if !self.next_is(TokenKind::CapIdent) {
+                return Err(ParseErr::Expected("quantifier".to_string(), self.got_msg()));
+            }
+            let name = Symbol::intern(self.cur_token()?.spelling);
+            names.push(name);
+            self.quantifier_scope.push(name);
+            self.bump()?;
+        }
+        self.bump()?;
 
-        let sub = self.parse_not()?;
-
-        self.quantifier_scope.pop();
-
-        Ok(Box::new(match kind {
-            TokenKind::All => LogicNode::All(name, sub),
-            TokenKind::Ex => LogicNode::Ex(name, sub),
+        let quant = match kind {
+            TokenKind::All => LogicNode::All,
+            TokenKind::Ex => LogicNode::Ex,
             _ => panic!(),
-        }))
+        };
+
+        let mut sub = self.parse_not()?;
+
+        for n in names.iter().rev() {
+            self.quantifier_scope.pop();
+            sub = Box::new(quant(*n, sub));
+        }
+
+        Ok(sub)
     }
 
     fn parse_paren(&mut self) -> ParseResult<Box<LogicNode>> {
@@ -266,5 +282,84 @@ impl<'t> FOParser<'t> {
                 "end of input".to_string(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    macro_rules! test_map {
+        ($func:ident, $( $f:expr, $e:expr );*) => {{
+            $(
+                session(|| {
+                    let cs = $func($f).expect($f);
+                    assert_eq!($e, cs.to_string());
+                });
+            )*
+        }};
+    }
+
+    macro_rules! test_list_invalid {
+        ($func:ident, $( $f:expr ),*) => {{
+            $(
+                session(|| {
+                    let res = $func($f);
+                    assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
+                });
+            )*
+        }};
+    }
+
+    #[test]
+    fn valid() {
+        test_map!(
+            parse_fo_formula,
+            "P(c)", "P(c)";
+            "\\all X: P(X)", "(∀X: P(X))";
+            "\\all X:P(X)", "(∀X: P(X))";
+            "\\all X:           P(X)", "(∀X: P(X))";
+            "\\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y, Z)))", "(∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y, Z))))))";
+            "\\ex Xyz: P(Xyz)", "(∃Xyz: P(Xyz))";
+            "!\\ex X: (P(X) <-> !P(X))", "¬(∃X: (P(X) <=> ¬P(X)))";
+            "!(\\ex X: (P(X) <-> !P(X)))", "¬(∃X: (P(X) <=> ¬P(X)))";
+            "\\ex Xyz: P(Xyz) & \\all X: P(X)", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X)))";
+            "!/ex X: (P(X) <-> !P(X))", "¬(∃X: (P(X) <=> ¬P(X)))";
+            "!(/ex X: (P(X) <-> !P(X)))", "¬(∃X: (P(X) <=> ¬P(X)))";
+            "/ex Xyz: P(Xyz) & /all X: P(X)", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X)))";
+            "\\ex X, Y: (P(X, Y) -> P(Y, X))", "(∃X: (∃Y: (P(X, Y) -> P(Y, X))))";
+            "\\all X, Y, Z: (P(X, Y) & P(Y, Z) -> P(X, Z))", "(∀X: (∀Y: (∀Z: ((P(X, Y) ∧ P(Y, Z)) -> P(X, Z)))))"
+        );
+    }
+
+    #[test]
+    fn invalid() {
+        test_list_invalid!(
+            parse_fo_formula,
+            "",
+            "-->a",
+            "<--",
+            "--><=>",
+            "!->",
+            "a!",
+            "a-->",
+            "b<=>",
+            "<->a",
+            "<->",
+            "(a&b v2",
+            "(a|b",
+            "X",
+            "R(X)",
+            "\\all X: P(\\all: X: P(X))",
+            "\\all X: P(Y)",
+            "\\all x: P(X)",
+            "\\all X P(X)",
+            "\\ex X, x: P(X)",
+            "\\ex X, f(X): P(X)",
+            "\\ex X, P(X): P(X)",
+            "\\ex X, P(x): P(X)",
+            "\\ex X, Y, x: P(X)"
+        );
     }
 }
