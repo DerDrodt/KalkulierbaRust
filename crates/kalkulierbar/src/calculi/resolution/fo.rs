@@ -12,7 +12,7 @@ use crate::{
     logic::{
         fo::Relation,
         transform::{
-            fo_cnf::{fo_cnf, FOCNFErr},
+            fo_cnf::FOCNFErr,
             term_manipulator::{VariableSuffixAppend, VariableSuffixStripper},
             visitor::FOTermVisitor,
         },
@@ -21,7 +21,7 @@ use crate::{
             UnificationErr, Unifier,
         },
     },
-    parse::{fo::parse_fo_formula, ParseErr},
+    parse::{parse_fo_flexibly_to_cnf, FOToCNFParseErr, ParseErr},
     tamper_protect::ProtectedState,
     Calculus, Symbol,
 };
@@ -65,6 +65,15 @@ impl From<ParseErr> for FOResErr {
 impl From<FOCNFErr> for FOResErr {
     fn from(e: FOCNFErr) -> Self {
         Self::CNFErr(e)
+    }
+}
+
+impl From<FOToCNFParseErr> for FOResErr {
+    fn from(e: FOToCNFParseErr) -> Self {
+        match e {
+            FOToCNFParseErr::ParseErr(e) => Self::ParseErr(e),
+            FOToCNFParseErr::CNFErr(e) => Self::CNFErr(e),
+        }
     }
 }
 
@@ -215,8 +224,7 @@ impl<'f> Calculus<'f> for FOResolution {
         formula: &'f str,
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
-        let fo = parse_fo_formula(formula)?;
-        let cs = fo_cnf(fo)?;
+        let cs = parse_fo_flexibly_to_cnf(formula)?;
 
         let mut s = FOResState::new(cs, params.unwrap_or_default().visual_help);
 

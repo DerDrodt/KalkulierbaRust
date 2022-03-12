@@ -8,7 +8,7 @@ use serde::{
 
 use crate::{
     clause::{Atom, Clause, ClauseSet},
-    parse::{parse_flexible, CNFStrategy, ParseErr},
+    parse::{parse_prop_flexible, CNFStrategy, ParseErr},
     tamper_protect::ProtectedState,
     Calculus, Symbol,
 };
@@ -284,7 +284,7 @@ impl<'f> Calculus<'f> for DPLL {
         formula: &'f str,
         _: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
-        let cs = parse_flexible(formula, CNFStrategy::Optimal)?;
+        let cs = parse_prop_flexible(formula, CNFStrategy::Optimal)?;
         let mut s = DPLLState::new(cs);
         s.nodes.push(DPLLNode::new(
             None,

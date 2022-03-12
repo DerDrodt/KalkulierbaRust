@@ -14,11 +14,10 @@ use crate::{
     logic::unify::{try_to_parse_unifier, Unifier},
     logic::{
         fo::Relation,
-        transform::fo_cnf::fo_cnf,
         unify::{unifier_eq::is_mgu_or_not_unifiable, unify, UnificationErr},
     },
     logic::{transform::fo_cnf::FOCNFErr, unify},
-    parse::{fo::parse_fo_formula, ParseErr},
+    parse::{parse_fo_flexibly_to_cnf, FOToCNFParseErr, ParseErr},
     symbol::Symbol,
     tamper_protect::ProtectedState,
     Calculus,
@@ -63,6 +62,15 @@ impl From<ParseErr> for FOTabErr {
 impl From<FOCNFErr> for FOTabErr {
     fn from(e: FOCNFErr) -> Self {
         FOTabErr::CNF(e)
+    }
+}
+
+impl From<FOToCNFParseErr> for FOTabErr {
+    fn from(e: FOToCNFParseErr) -> Self {
+        match e {
+            FOToCNFParseErr::ParseErr(e) => Self::Parse(e),
+            FOToCNFParseErr::CNFErr(e) => Self::CNF(e),
+        }
     }
 }
 
@@ -152,7 +160,7 @@ impl<'f> Calculus<'f> for FOTableaux {
         formula: &'f str,
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
-        let clauses = fo_cnf(parse_fo_formula(formula)?)?;
+        let clauses = parse_fo_flexibly_to_cnf(formula)?;
 
         Ok(FOTabState::new(
             clauses,

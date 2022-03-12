@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::calculus::CloseMsg;
 use crate::clause::{Atom, Clause, ClauseSet};
-use crate::parse::{parse_flexible, CNFStrategy, ParseErr};
+use crate::parse::{parse_prop_flexible, CNFStrategy, ParseErr};
 use crate::tamper_protect::ProtectedState;
 use crate::{Calculus, Symbol};
 
@@ -141,7 +141,7 @@ impl<'f> Calculus<'f> for PropResolution {
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
         let params = params.unwrap_or_default();
-        let parsed = parse_flexible(formula, params.cnf_strategy)?;
+        let parsed = parse_prop_flexible(formula, params.cnf_strategy)?;
         Ok(PropResState::new(parsed, params.visual_help))
     }
 

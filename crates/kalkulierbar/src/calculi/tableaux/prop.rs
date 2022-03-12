@@ -6,7 +6,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use super::TableauxType;
 use crate::clause::{Atom, Clause, ClauseSet};
 use crate::parse::ParseErr;
-use crate::parse::{parse_flexible, CNFStrategy};
+use crate::parse::{parse_prop_flexible, CNFStrategy};
 use crate::tamper_protect::ProtectedState;
 use crate::Calculus;
 use crate::{calculus::CloseMsg, symbol::Symbol};
@@ -493,7 +493,7 @@ impl<'l> Calculus<'l> for PropTableaux<'l> {
             cnf_strategy,
         } = params.unwrap_or_default();
 
-        let clauses = parse_flexible(formula, cnf_strategy)?;
+        let clauses = parse_prop_flexible(formula, cnf_strategy)?;
         let state = PropTableauxState::new(clauses, tab_type, regular, backtracking);
         state.compute_seal_info();
         Ok(state)

@@ -184,10 +184,13 @@ impl<'t> FOParser<'t> {
         self.bump()?;
         self.eat(TokenKind::LParen)?;
 
-        let mut args = vec![self.parse_term()?];
-        while self.next_is(TokenKind::Comma) {
-            self.bump()?;
+        let mut args = Vec::new();
+        if !self.next_is(TokenKind::RParen) {
             args.push(self.parse_term()?);
+            while self.next_is(TokenKind::Comma) {
+                self.bump()?;
+                args.push(self.parse_term()?);
+            }
         }
 
         self.eat(TokenKind::RParen)?;

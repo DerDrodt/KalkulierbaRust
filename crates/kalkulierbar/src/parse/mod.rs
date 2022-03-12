@@ -1,11 +1,19 @@
 use std::fmt;
 
-pub use clause_set::{parse_clause_set, CNFStrategy};
+pub use clause_set::{parse_prop_clause_set, CNFStrategy};
 pub use prop::parse_prop_formula;
 
 use crate::{
-    clause::ClauseSet, logic::transform::FormulaConversionErr, logic::LogicNode, symbol::Symbol,
+    clause::ClauseSet,
+    logic::{fo::Relation, transform::FormulaConversionErr},
+    logic::{
+        transform::fo_cnf::{fo_cnf, FOCNFErr},
+        LogicNode,
+    },
+    symbol::Symbol,
 };
+
+use self::{clause_set::parse_fo_clause_set, fo::parse_fo_formula};
 
 pub mod clause_set;
 pub mod fo;
@@ -14,7 +22,7 @@ pub mod sequent;
 
 pub type ParseResult<T> = Result<T, ParseErr>;
 
-pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<ClauseSet<Symbol>> {
+pub fn parse_prop_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<ClauseSet<Symbol>> {
     let likely_formula =
         formula.contains(|c| matches!(c, '&' | '|' | '\\' | '>' | '<' | '=' | '-'));
     /* let likely_clause_set = formula.contains(|c| match c {
@@ -24,7 +32,7 @@ pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<Claus
 
     // TODO: Dimacs
 
-    let clause_parse = match parse_clause_set(formula) {
+    let clause_parse = match parse_prop_clause_set(formula) {
         Ok(res) => {
             return Ok(res);
         }
@@ -43,6 +51,34 @@ pub fn parse_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<Claus
     } else {
         clause_parse
     })
+}
+
+pub enum FOToCNFParseErr {
+    ParseErr(ParseErr),
+    CNFErr(FOCNFErr),
+}
+
+impl From<ParseErr> for FOToCNFParseErr {
+    fn from(e: ParseErr) -> Self {
+        Self::ParseErr(e)
+    }
+}
+
+impl From<FOCNFErr> for FOToCNFParseErr {
+    fn from(e: FOCNFErr) -> Self {
+        Self::CNFErr(e)
+    }
+}
+
+pub fn parse_fo_flexibly_to_cnf(formula: &str) -> Result<ClauseSet<Relation>, FOToCNFParseErr> {
+    let is_formula = formula.contains(|c| matches!(c, '&' | '|' | '\\' | '>' | '<' | '=' | '-'));
+
+    if is_formula {
+        let n = parse_fo_formula(formula)?;
+        return Ok(fo_cnf(n)?);
+    }
+
+    Ok(parse_fo_clause_set(formula)?)
 }
 
 fn to_cnf(

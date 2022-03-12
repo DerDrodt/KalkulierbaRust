@@ -99,7 +99,7 @@ impl<'f> Calculus<'f> for FOSequent {
         formula: &'f str,
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
-        let (left, right) = sequent::parse_prop(formula)?;
+        let (left, right) = sequent::parse_fo(formula)?;
         Ok(SequentState::new(
             vec![SequentNode::new(None, left, right, None)],
             params.unwrap_or_default().show_only_applicable_rules,
