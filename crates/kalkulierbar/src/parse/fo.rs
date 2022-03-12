@@ -25,7 +25,7 @@ pub fn parse_fo_term(term: &str) -> ParseResult<FOTerm> {
 
 struct FOParser<'t> {
     tokens: Peekable<Tokenizer<'t>>,
-    quantifier_scope: Vec<Vec<Symbol>>,
+    quantifier_scope: Vec<Symbol>,
     bind_quant_vars: bool,
 }
 
@@ -132,31 +132,9 @@ impl<'t> FOParser<'t> {
         self.bump()?;
         self.eat(TokenKind::Colon)?;
 
-        self.quantifier_scope.push(Vec::new());
+        self.quantifier_scope.push(name);
 
         let sub = self.parse_not()?;
-
-        let last_scope = self
-            .quantifier_scope
-            .remove(self.quantifier_scope.len() - 1);
-
-        let mut bound_before: Vec<Symbol> = last_scope
-            .iter()
-            .filter_map(|it| if *it != name { Some(*it) } else { None })
-            .collect();
-
-        if self.quantifier_scope.is_empty() && !bound_before.is_empty() {
-            return Err(ParseErr::UnboundVars(
-                bound_before.iter().map(|k| k.to_string()).collect(),
-            ));
-        }
-
-        if !bound_before.is_empty() {
-            self.quantifier_scope
-                .last_mut()
-                .unwrap()
-                .append(&mut bound_before);
-        }
 
         Ok(Box::new(match kind {
             TokenKind::All => LogicNode::All(name, sub),
@@ -219,12 +197,8 @@ impl<'t> FOParser<'t> {
     fn parse_quant_var(&mut self) -> ParseResult<FOTerm> {
         let spelling = Symbol::intern(self.cur_token()?.spelling);
 
-        if self.quantifier_scope.is_empty() && self.bind_quant_vars {
+        if self.bind_quant_vars && !self.quantifier_scope.contains(&spelling) {
             return Err(ParseErr::UnboundVar(self.got_msg()));
-        }
-
-        if self.bind_quant_vars {
-            self.quantifier_scope.last_mut().unwrap().push(spelling);
         }
 
         self.eat(TokenKind::CapIdent)?;
