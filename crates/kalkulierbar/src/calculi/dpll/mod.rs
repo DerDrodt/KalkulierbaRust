@@ -71,7 +71,7 @@ impl fmt::Display for DPLLErr {
 
 pub type DPLLResult<T> = Result<T, DPLLErr>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DPLLMove {
     Split(usize, String),
     Propagate(usize, usize, usize, usize),
@@ -121,11 +121,11 @@ impl DPLLState {
 impl ProtectedState for DPLLState {
     fn compute_seal_info(&self) -> String {
         let nis: Vec<String> = self.nodes.iter().map(|n| n.info()).collect();
-        format!("pdpll|{}|{}", self.clause_set, nis.join(","))
+        format!("pdpll|{}|[{}]", self.clause_set, nis.join(", "))
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeType {
     #[serde(rename = "ROOT")]
     Root,
@@ -196,7 +196,7 @@ impl CsDiff {
 impl fmt::Display for CsDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CsDiff::Id => write!(f, ""),
+            CsDiff::Id => write!(f, "identity"),
             CsDiff::RemoveClause(c) => write!(f, "remove-{c}"),
             CsDiff::AddClause(c) => write!(f, "add-{c}"),
             CsDiff::RemoveAtom(c, a) => write!(f, "remove-{c}-{a}"),
@@ -246,7 +246,7 @@ impl DPLLNode {
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<String>>()
-            .join(",");
+            .join(", ");
         let ty = &self.ty;
         let label = self.label;
         let diff = &self.diff;
@@ -255,7 +255,7 @@ impl DPLLNode {
             Some(false) => "false",
             _ => "null",
         };
-        format!("({parent}|{children}|{ty}|{label}|{diff}|{veri})")
+        format!("({parent}|[{children}]|{ty}|{label}|{diff}|{veri})")
     }
 
     pub fn is_closed(&self) -> bool {
@@ -955,5 +955,580 @@ impl<'de> Deserialize<'de> for DPLLMove {
 
         const FIELDS: &[&str] = &["type", "c1", "c2", "literal", "mainID", "atomMap", "atoms"];
         deserializer.deserialize_struct("PropResMove", FIELDS, MoveVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    pub use super::*;
+    use crate::session;
+
+    mod propagate {
+        use super::*;
+
+        #[test]
+        fn valid_differs() {
+            session(|| {
+                let s = DPLL::parse_formula("a;!a,b,c", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+
+                assert_eq!(NodeType::Prop, s.nodes[1].ty);
+                assert_eq!(
+                    "{b, c}",
+                    s.nodes[1].diff.apply(s.clause_set).clauses()[1].to_string()
+                );
+            });
+        }
+
+        #[test]
+        fn valid_equals() {
+            session(|| {
+                let s = DPLL::parse_formula("a;a,b,c", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+
+                assert_eq!(NodeType::Model, s.nodes[2].ty);
+                assert_eq!(3, s.nodes.len());
+                assert_eq!(
+                    "{a}",
+                    s.nodes[1].diff.apply(s.clause_set).clauses()[0].to_string()
+                );
+            });
+        }
+
+        #[test]
+        fn valid_many() {
+            session(|| {
+                let s = DPLL::parse_formula("a;!a,b;a,c", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(1, 0, 2, 0)).unwrap();
+
+                assert_eq!(4, s.nodes.len());
+
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert_eq!(1, s.nodes[2].parent.unwrap());
+                assert_eq!(2, s.nodes[3].parent.unwrap());
+
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(vec![2], s.nodes[1].children);
+                assert_eq!(vec![3], s.nodes[2].children);
+                assert!(s.nodes[3].children.is_empty());
+
+                assert!(!s.nodes[0].is_leaf());
+                assert!(!s.nodes[1].is_leaf());
+                assert!(!s.nodes[2].is_leaf());
+                assert!(s.nodes[3].is_leaf());
+
+                assert!(!s.nodes[0].is_annotation());
+                assert!(!s.nodes[1].is_annotation());
+                assert!(!s.nodes[2].is_annotation());
+                assert!(s.nodes[3].is_annotation());
+
+                assert_eq!(Symbol::intern("true"), s.nodes[0].label);
+                assert_eq!(Symbol::intern("prop"), s.nodes[1].label);
+                assert_eq!(Symbol::intern("prop"), s.nodes[2].label);
+                assert_eq!(Symbol::intern("model"), s.nodes[3].label);
+
+                assert_eq!(
+                    "{a}, {!a, b}, {a, c}",
+                    s.nodes[0].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{a}, {b}, {a, c}",
+                    s.nodes[1].diff.apply(s.clause_set.clone()).to_string()
+                );
+                let ncs = s.nodes[1].diff.apply(s.clause_set);
+                assert_eq!("{a}, {b}", s.nodes[2].diff.apply(ncs).to_string());
+            });
+        }
+
+        #[test]
+        fn valid_closed() {
+            session(|| {
+                let s = DPLL::parse_formula("a;!a;a,b", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+
+                assert_eq!(NodeType::Closed, s.nodes[2].ty);
+            });
+        }
+
+        #[test]
+        fn invalid() {
+            session(|| {
+                let s = DPLL::parse_formula("a;!a,b;a,c", None).unwrap();
+
+                // Out of bounds
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(101, 0, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 101, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 101, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 1, 101)).is_err());
+
+                // Conflicts
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                // Same branch twice
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 2, 0)).is_err());
+                // Propagate Annotation
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(2, 0, 1, 0)).is_err());
+                // Base clause with 2 objects
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 1, 1, 0)).is_err());
+                // Wrong prop atom
+                assert!(DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 1)).is_err());
+            });
+        }
+    }
+
+    mod split {
+        use super::*;
+
+        #[test]
+        fn valid_single_clause() {
+            session(|| {
+                let s = DPLL::parse_formula("!a,b,c", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Split(0, "c".to_string())).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+
+                assert_eq!("true", s.nodes[0].label.to_string());
+                assert_eq!("c", s.nodes[1].label.to_string());
+                assert_eq!("¬c", s.nodes[2].label.to_string());
+
+                assert_eq!(NodeType::Root, s.nodes[0].ty);
+                assert_eq!(NodeType::Split, s.nodes[1].ty);
+                assert_eq!(NodeType::Split, s.nodes[2].ty);
+
+                assert_eq!(vec![1, 2], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert_eq!(0, s.nodes[2].parent.unwrap());
+
+                assert!(!s.nodes[0].is_leaf());
+                assert!(s.nodes[1].is_leaf());
+                assert!(s.nodes[2].is_leaf());
+
+                assert_eq!(
+                    "{!a, b, c}, {c}",
+                    s.nodes[1].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{!a, b, c}, {!c}",
+                    s.nodes[2].diff.apply(s.clause_set).to_string()
+                );
+            })
+        }
+
+        #[test]
+        fn valid_single_atom() {
+            session(|| {
+                let s = DPLL::parse_formula("!a;b,c;b", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Split(0, "a".to_string())).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Split(1, "b".to_string())).unwrap();
+
+                assert_eq!(5, s.nodes.len());
+
+                assert_eq!("true", s.nodes[0].label.to_string());
+                assert_eq!("a", s.nodes[1].label.to_string());
+                assert_eq!("¬a", s.nodes[2].label.to_string());
+                assert_eq!("b", s.nodes[3].label.to_string());
+                assert_eq!("¬b", s.nodes[4].label.to_string());
+
+                assert_eq!(vec![1, 2], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert_eq!(0, s.nodes[2].parent.unwrap());
+                assert_eq!(vec![3, 4], s.nodes[1].children);
+                assert_eq!(1, s.nodes[3].parent.unwrap());
+                assert_eq!(1, s.nodes[4].parent.unwrap());
+
+                assert!(!s.nodes[0].is_leaf());
+                assert!(!s.nodes[1].is_leaf());
+                assert!(s.nodes[2].is_leaf());
+                assert!(s.nodes[3].is_leaf());
+                assert!(s.nodes[4].is_leaf());
+
+                assert_eq!(
+                    "{!a}, {b, c}, {b}, {a}",
+                    s.nodes[1].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{!a}, {b, c}, {b}, {!a}",
+                    s.nodes[2].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{!a}, {b, c}, {b}, {b}",
+                    s.nodes[3].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{!a}, {b, c}, {b}, {!b}",
+                    s.nodes[4].diff.apply(s.clause_set).to_string()
+                );
+            })
+        }
+
+        #[test]
+        fn valid_number() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b,c", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Split(0, "42".to_string())).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+
+                assert_eq!("true", s.nodes[0].label.to_string());
+                assert_eq!("42", s.nodes[1].label.to_string());
+                assert_eq!("¬42", s.nodes[2].label.to_string());
+
+                assert_eq!(NodeType::Root, s.nodes[0].ty);
+                assert_eq!(NodeType::Split, s.nodes[1].ty);
+                assert_eq!(NodeType::Split, s.nodes[2].ty);
+
+                assert_eq!(vec![1, 2], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert_eq!(0, s.nodes[2].parent.unwrap());
+
+                assert!(!s.nodes[0].is_leaf());
+                assert!(s.nodes[1].is_leaf());
+                assert!(s.nodes[2].is_leaf());
+
+                assert_eq!(
+                    "{a, b, c}, {42}",
+                    s.nodes[1].diff.apply(s.clause_set.clone()).to_string()
+                );
+                assert_eq!(
+                    "{a, b, c}, {!42}",
+                    s.nodes[2].diff.apply(s.clause_set).to_string()
+                );
+            })
+        }
+
+        #[test]
+        fn invalid() {
+            session(|| {
+                let s = DPLL::parse_formula("a;a,b,c", None).unwrap();
+
+                // Out of bounds
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(1, "a".to_string())).is_err());
+
+                // Conflicts
+                let s = DPLL::apply_move(s, DPLLMove::Split(0, "a".to_string())).unwrap();
+                // Split on same twice
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(0, "b".to_string())).is_err());
+
+                // Wrong parsing
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(2, "".to_string())).is_err());
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::Split(2, "This is nonsense".to_string())
+                )
+                .is_err());
+                assert!(
+                    DPLL::apply_move(s.clone(), DPLLMove::Split(2, "HELLO!".to_string())).is_err()
+                );
+            })
+        }
+    }
+
+    mod prune {
+        use super::*;
+
+        #[test]
+        fn valid_propagation_prune() {
+            session(|| {
+                let s = DPLL::parse_formula("c,!a;a", None).unwrap();
+
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 1)).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+                assert!(s.nodes[2].children.is_empty());
+                assert_eq!(1, s.nodes[2].parent.unwrap());
+                assert!(s.nodes[2].is_leaf());
+
+                let cs2 = s.nodes[2].diff.apply(s.clause_set.clone());
+                let cs0 = s.nodes[0].diff.apply(s.clause_set.clone());
+
+                // Nothing happens and tests remain the same
+                let s = DPLL::apply_move(s, DPLLMove::Prune(2)).unwrap();
+                assert_eq!(3, s.nodes.len());
+                assert!(s.nodes[2].children.is_empty());
+                assert_eq!(1, s.nodes[2].parent.unwrap());
+                assert!(s.nodes[2].is_leaf());
+                assert_eq!(
+                    cs2.to_string(),
+                    s.nodes[2].diff.apply(s.clause_set.clone()).to_string()
+                );
+
+                // Annotation Prune fails
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Prune(1)).is_err());
+
+                // Reset to start state
+                let s = DPLL::apply_move(s, DPLLMove::Prune(0)).unwrap();
+                assert_eq!(1, s.nodes.len());
+                assert!(s.nodes[0].children.is_empty());
+                assert!(s.nodes[0].is_leaf());
+                assert_eq!(
+                    cs0.to_string(),
+                    s.nodes[0].diff.apply(s.clause_set.clone()).to_string()
+                );
+            })
+        }
+
+        #[test]
+        fn valid_split_prune() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;b,c", None).unwrap();
+
+                let s = DPLL::apply_move(s, DPLLMove::Split(0, "b".to_string())).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+                assert_eq!(vec![1, 2], s.nodes[0].children);
+                assert!(!s.nodes[0].is_leaf());
+
+                let s = DPLL::apply_move(s, DPLLMove::Prune(0)).unwrap();
+                assert_eq!(1, s.nodes.len());
+                assert!(s.nodes[0].children.is_empty());
+                assert!(s.nodes[0].is_leaf());
+            })
+        }
+
+        #[test]
+        fn valid_model_prune() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+                let s = DPLL::apply_move(
+                    s,
+                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), true)])),
+                )
+                .unwrap();
+
+                assert_eq!("model ✓", s.nodes[2].label.to_string());
+                assert!(s.nodes[2].verified.unwrap());
+
+                let s = DPLL::apply_move(s, DPLLMove::Prune(2)).unwrap();
+                assert_eq!("model ✓", s.nodes[2].label.to_string());
+                assert!(s.nodes[2].verified.unwrap());
+            })
+        }
+
+        #[test]
+        fn invalid() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;!a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+
+                assert!(DPLL::apply_move(s.clone(), DPLLMove::Prune(42)).is_err());
+                assert!(DPLL::apply_move(s, DPLLMove::Prune(1)).is_err());
+            })
+        }
+    }
+
+    mod check_model {
+        use super::*;
+
+        #[test]
+        fn model1() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+
+                assert_eq!("model", s.nodes[2].label.to_string());
+                assert!(s.nodes[2].verified.is_none());
+
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), false)]))
+                )
+                .is_err());
+
+                let s = DPLL::apply_move(
+                    s,
+                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), true)])),
+                )
+                .unwrap();
+                assert_eq!("model ✓", s.nodes[2].label.to_string());
+                assert_eq!(true, s.nodes[2].verified.unwrap());
+
+                let close_msg = DPLL::check_close(s);
+                assert!(!close_msg.closed);
+            })
+        }
+
+        #[test]
+        fn model2() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;!a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), false)]))
+                )
+                .is_err());
+
+                let s = DPLL::apply_move(
+                    s,
+                    DPLLMove::ModelCheck(
+                        2,
+                        HashMap::from([("a".into(), false), ("b".into(), true)]),
+                    ),
+                )
+                .unwrap();
+                assert_eq!("model ✓", s.nodes[2].label.to_string());
+                assert_eq!(true, s.nodes[2].verified.unwrap());
+
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(
+                        2,
+                        HashMap::from([("a".into(), false), ("b".into(), true)]),
+                    )
+                )
+                .is_err());
+
+                let close_msg = DPLL::check_close(s);
+                assert!(!close_msg.closed);
+            })
+        }
+
+        #[test]
+        fn model_unsat() {
+            session(|| {
+                let s = DPLL::parse_formula("a;!a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+                assert_eq!("prop", s.nodes[1].label.to_string());
+                assert_eq!("closed", s.nodes[2].label.to_string());
+
+                let close_msg = DPLL::check_close(s);
+                assert!(close_msg.closed);
+            })
+        }
+
+        #[test]
+        fn invalid() {
+            session(|| {
+                let s = DPLL::parse_formula("a,b;a", None).unwrap();
+                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(3, HashMap::from([("a".into(), true)]))
+                )
+                .is_err());
+
+                assert!(
+                    DPLL::apply_move(s.clone(), DPLLMove::ModelCheck(2, HashMap::from([])))
+                        .is_err()
+                );
+
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(0, HashMap::from([("a".into(), true)]))
+                )
+                .is_err());
+                assert!(DPLL::apply_move(
+                    s.clone(),
+                    DPLLMove::ModelCheck(1, HashMap::from([("a".into(), true)]))
+                )
+                .is_err());
+            })
+        }
+    }
+
+    mod json {
+        use super::*;
+
+        #[test]
+        fn valid_move() {
+            session(|| {
+                let json = "{\"type\":\"dpll-split\",\"branch\":42,\"literal\":\"hello\"}";
+                assert_eq!(
+                    DPLLMove::Split(42, "hello".to_string()),
+                    serde_json::from_str(json).unwrap()
+                );
+
+                let json = "{\"type\":\"dpll-prop\",\"branch\":1,\"baseClause\":2,\"propClause\":3,\"propAtom\":4}";
+                assert_eq!(
+                    DPLLMove::Propagate(1, 2, 3, 4),
+                    serde_json::from_str(json).unwrap()
+                );
+
+                let json = "{\"type\":\"dpll-prune\",\"branch\":5}";
+                assert_eq!(DPLLMove::Prune(5), serde_json::from_str(json).unwrap());
+
+                let json = "{\"type\":\"dpll-modelcheck\",\"branch\":12,\"interpretation\":{\"a\":true,\"b\":false}}";
+                assert_eq!(
+                    DPLLMove::ModelCheck(
+                        12,
+                        HashMap::from([("a".into(), true), ("b".into(), false)])
+                    ),
+                    serde_json::from_str(json).unwrap()
+                );
+            })
+        }
+
+        #[test]
+        fn invalid_move() {
+            session(|| {
+                let json = "{\"type\":\"dpll-split\",\"branch42,\"literal\":\"hello\"}";
+                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                assert!(r#move.is_err());
+
+                let json = "{\"branch\":42,\"literal\":\"hello\"}";
+                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                assert!(r#move.is_err());
+
+                let json = "{\"type\":\"dpll-split\",\"branch\":,\"literal\":\"hello\"}";
+                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                assert!(r#move.is_err());
+
+                let json = "{\"type\":\"dpll-split\",\"literal\":\"hello\"}";
+                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                assert!(r#move.is_err());
+            })
+        }
+
+        #[test]
+        fn to_state() {
+            session(|| {
+                let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
+                let s: DPLLState = serde_json::from_str(json).unwrap();
+                let expected = "pdpll|{!a, c}, {a, !c}|[(null|[1, 2]|ROOT|true|identity|null), (0|[]|SPLIT|a|add-{a}|null), (0|[3, 4]|SPLIT|¬a|add-{!a}|null), (2|[]|SPLIT|c|add-{c}|null), (2|[]|SPLIT|¬c|add-{!c}|null)]";
+                assert_eq!(expected, s.compute_seal_info());
+            })
+        }
+
+        #[test]
+        fn corrupt_state() {
+            session(|| {
+                let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"litc\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
+                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                assert!(s.is_err());
+            })
+        }
+
+        #[test]
+        fn state_missing_field() {
+            session(|| {
+                let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
+                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                assert!(s.is_err());
+            })
+        }
+
+        #[test]
+        fn state_modify() {
+            session(|| {
+                let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
+                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                assert!(s.is_err());
+            })
+        }
+
+        #[test]
+        fn state_seal() {
+            session(|| {
+                let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FAFAFAFADBE0945B38BCD64A6806D6C1AD\"}";
+                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                assert!(s.is_err());
+            })
+        }
     }
 }
