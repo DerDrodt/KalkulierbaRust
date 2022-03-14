@@ -10,7 +10,7 @@ mod util;
 #[serde(rename_all = "UPPERCASE")]
 pub enum VisualHelp {
     None,
-    Hightlight,
+    Highlight,
     Rearrange,
 }
 
@@ -24,7 +24,7 @@ impl fmt::Display for VisualHelp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             VisualHelp::None => write!(f, "NONE"),
-            VisualHelp::Hightlight => write!(f, "HIGHLIGHT"),
+            VisualHelp::Highlight => write!(f, "HIGHLIGHT"),
             VisualHelp::Rearrange => write!(f, "REARRANGE"),
         }
     }
