@@ -30,7 +30,7 @@ pub fn parse_prop_flexible(formula: &str, strategy: CNFStrategy) -> ParseResult<
         _ => false,
     }); */
 
-    // TODO: Dimacs
+    // TODO: DIMACS
 
     let clause_parse = match parse_prop_clause_set(formula) {
         Ok(res) => {

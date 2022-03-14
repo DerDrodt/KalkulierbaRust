@@ -349,7 +349,7 @@ fn apply_hyper(
 
         let side = &state.clause_set.clauses()[sc_id];
 
-        // Check side premiss for positiveness
+        // Check side premise for positiveness
         if !side.is_positive() {
             return Err(FOResErr::SidePremissNotPos(side.clone()));
         }

@@ -101,6 +101,7 @@ pub struct PropTableauxState {
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
+    #[serde(rename = "tree")]
     nodes: Vec<PropTabNode>,
     #[serde(rename = "moveHistory")]
     moves: Vec<PropTableauxMove>,
@@ -258,7 +259,7 @@ impl PropTableauxState {
     }
 
     pub fn get_close_msg(&self) -> CloseMsg {
-        let msg = if self.root().is_closed() {
+        let msg = if !self.root().is_closed() {
             "The proof tree is not closed".to_string()
         } else {
             let connectedness = match self.ty {
@@ -693,10 +694,10 @@ fn check_connectedness(state: &PropTableauxState, ty: TableauxType) -> bool {
 fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: bool) -> bool {
     let node = &state.nodes[root];
 
-    // A subtree is weakly/strongly connected iff:
+    // A sub-tree is weakly/strongly connected iff:
     // 1. The root is a leaf OR at least one child of the root is a closed leaf
-    // 1a. For strong connectedness: The closed child is closed with the root
-    // 2. All child-subtrees are weakly/strongly connected themselves
+    // 1a. For strong connection: The closed child is closed with the root
+    // 2. All child-sub-trees are weakly/strongly connected themselves
 
     if node.is_leaf() {
         return true;

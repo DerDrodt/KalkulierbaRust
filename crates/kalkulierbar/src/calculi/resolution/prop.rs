@@ -242,7 +242,7 @@ fn apply_hyper(
     for (ma_id, (sc_id, sa_id)) in atom_map {
         let side = &state.clause_set.clauses()[sc_id];
 
-        // Check side premiss for positiveness
+        // Check side premise for positiveness
         if !side.is_positive() {
             return Err(PropResErr::SidePremissNotPos(side.clone()));
         }
@@ -417,7 +417,7 @@ impl<'de> Deserialize<'de> for PropResState {
                             if last_move.is_some() {
                                 return Err(de::Error::duplicate_field("lastMove"));
                             }
-                            last_move = Some(map.next_value()?);
+                            last_move = map.next_value()?;
                         }
                         Field::Seal => {
                             if seal.is_some() {

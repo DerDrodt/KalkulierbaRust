@@ -450,7 +450,7 @@ fn apply_gamma(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     let nf = append_suffix_selectively(fc, fs, &suffix);
 
     // Add new identifiers to the set
-    // This is not strictly speaking necessary as skolem term names can never be in
+    // This is not strictly speaking necessary as Skolem term names can never be in
     // conflict with suffixed variable names, but we'll do it still to ensure
     // that state.identifiers contains _all_ identifiers in the tableaux
 
@@ -487,8 +487,8 @@ fn apply_delta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     let children = n.children.clone();
     n.children.clear();
 
-    // Apply skolemization to the top-level existential quantifier
-    // This adds the newly created skolem term identifier to the state.identifiers set
+    // Apply Skolemization to the top-level existential quantifier
+    // This adds the newly created Skolem term identifier to the state.identifiers set
     state.skolem_counter += 1;
     let (new_sym, nf) = delta_skolem(fs, fc, &state.idents, state.skolem_counter);
     state.idents.insert(new_sym);
@@ -672,7 +672,7 @@ fn delta_skolem(
     let free_vars = collect_free_vars(&child);
     let (new_sym, term) = get_skolem_term(sk_ctr, blacklist, &free_vars);
 
-    // Replace variables bound by top-level quantifier with skolem term
+    // Replace variables bound by top-level quantifier with Skolem term
     let new_node = DeltaSkolemization::new(to_replace, term).visit(child);
     (new_sym, new_node)
 }

@@ -1,5 +1,5 @@
 {
-  "cSpell.words": [
-    "skolem"
-  ]
+  "cSpell.words": ["skolem"],
+  "spellright.language": ["English (American)"],
+  "spellright.documentTypes": ["markdown", "latex", "plaintext", "rust"]
 }

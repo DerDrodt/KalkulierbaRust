@@ -249,7 +249,7 @@ pub fn apply_expand(
         leaf.children.push(len + i)
     }
 
-    // Verify compliance with connectedness criteria
+    // Verify compliance with connection criteria
     verify_expand_connectedness(&state, leaf_id)?;
 
     // Record expansion for backtracking
@@ -271,14 +271,14 @@ pub fn apply_lemma(
     let atom = state.get_lemma(leaf_id, lemma_id)?;
 
     // Add lemma atom to leaf
-    // NOTE: We explicitly do not apply clause preprocessing for Lemma expansions
+    // NOTE: We explicitly do not apply clause pre-processing for Lemma expansions
     let negated = atom.negated();
     let new_leaf = FOTabNode::new(Some(leaf_id), atom.take_lit(), negated, Some(lemma_id));
     let size = state.nodes.len();
     state.nodes.push(new_leaf);
     state.nodes.get_mut(leaf_id).unwrap().children.push(size);
 
-    // Verify compliance with connectedness criteria
+    // Verify compliance with connection criteria
     verify_expand_connectedness(&state, leaf_id)?;
 
     // Add move to state history
@@ -434,10 +434,10 @@ fn check_connectedness(state: &FOTabState, ty: TableauxType) -> bool {
 fn check_connectedness_subtree(state: &FOTabState, root: usize, strong: bool) -> bool {
     let node = &state.nodes[root];
 
-    // A subtree is weakly/strongly connected iff:
+    // A sub-tree is weakly/strongly connected iff:
     // 1. The root is a leaf OR at least one child of the root is a closed leaf
-    // 1a. For strong connectedness: The closed child is closed with the root
-    // 2. All child-subtrees are weakly/strongly connected themselves
+    // 1a. For strong connection: The closed child is closed with the root
+    // 2. All child-sub-trees are weakly/strongly connected themselves
 
     // Leaves are trivially connected
     if node.is_leaf() {
