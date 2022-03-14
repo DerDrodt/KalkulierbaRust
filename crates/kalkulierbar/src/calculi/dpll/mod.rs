@@ -108,7 +108,7 @@ impl DPLLState {
             cs = d.apply(cs);
         }
 
-        todo!()
+        cs
     }
 
     pub fn add_child(&mut self, p: usize, n: DPLLNode) {
@@ -429,6 +429,8 @@ fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
 
     while let Some(idx) = q.get(0) {
         let idx = *idx;
+        q.remove(0);
+
         let n = &state.nodes[idx];
         for c in &n.children {
             q.push(*c);
@@ -595,7 +597,7 @@ impl Serialize for CsDiff {
             CsDiff::RemoveAtom(_, _) => ("cd-delatom", 3),
         };
         let mut state = serializer.serialize_struct("CsDiff", len)?;
-        state.serialize_field("ty", ty)?;
+        state.serialize_field("type", ty)?;
         match self {
             CsDiff::Id => {}
             CsDiff::RemoveClause(c) => {
@@ -930,16 +932,22 @@ impl<'de> Deserialize<'de> for DPLLMove {
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 let ty: &str = &ty;
                 let branch = branch.ok_or_else(|| de::Error::missing_field("branch"))?;
-                let lit = lit.ok_or_else(|| de::Error::missing_field("literal"))?;
-                let base_c = base_c.ok_or_else(|| de::Error::missing_field("baseClause"))?;
-                let prop_c = prop_c.ok_or_else(|| de::Error::missing_field("propClause"))?;
-                let prop_a = prop_a.ok_or_else(|| de::Error::missing_field("propAtom"))?;
-                let i = i.ok_or_else(|| de::Error::missing_field("interpretation"))?;
                 Ok(match ty {
-                    "dpll-split" => DPLLMove::Split(branch, lit),
-                    "dpll-prop" => DPLLMove::Propagate(branch, base_c, prop_c, prop_a),
+                    "dpll-split" => DPLLMove::Split(
+                        branch,
+                        lit.ok_or_else(|| de::Error::missing_field("literal"))?,
+                    ),
+                    "dpll-prop" => DPLLMove::Propagate(
+                        branch,
+                        base_c.ok_or_else(|| de::Error::missing_field("baseClause"))?,
+                        prop_c.ok_or_else(|| de::Error::missing_field("propClause"))?,
+                        prop_a.ok_or_else(|| de::Error::missing_field("propAtom"))?,
+                    ),
                     "dpll-prune" => DPLLMove::Prune(branch),
-                    "dpll-modelcheck" => DPLLMove::ModelCheck(branch, i),
+                    "dpll-modelcheck" => DPLLMove::ModelCheck(
+                        branch,
+                        i.ok_or_else(|| de::Error::missing_field("interpretation"))?,
+                    ),
                     _ => todo!(),
                 })
             }
