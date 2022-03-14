@@ -21,8 +21,8 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
             None => None,
         };
 
-        let state =
-            prop::PropSequent::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = prop::PropSequent::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -50,7 +50,8 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
         let state: sequent::SequentState<PropSeqMove> = serde_json::from_str(&state)?;
         let r#move: prop::PropSeqMove = serde_json::from_str(&r#move)?;
 
-        let state = prop::PropSequent::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = prop::PropSequent::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })

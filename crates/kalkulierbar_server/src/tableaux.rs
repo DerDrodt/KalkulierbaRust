@@ -1,4 +1,4 @@
-use actix_web::{error, web, HttpResponse, Responder, Result};
+use actix_web::{error, http, web, HttpResponse, Responder, Result};
 use kalkulierbar::{session, Calculus};
 
 use crate::{MoveForm, ParseForm, StateForm};
@@ -21,10 +21,10 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
             None => None,
         };
 
-        let state =
-            prop::PropTableaux::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = prop::PropTableaux::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
-        Ok(HttpResponse::Ok().json(state))
+        Ok(HttpResponse::Ok().body(serde_json::to_string(&state)?))
     })
 }
 
@@ -50,8 +50,8 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
         let state: prop::PropTableauxState = serde_json::from_str(&state)?;
         let r#move: prop::PropTableauxMove = serde_json::from_str(&r#move)?;
 
-        let state =
-            prop::PropTableaux::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = prop::PropTableaux::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -89,8 +89,8 @@ pub(crate) async fn fo_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
             None => None,
         };
 
-        let state =
-            fo::FOTableaux::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = fo::FOTableaux::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -118,7 +118,8 @@ pub(crate) async fn fo_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
         let state: fo::FOTabState = serde_json::from_str(&state)?;
         let r#move: fo::FOTabMove = serde_json::from_str(&r#move)?;
 
-        let state = fo::FOTableaux::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = fo::FOTableaux::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -156,8 +157,8 @@ pub(crate) async fn nc_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
             None => None,
         };
 
-        let state =
-            nc::NCTableaux::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = nc::NCTableaux::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -185,7 +186,8 @@ pub(crate) async fn nc_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
         let state: nc::NCTabState = serde_json::from_str(&state)?;
         let r#move: nc::NCTabMove = serde_json::from_str(&r#move)?;
 
-        let state = nc::NCTableaux::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = nc::NCTableaux::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })

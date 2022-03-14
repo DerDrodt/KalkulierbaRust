@@ -22,7 +22,7 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
         };
 
         let state = prop::PropResolution::parse_formula(&formula, params)
-            .map_err(error::ErrorBadRequest)?;
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -50,8 +50,8 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
         let state: prop::PropResState = serde_json::from_str(&state)?;
         let r#move: prop::PropResMove = serde_json::from_str(&r#move)?;
 
-        let state =
-            prop::PropResolution::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = prop::PropResolution::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -89,8 +89,8 @@ pub(crate) async fn fo_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
             None => None,
         };
 
-        let state =
-            fo::FOResolution::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = fo::FOResolution::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -118,7 +118,8 @@ pub(crate) async fn fo_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
         let state: fo::FOResState = serde_json::from_str(&state)?;
         let r#move: fo::FOResMove = serde_json::from_str(&r#move)?;
 
-        let state = fo::FOResolution::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = fo::FOResolution::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })

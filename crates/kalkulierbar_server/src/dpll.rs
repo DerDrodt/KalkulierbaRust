@@ -21,7 +21,8 @@ pub(crate) async fn parse(form: web::Form<ParseForm>) -> Result<HttpResponse> {
             None => None,
         };
 
-        let state = dpll::DPLL::parse_formula(&formula, params).map_err(error::ErrorBadRequest)?;
+        let state = dpll::DPLL::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })
@@ -49,7 +50,8 @@ pub(crate) async fn r#move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
         let state: dpll::DPLLState = serde_json::from_str(&state)?;
         let r#move: dpll::DPLLMove = serde_json::from_str(&r#move)?;
 
-        let state = dpll::DPLL::apply_move(state, r#move).map_err(error::ErrorBadRequest)?;
+        let state = dpll::DPLL::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
         Ok(HttpResponse::Ok().json(state))
     })

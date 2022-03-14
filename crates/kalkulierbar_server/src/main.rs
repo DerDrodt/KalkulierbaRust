@@ -1,4 +1,10 @@
-use actix_web::{error, web, App, HttpResponse, HttpServer, Responder, Result};
+use std::env;
+
+use actix_web::http::{header, StatusCode};
+use actix_web::middleware::errhandlers::{ErrorHandlerResponse, ErrorHandlers};
+use actix_web::middleware::Logger;
+use actix_web::{dev, error, http, web, App, HttpResponse, HttpServer, Responder, Result};
+use env_logger::Env;
 
 use kalkulierbar::CalculusKind;
 use serde::Deserialize;
@@ -55,6 +61,15 @@ struct DelExampleForm {
     #[serde(rename = "exampleID")]
     example_id: usize,
     mac: String,
+}
+
+fn add_error_header<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
+    res.response_mut().headers_mut().insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("Error"),
+    );
+
+    Ok(ErrorHandlerResponse::Response(res))
 }
 
 async fn index() -> impl Responder {
@@ -128,12 +143,25 @@ pub(crate) async fn del_example(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let port: u16 = env::var("PATH").unwrap_or_default().parse().unwrap_or(7000);
+    let listen_globally = env::args().any(|a| a == "-g" || a == "--global");
+    let host = if listen_globally {
+        "0.0.0.0"
+    } else {
+        "localhost"
+    };
+
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
+
     HttpServer::new(|| {
         App::new()
             .wrap(
                 actix_web::middleware::DefaultHeaders::new()
                     .header("Access-Control-Allow-Origin", "*"),
             )
+            .wrap(Logger::default())
+            //.wrap(Logger::new("%a %{User-Agent}i"))
+            .wrap(ErrorHandlers::new().handler(StatusCode::INTERNAL_SERVER_ERROR, add_error_header))
             .route("/", web::get().to(index))
             .route("/config", web::get().to(config))
             .route("/admin/checkCredentials", web::get().to(check_creds))
@@ -211,7 +239,7 @@ async fn main() -> std::io::Result<()> {
             .route("/prop-sequent/close", web::post().to(sequent::prop_close))
             .app_data(StateKeeper::new())
     })
-    .bind("127.0.0.1:7000")?
+    .bind((host, port))?
     .run()
     .await
 }
