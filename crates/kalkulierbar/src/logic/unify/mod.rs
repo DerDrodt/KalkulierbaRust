@@ -237,7 +237,7 @@ fn unify_terms(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, UnificationE
 mod tests {
 
     use super::*;
-    use crate::session;
+    use crate::{logic::transform::fo_cnf::fo_cnf, parse::fo::parse_fo_formula, session};
 
     macro_rules! rel {
         ($name:expr, $( $arg:expr ),*) => {
@@ -281,6 +281,59 @@ mod tests {
                     val,
                     mgu.get_unwrap(key)
                 )
+            }
+        })
+    }
+
+    #[test]
+    fn valid() {
+        session(|| {
+            let formulas = [
+                ("R(a) & R(a)", "{}"),
+                ("\\all X: (R(X) & R(X))", "{}"),
+                ("R(a) & \\all X: R(X)", "{X=a}"),
+                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
+                ("\\all X: R(f(a,X)) & R(f(a,b))", "{X=b}"),
+                ("\\all X: R(f(X)) & \\all Y: R(f(Y))", "{X=Y}"),
+                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
+                ("\\all X: R(f(g(X))) & \\all Y: R(f(Y))", "{Y=g(X)}"),
+                (
+                    "\\all X: R(f(g(X),X)) & \\all Y: R(f(Y,a))",
+                    "{X=a, Y=g(a)}",
+                ),
+                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
+            ];
+
+            for (f, e) in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                let cs = fo_cnf(parsed).unwrap();
+                let r1 = cs.clauses()[0].atoms()[0].lit();
+                let r2 = cs.clauses()[1].atoms()[0].lit();
+                let mgu = unify(r1, r2).unwrap();
+                assert_eq!(e, mgu.to_string());
+            }
+        })
+    }
+
+    #[test]
+    fn invalid() {
+        session(|| {
+            let formulas = [
+                "R(a) & R(b)",
+                "R(f(a)) & R(g(a))",
+                "R(a) & Q(a)",
+                "R(a) & R(a,b)",
+                "\\all X: \\all Y: (R(f(X)) & R(g(Y)))",
+                "\\all X: \\all Y: \\all Z: (R(f(X)) & R(f(Y,Z)))",
+                "\\all X: (R(f(X)) & R(X))",
+            ];
+
+            for f in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                let cs = fo_cnf(parsed).unwrap();
+                let r1 = cs.clauses()[0].atoms()[0].lit();
+                let r2 = cs.clauses()[1].atoms()[0].lit();
+                assert!(unify(r1, r2).is_err());
             }
         })
     }

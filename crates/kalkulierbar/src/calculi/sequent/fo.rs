@@ -529,3 +529,516 @@ impl<'de> Deserialize<'de> for FOSeqMove {
         deserializer.deserialize_struct("FOSeqMove", FIELDS, MoveVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    mod all_l {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        fn u() -> Unifier {
+            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        }
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\all X: R(X) |-", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, u())).unwrap();
+
+                assert_eq!(2, s.nodes.len());
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert!(s.nodes[1].right_formulas.is_empty());
+                assert_eq!(2, s.nodes[1].left_formulas.len());
+
+                let f1 = parse_fo_formula("\\all X: R(X)").unwrap();
+                let f2 = parse_fo_formula("R(a)").unwrap();
+
+                assert!(s.nodes[1].left_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[1].left_formulas[1].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\ex X: R(X) |-", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, u())).is_err());
+            })
+        }
+    }
+
+    mod all_r {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        fn u() -> Unifier {
+            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        }
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\all X: R(X)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).unwrap();
+
+                assert_eq!(2, s.nodes.len());
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert!(s.nodes[1].left_formulas.is_empty());
+                assert_eq!(1, s.nodes[1].right_formulas.len());
+
+                let f1 = parse_fo_formula("R(a)").unwrap();
+
+                assert!(s.nodes[1].right_formulas[0].syn_eq(&f1));
+            })
+        }
+
+        #[test]
+        fn wrong_inst() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\all X: R(X), P(a)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).is_err());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\ex X: R(X)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).is_err());
+            })
+        }
+    }
+
+    mod and_l {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) & P(b)) |-", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AndL(0, 0)).unwrap();
+
+                assert_eq!(2, s.nodes.len());
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert!(s.nodes[1].right_formulas.is_empty());
+                assert_eq!(2, s.nodes[1].left_formulas.len());
+
+                let f1 = parse_fo_formula("P(a)").unwrap();
+                let f2 = parse_fo_formula("P(b)").unwrap();
+
+                assert!(s.nodes[1].left_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[1].left_formulas[1].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) & P(b)) |-", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AndL(0, 0)).unwrap();
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) & P(b))", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::AndL(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod and_r {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) & P(b)) & (P(b) |P(c))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AndR(0, 0)).unwrap();
+
+                assert_eq!(3, s.nodes.len());
+
+                let f1 = parse_fo_formula("P(a) & P(b)").unwrap();
+                let f2 = parse_fo_formula("P(b) | P(c)").unwrap();
+
+                assert!(s.nodes[1].right_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[2].right_formulas[0].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) & P(b)) & (P(b) |P(c))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AndR(0, 0)).unwrap();
+
+                assert!(s.nodes[1].parent.is_some());
+                assert_eq!(2, s.nodes[0].children.len());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("(P(a) | P(b))", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::AndR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod ax {
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | !P(a)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(1, 1)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::Ax(2)).unwrap();
+
+                assert!(s.nodes.iter().all(|n| n.is_closed));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | !P(a)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(1, 1)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::Ax(2)).unwrap();
+
+                assert!(s.nodes[3].parent.is_some());
+                assert_eq!(1, s.nodes[2].children.len());
+            })
+        }
+
+        #[test]
+        fn fail() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | !P(a)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::Ax(0)).is_err());
+            })
+        }
+    }
+
+    mod ex_l {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        fn u() -> Unifier {
+            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        }
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\ex X: R(X) |-", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).unwrap();
+
+                assert_eq!(2, s.nodes.len());
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert!(s.nodes[1].right_formulas.is_empty());
+                assert_eq!(1, s.nodes[1].left_formulas.len());
+
+                let f1 = parse_fo_formula("R(a)").unwrap();
+
+                assert!(s.nodes[1].left_formulas[0].syn_eq(&f1));
+            })
+        }
+
+        #[test]
+        fn wrong_inst() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\ex X: R(X), P(a)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).is_err());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\all X: R(X) |-", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).is_err());
+            })
+        }
+    }
+
+    mod ex_r {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        fn u() -> Unifier {
+            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        }
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\ex X: R(X)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, u())).unwrap();
+
+                assert_eq!(2, s.nodes.len());
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(vec![1], s.nodes[0].children);
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+                assert!(s.nodes[1].left_formulas.is_empty());
+                assert_eq!(2, s.nodes[1].right_formulas.len());
+
+                let f1 = parse_fo_formula("\\ex X: R(X)").unwrap();
+                let f2 = parse_fo_formula("R(a)").unwrap();
+
+                assert!(s.nodes[1].right_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[1].right_formulas[1].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("\\all X: R(X)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, u())).is_err());
+            })
+        }
+    }
+
+    mod not_l {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("!(!P(a))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotL(1, 0)).unwrap();
+
+                let f1 = parse_fo_formula("P(a)").unwrap();
+
+                assert!(s.nodes[2].right_formulas[0].syn_eq(&f1));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("!(!P(a))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotL(1, 0)).unwrap();
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) & !P(a)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::NotL(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod not_r {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("!P(a)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+
+                let f1 = parse_fo_formula("P(a)").unwrap();
+
+                assert!(s.nodes[1].left_formulas[0].syn_eq(&f1));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("!P(a)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) & !P(a)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod or_l {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("!((P(a) & P(b)) | (P(b) |P(c)))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrL(1, 0)).unwrap();
+
+                let f1 = parse_fo_formula("P(a) & P(b)").unwrap();
+                let f2 = parse_fo_formula("P(b) | P(c)").unwrap();
+
+                assert!(s.nodes[2].left_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[3].left_formulas[0].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("!((P(a) & P(b)) | (P(b) |P(c)))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrL(1, 0)).unwrap();
+
+                assert_eq!(2, s.nodes[1].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("!((P(a) & P(b)) & (P(b) |P(c)))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(0, 0)).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::OrL(1, 0)).is_err());
+            })
+        }
+    }
+
+    mod or_r {
+        use crate::{parse::fo::parse_fo_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | P(b)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+
+                let f1 = parse_fo_formula("P(a)").unwrap();
+                let f2 = parse_fo_formula("P(b)").unwrap();
+
+                assert!(s.nodes[1].right_formulas[0].syn_eq(&f1));
+                assert!(s.nodes[1].right_formulas[1].syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | P(b)", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap());
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) & P(b)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod undo {
+        use crate::tamper_protect::ProtectedState;
+
+        use super::*;
+
+        #[test]
+        fn nothing_to_undo() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | P(b)", None).unwrap();
+                assert!(FOSequent::apply_move(s, FOSeqMove::Undo).is_err());
+            })
+        }
+
+        #[test]
+        fn one_child() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | P(b)", None).unwrap();
+                let i = s.compute_seal_info();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::Undo).unwrap();
+
+                assert_eq!(i, s.compute_seal_info());
+            })
+        }
+
+        #[test]
+        fn two_children() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) & P(b)", None).unwrap();
+                let i = s.compute_seal_info();
+                let s = FOSequent::apply_move(s, FOSeqMove::AndR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::Undo).unwrap();
+
+                assert_eq!(i, s.compute_seal_info());
+            })
+        }
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = FOSequent::parse_formula("P(a) | !P(a)", None).unwrap();
+                let i0 = s.compute_seal_info();
+                let s = FOSequent::apply_move(s, FOSeqMove::OrR(0, 0)).unwrap();
+                let i1 = s.compute_seal_info();
+                let s = FOSequent::apply_move(s, FOSeqMove::NotR(1, 1)).unwrap();
+                let i2 = s.compute_seal_info();
+                let s = FOSequent::apply_move(s, FOSeqMove::Ax(2)).unwrap();
+
+                let s = FOSequent::apply_move(s, FOSeqMove::Undo).unwrap();
+                assert_eq!(i2, s.compute_seal_info());
+                let s = FOSequent::apply_move(s, FOSeqMove::Undo).unwrap();
+                assert_eq!(i1, s.compute_seal_info());
+                let s = FOSequent::apply_move(s, FOSeqMove::Undo).unwrap();
+                assert_eq!(i0, s.compute_seal_info());
+            })
+        }
+    }
+}

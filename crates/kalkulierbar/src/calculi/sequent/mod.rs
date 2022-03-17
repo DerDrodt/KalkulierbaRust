@@ -438,6 +438,7 @@ fn apply_prune<M>(mut state: SequentState<M>, node_id: usize) -> SequentResult<S
 
     while let Some(idx) = q.get(0) {
         let idx = *idx;
+        q.remove(0);
         let n = &state.nodes[idx];
         for c in &n.children {
             q.push(*c);

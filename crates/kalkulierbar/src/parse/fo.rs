@@ -331,8 +331,8 @@ mod tests {
             "!/ex X: (P(X) <-> !P(X))", "¬(∃X: (P(X) <=> ¬P(X)))";
             "!(/ex X: (P(X) <-> !P(X)))", "¬(∃X: (P(X) <=> ¬P(X)))";
             "/ex Xyz: P(Xyz) & /all X: P(X)", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X)))";
-            "\\ex X, Y: (P(X, Y) -> P(Y, X))", "(∃X: (∃Y: (P(X, Y) -> P(Y, X))))";
-            "\\all X, Y, Z: (P(X, Y) & P(Y, Z) -> P(X, Z))", "(∀X: (∀Y: (∀Z: ((P(X, Y) ∧ P(Y, Z)) -> P(X, Z)))))"
+            "\\ex X, Y: (P(X, Y) -> P(Y, X))", "(∃X: (∃Y: (P(X, Y) → P(Y, X))))";
+            "\\all X, Y, Z: (P(X, Y) & P(Y, Z) -> P(X, Z))", "(∀X: (∀Y: (∀Z: ((P(X, Y) ∧ P(Y, Z)) → P(X, Z)))))"
         );
     }
 

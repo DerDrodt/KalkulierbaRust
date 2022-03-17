@@ -136,3 +136,42 @@ impl MutLogicNodeTransformer for PrenexNormalForm {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse::fo::parse_fo_formula, session};
+
+    #[test]
+    fn valid() {
+        session(|| {
+            let formulas = [
+                (
+                    "R(a) -> R(b) | R(a) & !R(b)",
+                    "(R(a) → (R(b) ∨ (R(a) ∧ ¬R(b))))",
+                ),
+                ("!(R(a) | R(b))", "¬(R(a) ∨ R(b))"),
+                ("!(R(a) & R(b))", "¬(R(a) ∧ R(b))"),
+                ("!(!R(a) <-> !R(a))", "¬(¬R(a) <=> ¬R(a))"),
+                (
+                    "!\\ex A : !(S(A) & !\\all B : (R(B) -> !R(A)))",
+                    "(∃A: (∀B: ¬¬(S(A) ∧ ¬(R(B) → ¬R(A)))))",
+                ),
+                (
+                    "!\\all A : (P(A) <-> \\all C : (R(A) <-> !R(C)))",
+                    "(∀A: (∀C: ¬(P(A) <=> (R(A) <=> ¬R(C)))))",
+                ),
+                (
+                    "!\\ex A : R(A) -> !\\all B : !(R(B) | !R(B))",
+                    "(∃A: (∀B: (¬R(A) → ¬¬(R(B) ∨ ¬R(B)))))",
+                ),
+            ];
+
+            for (f, e) in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                let nnf = prenex_normal(parsed).unwrap();
+                assert_eq!(e, nnf.to_string());
+            }
+        })
+    }
+}

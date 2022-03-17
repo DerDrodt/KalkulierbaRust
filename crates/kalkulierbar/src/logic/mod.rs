@@ -60,7 +60,7 @@ impl fmt::Display for LogicNode {
             LogicNode::Not(c) => write!(f, "¬{}", c),
             LogicNode::And(l, r) => write!(f, "({} ∧ {})", l, r),
             LogicNode::Or(l, r) => write!(f, "({} ∨ {})", l, r),
-            LogicNode::Impl(l, r) => write!(f, "({} -> {})", l, r),
+            LogicNode::Impl(l, r) => write!(f, "({} → {})", l, r),
             LogicNode::Equiv(l, r) => write!(f, "({} <=> {})", l, r),
             LogicNode::Rel(name, args) => {
                 let mut arg_str = String::new();

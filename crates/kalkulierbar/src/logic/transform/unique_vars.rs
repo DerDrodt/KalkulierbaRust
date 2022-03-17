@@ -55,7 +55,7 @@ impl MutLogicNodeTransformer for UniqueVars {
     }
 
     fn visit_not(&mut self, child: crate::logic::LogicNode) -> Self::Ret {
-        LogicNode::Not(Box::new(child))
+        LogicNode::Not(self.visit(child).into())
     }
 
     fn visit_and(
@@ -63,7 +63,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::And(Box::new(left), Box::new(right))
+        LogicNode::And(self.visit(left).into(), self.visit(right).into())
     }
 
     fn visit_or(
@@ -71,7 +71,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Or(Box::new(left), Box::new(right))
+        LogicNode::Or(self.visit(left).into(), self.visit(right).into())
     }
 
     fn visit_impl(
@@ -79,7 +79,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Impl(Box::new(left), Box::new(right))
+        LogicNode::Impl(self.visit(left).into(), self.visit(right).into())
     }
 
     fn visit_equiv(
@@ -87,7 +87,7 @@ impl MutLogicNodeTransformer for UniqueVars {
         left: crate::logic::LogicNode,
         right: crate::logic::LogicNode,
     ) -> Self::Ret {
-        LogicNode::Equiv(Box::new(left), Box::new(right))
+        LogicNode::Equiv(self.visit(left).into(), self.visit(right).into())
     }
 
     fn visit_rel(&mut self, spelling: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> Self::Ret {
@@ -171,5 +171,33 @@ impl<'a> FOTermTransformer for VariableRenamer<'a> {
 
     fn visit_fn(&self, name: Symbol, args: Vec<crate::logic::fo::FOTerm>) -> FOTerm {
         FOTerm::Function(name, args.into_iter().map(|a| self.visit(a)).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse::fo::parse_fo_formula, session};
+
+    #[test]
+    fn valid() {
+        session(|| {
+            let formulas = [
+                (
+                    "\\all X: (R(X) & \\all X: S(X))",
+                    "(∀X: (R(X) ∧ (∀Xv1: S(Xv1))))",
+                ),
+                (
+                    "\\all X: R(X) & \\all X: S(X)",
+                    "((∀X: R(X)) ∧ (∀Xv1: S(Xv1)))",
+                ),
+            ];
+
+            for (f, e) in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                let nnf = unique_vars(parsed);
+                assert_eq!(e, nnf.to_string());
+            }
+        })
     }
 }

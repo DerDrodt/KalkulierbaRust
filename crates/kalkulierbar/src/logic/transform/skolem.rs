@@ -191,3 +191,43 @@ impl<'a> MutFOTermTransformer for SkolemTermReplacer<'a> {
         FOTerm::Function(name, args.into_iter().map(|a| self.visit(a)).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse::fo::parse_fo_formula, session};
+
+    #[test]
+    fn valid() {
+        session(|| {
+            let formulas = [
+                (
+                    "R(a) -> R(b) | R(a) & !R(b)",
+                    "(R(a) → (R(b) ∨ (R(a) ∧ ¬R(b))))",
+                ),
+                ("!(R(a) | R(b))", "¬(R(a) ∨ R(b))"),
+                ("!(R(a) & R(b))", "¬(R(a) ∧ R(b))"),
+                ("!(!R(a) <-> !R(a))", "¬(¬R(a) <=> ¬R(a))"),
+                ("\\ex A: R(A) & Q(sk1)", "(R(sk2) ∧ Q(sk1))"),
+                (
+                    "!\\ex A : !(S(A) & !\\all B : (R(B) -> !R(A)))",
+                    "¬¬(S(sk1) ∧ ¬(∀B: (R(B) → ¬R(sk1))))",
+                ),
+                (
+                    "!\\all A : (P(A) <-> \\ex C : (R(A) <-> !R(C)))",
+                    "¬(∀A: (P(A) <=> (R(A) <=> ¬R(sk1(A)))))",
+                ),
+                (
+                    "!\\ex A : R(A) -> !\\all B : !(R(B) | !R(B))",
+                    "(¬R(sk1) → ¬(∀B: ¬(R(B) ∨ ¬R(B))))",
+                ),
+            ];
+
+            for (f, e) in formulas {
+                let parsed = parse_fo_formula(f).unwrap();
+                let nnf = skolemize(parsed).unwrap();
+                assert_eq!(e, nnf.to_string());
+            }
+        })
+    }
+}
