@@ -237,6 +237,13 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/prop-sequent/move", web::post().to(sequent::prop_move))
             .route("/prop-sequent/close", web::post().to(sequent::prop_close))
+            // FO Sequent
+            .route("/fo-sequent", web::get().to(sequent::fo))
+            .route("/fo-sequent/parse", web::post().to(sequent::fo_parse))
+            .route("/fo-sequent/validate", web::post().to(sequent::fo_validate))
+            .route("/fo-sequent/move", web::post().to(sequent::fo_move))
+            .route("/fo-sequent/close", web::post().to(sequent::fo_close))
+            // App data
             .app_data(StateKeeper::new())
     })
     .bind((host, port))?
