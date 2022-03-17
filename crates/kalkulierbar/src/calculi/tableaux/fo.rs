@@ -11,7 +11,7 @@ use crate::{
     clause::Atom,
     clause::{Clause, ClauseSet},
     logic::transform::{term_manipulator::VariableSuffixAppend, visitor::FOTermVisitor},
-    logic::unify::{try_to_parse_unifier, Unifier},
+    logic::unify::{try_to_parse_unifier, Substitution},
     logic::{
         fo::Relation,
         unify::{unifier_eq::is_mgu_or_not_unifiable, unify, UnificationErr},
@@ -212,7 +212,7 @@ pub fn apply_close_assign(
     mut state: FOTabState,
     leaf_id: usize,
     node_id: usize,
-    unifier: Unifier,
+    unifier: Substitution,
 ) -> FOTabResult<FOTabState> {
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
@@ -324,7 +324,7 @@ fn close_branch_common(
     mut state: FOTabState,
     leaf_id: usize,
     node_id: usize,
-    unifier: Unifier,
+    unifier: Substitution,
 ) -> FOTabResult<FOTabState> {
     state.apply_unifier(unifier.clone());
     let close_node = state.node(node_id)?;
@@ -558,7 +558,7 @@ fn ensure_expandable(state: &FOTabState, leaf_id: usize, clause_id: usize) -> FO
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FOTabMove {
     AutoClose(usize, usize),
-    CloseAssign(usize, usize, Unifier),
+    CloseAssign(usize, usize, Substitution),
     Expand(usize, usize),
     Lemma(usize, usize),
     Undo,
@@ -797,7 +797,7 @@ impl FOTabState {
         false
     }
 
-    fn apply_unifier(&mut self, u: Unifier) {
+    fn apply_unifier(&mut self, u: Substitution) {
         for n in &mut self.nodes {
             n.apply_unifier(&u);
         }
@@ -878,7 +878,7 @@ impl<'f> FOTabNode {
         (self.relation.spelling, self.relation.args.len())
     }
 
-    fn apply_unifier(&mut self, u: &Unifier) {
+    fn apply_unifier(&mut self, u: &Substitution) {
         self.relation.apply_unifier(u);
     }
 
@@ -1484,7 +1484,7 @@ mod tests {
         use super::{super::*, *};
         use crate::parse::fo::parse_fo_term;
         use std::collections::HashMap;
-        use unify::Unifier;
+        use unify::Substitution;
 
         fn param() -> Option<FOTabParams> {
             Some(FOTabParams {
@@ -1528,7 +1528,7 @@ mod tests {
             $(
                 map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
             )*
-            Unifier::from_map(map)
+            Substitution::from_map(map)
         }};
         }
 
@@ -1723,7 +1723,7 @@ mod tests {
                 $(
                     map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
                 )*
-                Unifier::from_map(map)
+                Substitution::from_map(map)
             }};
         }
 
@@ -1849,7 +1849,7 @@ mod tests {
                 $(
                     map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
                 )*
-                Unifier::from_map(map)
+                Substitution::from_map(map)
             }};
         }
 
@@ -2005,7 +2005,7 @@ mod tests {
                 $(
                     map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
                 )*
-                Unifier::from_map(map)
+                Substitution::from_map(map)
             }};
         }
 

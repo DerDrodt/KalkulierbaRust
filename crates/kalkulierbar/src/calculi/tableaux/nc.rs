@@ -20,8 +20,8 @@ use crate::{
             transformer::{FOTermTransformer, LogicNodeTransformer},
         },
         unify::{
-            try_to_parse_unifier, unifier_eq::is_mgu_or_not_unifiable, unify, UnificationErr,
-            Unifier,
+            try_to_parse_unifier, unifier_eq::is_mgu_or_not_unifiable, unify, Substitution,
+            UnificationErr,
         },
         LogicNode,
     },
@@ -191,7 +191,7 @@ pub enum NCTabMove {
     Beta(usize),
     Gamma(usize),
     Delta(usize),
-    Close(usize, usize, Option<Unifier>),
+    Close(usize, usize, Option<Substitution>),
     Undo,
 }
 
@@ -513,7 +513,7 @@ fn apply_close(
     mut state: NCTabState,
     node_id: usize,
     close_id: usize,
-    u: Option<Unifier>,
+    u: Option<Substitution>,
 ) -> NCTabResult<NCTabState> {
     check_close_id_restrictions(&state, node_id, close_id)?;
     let node = &state.nodes[node_id];

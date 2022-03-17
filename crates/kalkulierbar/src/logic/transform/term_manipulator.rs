@@ -1,11 +1,11 @@
 use super::visitor::FOTermVisitor;
 
 use crate::{
-    logic::{fo::FOTerm, unify::Unifier},
+    logic::{fo::FOTerm, unify::Substitution},
     symbol::Symbol,
 };
 
-pub struct VariableInstantiator<'a>(pub &'a Unifier);
+pub struct VariableInstantiator<'a>(pub &'a Substitution);
 
 impl<'a> FOTermVisitor for VariableInstantiator<'a> {
     type Ret = FOTerm;
@@ -30,7 +30,7 @@ impl<'a> FOTermVisitor for VariableInstantiator<'a> {
 }
 
 impl FOTerm {
-    pub fn instantiate(&self, unifier: &Unifier) -> FOTerm {
+    pub fn instantiate(&self, unifier: &Substitution) -> FOTerm {
         let instantiatior = VariableInstantiator(unifier);
         instantiatior.visit(self)
     }

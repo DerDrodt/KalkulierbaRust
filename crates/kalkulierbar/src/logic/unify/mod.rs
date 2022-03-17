@@ -47,11 +47,11 @@ impl fmt::Display for UnificationErr {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct Unifier(HashMap<Symbol, FOTerm>);
+pub struct Substitution(HashMap<Symbol, FOTerm>);
 
-impl Unifier {
+impl Substitution {
     pub fn new() -> Self {
-        Unifier(HashMap::new())
+        Substitution(HashMap::new())
     }
 
     pub fn from_value(s: Symbol, t: FOTerm) -> Self {
@@ -61,7 +61,7 @@ impl Unifier {
     }
 
     pub fn from_map(m: HashMap<Symbol, FOTerm>) -> Self {
-        Unifier(m)
+        Substitution(m)
     }
 
     pub fn contains(&self, s: Symbol) -> bool {
@@ -81,7 +81,7 @@ impl Unifier {
     }
 
     fn add(&mut self, s: Symbol, t: FOTerm) {
-        let u = Unifier::from_value(s, t.clone());
+        let u = Substitution::from_value(s, t.clone());
         let mut m = HashMap::new();
         for (key, term) in self.0.iter() {
             m.insert(*key, term.instantiate(&u));
@@ -99,7 +99,7 @@ impl Unifier {
     }
 }
 
-impl fmt::Display for Unifier {
+impl fmt::Display for Substitution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let mut contents = String::new();
         for (i, (k, v)) in self.0.iter().enumerate() {
@@ -112,7 +112,7 @@ impl fmt::Display for Unifier {
     }
 }
 
-pub fn try_to_parse_unifier(h: HashMap<Symbol, String>) -> Result<Unifier, ParseErr> {
+pub fn try_to_parse_unifier(h: HashMap<Symbol, String>) -> Result<Substitution, ParseErr> {
     let mut u = HashMap::new();
 
     for (k, v) in h {
@@ -120,10 +120,10 @@ pub fn try_to_parse_unifier(h: HashMap<Symbol, String>) -> Result<Unifier, Parse
         u.insert(k, t);
     }
 
-    Ok(Unifier::from_map(u))
+    Ok(Substitution::from_map(u))
 }
 
-impl Serialize for Unifier {
+impl Serialize for Substitution {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -132,7 +132,7 @@ impl Serialize for Unifier {
     }
 }
 
-impl<'de> Deserialize<'de> for Unifier {
+impl<'de> Deserialize<'de> for Substitution {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -140,7 +140,7 @@ impl<'de> Deserialize<'de> for Unifier {
         struct MapVisitor;
 
         impl<'de> Visitor<'de> for MapVisitor {
-            type Value = Unifier;
+            type Value = Substitution;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a map")
@@ -157,7 +157,7 @@ impl<'de> Deserialize<'de> for Unifier {
                     values.insert(key, value);
                 }
 
-                Ok(Unifier::from_map(values))
+                Ok(Substitution::from_map(values))
             }
         }
 
@@ -165,13 +165,15 @@ impl<'de> Deserialize<'de> for Unifier {
     }
 }
 
-pub fn unify(rel1: &Relation, rel2: &Relation) -> Result<Unifier, UnificationErr> {
+pub fn unify(rel1: &Relation, rel2: &Relation) -> Result<Substitution, UnificationErr> {
     let mut terms = Vec::new();
     find_terms_to_unify(&mut terms, rel1, rel2)?;
     unify_terms(terms)
 }
 
-pub fn unify_all<'a>(rels: Vec<(&'a Relation, &'a Relation)>) -> Result<Unifier, UnificationErr> {
+pub fn unify_all<'a>(
+    rels: Vec<(&'a Relation, &'a Relation)>,
+) -> Result<Substitution, UnificationErr> {
     let mut terms = Vec::new();
     for (r1, r2) in rels {
         find_terms_to_unify(&mut terms, r1, r2)?;
@@ -201,8 +203,8 @@ fn find_terms_to_unify<'a>(
     Ok(())
 }
 
-fn unify_terms(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Unifier, UnificationErr> {
-    let mut mgu = Unifier::new();
+fn unify_terms(mut terms: Vec<(FOTerm, FOTerm)>) -> Result<Substitution, UnificationErr> {
+    let mut mgu = Substitution::new();
 
     while let Some((ot1, ot2)) = terms.pop() {
         let (t1, t2) = (ot1.instantiate(&mgu), ot2.instantiate(&mgu));
@@ -259,6 +261,16 @@ mod tests {
         FOTerm::Const(Symbol::intern(s))
     }
 
+    macro_rules! unifier {
+           ($( $f:expr, $t:expr );*) => {{
+            let mut map = HashMap::new();
+            $(
+                map.insert(Symbol::intern($f), parse_fo_term($t).unwrap());
+            )*
+            Substitution::from_map(map)
+        }};
+    }
+
     #[test]
     fn test_unify() {
         session(|| {
@@ -289,19 +301,22 @@ mod tests {
     fn valid() {
         session(|| {
             let formulas = [
-                ("R(a) & R(a)", "{}"),
-                ("\\all X: (R(X) & R(X))", "{}"),
-                ("R(a) & \\all X: R(X)", "{X=a}"),
-                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
-                ("\\all X: R(f(a,X)) & R(f(a,b))", "{X=b}"),
-                ("\\all X: R(f(X)) & \\all Y: R(f(Y))", "{X=Y}"),
-                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
-                ("\\all X: R(f(g(X))) & \\all Y: R(f(Y))", "{Y=g(X)}"),
+                ("R(a) & R(a)", Substitution::new()),
+                ("\\all X: (R(X) & R(X))", Substitution::new()),
+                ("R(a) & \\all X: R(X)", unifier!("X", "a")),
+                ("\\all X: R(X) & \\all Y: R(Y)", unifier!("X", "Y")),
+                ("\\all X: R(f(a,X)) & R(f(a,b))", unifier!("X", "b")),
+                ("\\all X: R(f(X)) & \\all Y: R(f(Y))", unifier!("X", "Y")),
+                ("\\all X: R(X) & \\all Y: R(Y)", unifier!("X", "Y")),
+                (
+                    "\\all X: R(f(g(X))) & \\all Y: R(f(Y))",
+                    unifier!("Y", "g(X)"),
+                ),
                 (
                     "\\all X: R(f(g(X),X)) & \\all Y: R(f(Y,a))",
-                    "{X=a, Y=g(a)}",
+                    unifier!("X", "a"; "Y", "g(a)"),
                 ),
-                ("\\all X: R(X) & \\all Y: R(Y)", "{X=Y}"),
+                ("\\all X: R(X) & \\all Y: R(Y)", unifier!("X", "Y")),
             ];
 
             for (f, e) in formulas {
@@ -310,7 +325,7 @@ mod tests {
                 let r1 = cs.clauses()[0].atoms()[0].lit();
                 let r2 = cs.clauses()[1].atoms()[0].lit();
                 let mgu = unify(r1, r2).unwrap();
-                assert_eq!(e, mgu.to_string());
+                assert_eq!(e, mgu);
             }
         })
     }

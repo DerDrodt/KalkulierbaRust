@@ -8,16 +8,16 @@ use crate::{
     Symbol,
 };
 
-use super::{unify, Unifier};
+use super::{unify, Substitution};
 
-pub fn is_mgu_or_not_unifiable(u: &Unifier, r1: &Relation, r2: &Relation) -> bool {
+pub fn is_mgu_or_not_unifiable(u: &Substitution, r1: &Relation, r2: &Relation) -> bool {
     match unify(r1, r2) {
         Ok(mgu) => eq(&mgu, u),
         Err(_) => true,
     }
 }
 
-fn eq(u1: &Unifier, u2: &Unifier) -> bool {
+fn eq(u1: &Substitution, u2: &Substitution) -> bool {
     let mut term_pairs = Vec::new();
     let keys = u1.keys();
 

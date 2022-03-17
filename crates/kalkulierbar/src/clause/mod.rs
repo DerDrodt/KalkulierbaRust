@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::logic::{fo::Relation, unify::Unifier};
+use crate::logic::{fo::Relation, unify::Substitution};
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Atom<L: fmt::Display + Clone> {
@@ -36,7 +36,7 @@ impl<L: fmt::Display + Clone> Atom<L> {
 }
 
 impl Atom<Relation> {
-    pub fn instantiate(&self, u: &Unifier) -> Self {
+    pub fn instantiate(&self, u: &Substitution) -> Self {
         Atom {
             lit: self.lit.instantiate(u),
             negated: self.negated,
@@ -96,7 +96,7 @@ impl<L: fmt::Display + Clone> Clause<L> {
 }
 
 impl Clause<Relation> {
-    pub fn instantiate(&self, u: &Unifier) -> Self {
+    pub fn instantiate(&self, u: &Substitution) -> Self {
         Clause {
             atoms: self.atoms.iter().map(|a| a.instantiate(u)).collect(),
         }

@@ -18,7 +18,7 @@ use crate::{
         },
         unify::{
             try_to_parse_unifier, unifier_eq::is_mgu_or_not_unifiable, unify, unify_all,
-            UnificationErr, Unifier,
+            Substitution, UnificationErr,
         },
     },
     parse::{parse_fo_flexibly_to_cnf, FOToCNFParseErr, ParseErr},
@@ -186,7 +186,7 @@ impl FOResState {
 #[derive(Debug, Clone)]
 pub enum FOResMove {
     ResolveUnify(usize, usize, usize, usize),
-    ResolveCustom(usize, usize, usize, usize, Unifier),
+    ResolveCustom(usize, usize, usize, usize, Substitution),
     Hide(usize),
     Show,
     Hyper(usize, HashMap<usize, (usize, usize)>),
@@ -290,7 +290,7 @@ fn apply_resolve_custom(
     c2: usize,
     l1: usize,
     l2: usize,
-    u: Unifier,
+    u: Substitution,
 ) -> FOResResult<FOResState> {
     resolve_check_ids(&state, c1, c2, l1, l2)?;
 
@@ -444,7 +444,7 @@ fn apply_resolve(
     c1: usize,
     c2: usize,
     l1: usize,
-    u: Unifier,
+    u: Substitution,
 ) -> FOResResult<FOResState> {
     let cl1 = &state.clause_set.clauses()[c1];
     let cl2 = &state.clause_set.clauses()[c2];

@@ -14,7 +14,7 @@ use crate::{
     logic::{
         fo::FOTerm,
         transform::collectors::collect_symbols,
-        unify::{try_to_parse_unifier, Unifier},
+        unify::{try_to_parse_unifier, Substitution},
         LogicNode,
     },
     parse::sequent,
@@ -38,10 +38,10 @@ pub enum FOSeqMove {
     OrR(usize, usize),
     ImplL(usize, usize),
     ImplR(usize, usize),
-    AllL(usize, usize, Unifier),
-    AllR(usize, usize, Unifier),
-    ExL(usize, usize, Unifier),
-    ExR(usize, usize, Unifier),
+    AllL(usize, usize, Substitution),
+    AllR(usize, usize, Substitution),
+    ExL(usize, usize, Substitution),
+    ExR(usize, usize, Substitution),
     Undo,
     Prune(usize),
 }
@@ -145,7 +145,7 @@ fn apply_all_l(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Unifier,
+    mut u: Substitution,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_left(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
@@ -157,7 +157,7 @@ fn apply_all_l(
         } else {
             todo!()
         };
-        let nu = Unifier::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with);
         let new_f = c.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -188,7 +188,7 @@ fn apply_all_r(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Unifier,
+    mut u: Substitution,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_right(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
@@ -217,7 +217,7 @@ fn apply_all_r(
         {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
-        let nu = Unifier::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with);
         let new_f = child.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -249,7 +249,7 @@ fn apply_ex_l(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Unifier,
+    mut u: Substitution,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_left(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
@@ -278,7 +278,7 @@ fn apply_ex_l(
         {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
-        let nu = Unifier::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with);
         let new_f = child.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -310,7 +310,7 @@ fn apply_ex_r(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Unifier,
+    mut u: Substitution,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_right(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
@@ -322,7 +322,7 @@ fn apply_ex_r(
         } else {
             todo!()
         };
-        let nu = Unifier::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with);
         let new_f = c.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -540,8 +540,8 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Unifier {
-            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn u() -> Substitution {
+            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
         }
 
         #[test]
@@ -579,8 +579,8 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Unifier {
-            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn u() -> Substitution {
+            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
         }
 
         #[test]
@@ -748,8 +748,8 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Unifier {
-            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn u() -> Substitution {
+            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
         }
 
         #[test]
@@ -793,8 +793,8 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Unifier {
-            Unifier::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn u() -> Substitution {
+            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
         }
 
         #[test]

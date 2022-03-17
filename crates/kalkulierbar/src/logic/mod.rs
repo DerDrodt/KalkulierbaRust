@@ -16,7 +16,7 @@ pub use transform::Lit;
 
 use self::transform::to_basic::ToBasicOps;
 use self::transform::transformer::MutLogicNodeTransformer;
-use self::unify::Unifier;
+use self::unify::Substitution;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LogicNode {
@@ -36,7 +36,7 @@ impl LogicNode {
         ToBasicOps::new().visit(self)
     }
 
-    pub fn instantiate(&self, u: &Unifier) -> Self {
+    pub fn instantiate(&self, u: &Substitution) -> Self {
         match self {
             LogicNode::Var(_) => panic!(),
             LogicNode::Not(c) => Self::Not(c.instantiate(u).into()),
