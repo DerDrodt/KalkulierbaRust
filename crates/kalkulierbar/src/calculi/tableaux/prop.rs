@@ -725,7 +725,7 @@ fn check_connectedness_subtree(state: &PropTableauxState, root: usize, strong: b
     has_directly_closed_child && all_children_connected
 }
 
-fn check_regularity(state: &PropTableauxState) -> bool {
+pub(crate) fn check_regularity(state: &PropTableauxState) -> bool {
     let start = &state.root().children;
 
     start

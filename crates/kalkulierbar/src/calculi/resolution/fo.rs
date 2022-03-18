@@ -130,13 +130,13 @@ impl fmt::Display for FOResErr {
 pub type FOResResult<T> = Result<T, FOResErr>;
 
 pub struct FOResState {
-    clause_set: ClauseSet<Relation>,
-    visual_help: VisualHelp,
-    newest_node: Option<usize>,
-    hidden_clauses: ClauseSet<Relation>,
-    clause_counter: u32,
-    status_msg: Option<String>,
-    last_move: Option<FOResMove>,
+    pub clause_set: ClauseSet<Relation>,
+    pub visual_help: VisualHelp,
+    pub newest_node: Option<usize>,
+    pub hidden_clauses: ClauseSet<Relation>,
+    pub clause_counter: u32,
+    pub status_msg: Option<String>,
+    pub last_move: Option<FOResMove>,
 }
 
 impl FOResState {
@@ -378,11 +378,11 @@ fn apply_hyper(
         );
     }
 
-    if !main_premiss.is_positive() {
+    if !new_main.is_positive() {
         return Err(FOResErr::ResultingMainNotPos(main_premiss));
     }
 
-    state.clause_set.add(main_premiss);
+    state.clause_set.add(new_main);
     state.newest_node = Some(state.clause_set.size() - 1);
 
     Ok(state)
@@ -910,5 +910,25 @@ impl<'de> Deserialize<'de> for FOResMove {
             "atoms",
         ];
         deserializer.deserialize_struct("FOResMove", FIELDS, MoveVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    // see https://github.com/KalkulierbaR/kalkulierbar/issues/50
+    #[test]
+    fn issue50() {
+        session(|| {
+            let s = FOResolution::parse_formula(
+                "/all M: /all N: (Subset(M, N) <-> /all A: (In(A, M) -> In(A, N)))",
+                None,
+            )
+            .unwrap();
+            let expected = "{!Subset(M_1, N_1), !In(A_1, M_1), In(A_1, N_1)}, {Subset(M_2, N_2), In(sk1(M_2, N_2), M_2)}, {Subset(M_3, N_3), !In(sk1(M_3, N_3), N_3)}";
+            assert_eq!(expected, s.clause_set.to_string());
+        })
     }
 }

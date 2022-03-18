@@ -23,11 +23,11 @@ pub struct PropResParam {
 }
 
 pub struct PropResState {
-    clause_set: ClauseSet<Symbol>,
-    visual_help: VisualHelp,
-    newest_node: Option<usize>,
-    hidden_clauses: ClauseSet<Symbol>,
-    last_move: Option<PropResMove>,
+    pub clause_set: ClauseSet<Symbol>,
+    pub visual_help: VisualHelp,
+    pub newest_node: Option<usize>,
+    pub hidden_clauses: ClauseSet<Symbol>,
+    pub last_move: Option<PropResMove>,
 }
 
 impl PropResState {

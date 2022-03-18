@@ -127,11 +127,11 @@ pub type FOTabResult<T> = Result<T, FOTabErr>;
 #[serde(default)]
 pub struct FOTabParams {
     #[serde(rename = "type")]
-    ty: TableauxType,
-    regular: bool,
-    backtracking: bool,
+    pub ty: TableauxType,
+    pub regular: bool,
+    pub backtracking: bool,
     #[serde(rename = "manualVarAssign")]
-    manual_var_assign: bool,
+    pub manual_var_assign: bool,
 }
 
 impl Default for FOTabParams {
@@ -501,7 +501,7 @@ fn ensure_basic_closeability(
     }
 }
 
-fn check_regularity(state: &FOTabState) -> bool {
+pub(crate) fn check_regularity(state: &FOTabState) -> bool {
     let start = &state.root().children;
 
     start
