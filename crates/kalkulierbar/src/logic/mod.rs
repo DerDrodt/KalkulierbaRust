@@ -51,6 +51,42 @@ impl LogicNode {
             LogicNode::Ex(s, c) => Self::Ex(*s, c.instantiate(u).into()),
         }
     }
+
+    pub fn is_var(&self) -> bool {
+        matches!(self, Self::Var(..))
+    }
+
+    pub fn is_not(&self) -> bool {
+        matches!(self, Self::Not(..))
+    }
+
+    pub fn is_and(&self) -> bool {
+        matches!(self, Self::And(..))
+    }
+
+    pub fn is_or(&self) -> bool {
+        matches!(self, Self::Or(..))
+    }
+
+    pub fn is_impl(&self) -> bool {
+        matches!(self, Self::Impl(..))
+    }
+
+    pub fn is_equiv(&self) -> bool {
+        matches!(self, Self::Equiv(..))
+    }
+
+    pub fn is_rel(&self) -> bool {
+        matches!(self, Self::Rel(..))
+    }
+
+    pub fn is_all(&self) -> bool {
+        matches!(self, Self::All(..))
+    }
+
+    pub fn is_ex(&self) -> bool {
+        matches!(self, Self::Ex(..))
+    }
 }
 
 impl fmt::Display for LogicNode {

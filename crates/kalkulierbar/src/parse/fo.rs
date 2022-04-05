@@ -48,7 +48,9 @@ impl<'t> FOParser<'t> {
 
     pub fn parse(formula: &'t str) -> ParseResult<LogicNode> {
         let mut parser = FOParser::new(formula);
-
+        if parser.tokens.peek().is_none() {
+            return Err(ParseErr::EmptyFormula);
+        }
         let node = parser.parse_equiv()?;
         match parser.tokens.next() {
             Some(_) => Err(ParseErr::Expected(

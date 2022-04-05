@@ -256,3 +256,380 @@ impl<'de> Deserialize<'de> for PropSeqMove {
         deserializer.deserialize_struct("PropSeqMove", FIELDS, MoveVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    mod and_l {
+        use crate::{parse::parse_prop_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("!(a & b)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::AndL(1, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a ").unwrap();
+                let f2 = parse_prop_formula("b ").unwrap();
+                let n = &s.nodes[s.nodes.len() - 1];
+
+                assert!(n.left_formulas[0].syn_eq(&f1));
+                assert!(n.left_formulas[1].syn_eq(&f2));
+
+                assert!(n.left_formulas[0].is_var());
+                assert!(n.left_formulas[1].is_var())
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("!(a & b)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                assert!(s.nodes[0].parent.is_none());
+                let s = PropSequent::apply_move(s, PropSeqMove::AndL(1, 0)).unwrap();
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("a & b", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::AndL(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod and_r {
+        use crate::{parse::parse_prop_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("(a & b) & (b |c)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a & b").unwrap();
+                let f2 = parse_prop_formula("b | c").unwrap();
+                let n1 = &s.nodes[s.nodes.len() - 2];
+                let n2 = &s.nodes[s.nodes.len() - 1];
+
+                assert!(n1.right_formulas[0].syn_eq(&f1));
+                assert!(n2.right_formulas[0].syn_eq(&f2));
+
+                assert_eq!(3, s.nodes.len())
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("(a & b) & (b |c)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(2, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("(a & b) | (b |c)", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod ax {
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | !a", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+
+                assert!(s.nodes.iter().all(|n| n.is_closed))
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | !a", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(1, s.nodes[1].children.len());
+                assert_eq!(1, s.nodes[2].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | !a", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::Ax(0)).is_err());
+            })
+        }
+    }
+
+    mod not_l {
+        use crate::{parse::parse_prop_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("!(!a)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotL(1, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a").unwrap();
+                let n = &s.nodes[2];
+
+                assert!(n.right_formulas[0].syn_eq(&f1));
+                assert!(n.right_formulas[0].is_var())
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("!(!a)", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotL(1, 0)).unwrap();
+
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(1, s.nodes[1].children.len());
+                assert_eq!(1, s.nodes[2].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("a & !a", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::NotL(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod not_r {
+        use crate::{parse::parse_prop_formula, SynEq};
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("!a", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a").unwrap();
+                let n = &s.nodes[1];
+
+                assert!(n.left_formulas[0].syn_eq(&f1));
+                assert!(n.left_formulas[0].is_var())
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("!a", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("a & !a", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod or_l {
+        use crate::parse::parse_prop_formula;
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("!((a & b) | (b |c))", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a & b").unwrap();
+                let f2 = parse_prop_formula("b | c").unwrap();
+                let n1 = &s.nodes[2];
+                let n2 = &s.nodes[3];
+
+                assert_eq!(f1, n1.left_formulas[0]);
+                assert_eq!(f2, n2.left_formulas[0]);
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("!((a & b) | (b |c))", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).unwrap();
+
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(2, s.nodes[1].children.len());
+                assert_eq!(1, s.nodes[2].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("!((a & b) & (b |c))", None).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).is_err());
+            })
+        }
+    }
+
+    mod or_r {
+        use crate::parse::parse_prop_formula;
+
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | b", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+
+                let f1 = parse_prop_formula("a").unwrap();
+                let f2 = parse_prop_formula("b").unwrap();
+                let n = &s.nodes[1];
+
+                assert_eq!(f1, n.right_formulas[0]);
+                assert_eq!(f2, n.right_formulas[1]);
+            })
+        }
+
+        #[test]
+        fn parent() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | b", None).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+
+                assert!(s.nodes[0].parent.is_none());
+                assert_eq!(1, s.nodes[0].children.len());
+                assert_eq!(0, s.nodes[1].parent.unwrap())
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = PropSequent::parse_formula("a & b", None).unwrap();
+                assert!(PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).is_err());
+            })
+        }
+    }
+
+    mod undo {
+        use crate::tamper_protect::ProtectedState;
+
+        use super::*;
+
+        #[test]
+        fn nothing_to_undo() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | b", None).unwrap();
+
+                assert!(PropSequent::apply_move(s, PropSeqMove::Undo).is_err())
+            })
+        }
+
+        #[test]
+        fn one_child() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | b", None).unwrap();
+
+                let h = s.compute_seal_info();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+
+                assert_eq!(h, s.compute_seal_info())
+            })
+        }
+
+        #[test]
+        fn two_children() {
+            session(|| {
+                let s = PropSequent::parse_formula("a & b", None).unwrap();
+                let h = s.compute_seal_info();
+                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+
+                assert_eq!(h, s.compute_seal_info())
+            })
+        }
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = PropSequent::parse_formula("a | !a", None).unwrap();
+                let h0 = s.compute_seal_info();
+                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let h1 = s.compute_seal_info();
+                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+                let h2 = s.compute_seal_info();
+                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+
+                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                assert_eq!(h2, s.compute_seal_info());
+                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                assert_eq!(h1, s.compute_seal_info());
+                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                assert_eq!(h0, s.compute_seal_info());
+            })
+        }
+    }
+}
