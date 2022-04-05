@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use serde::{
     de::{self, MapAccess, Visitor},
@@ -34,12 +37,12 @@ use super::{
 #[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
-pub struct FOResParam {
+pub struct Params {
     visual_help: VisualHelp,
 }
 
 #[derive(Debug)]
-pub enum FOResErr {
+pub enum Err {
     ParseErr(ParseErr),
     CNFErr(FOCNFErr),
     UnificationErr(UnificationErr),
@@ -54,21 +57,22 @@ pub enum FOResErr {
     SidePremissNotPos(Clause<Relation>),
     MainAtomNotNeg(Atom<Relation>),
     ResultingMainNotPos(Clause<Relation>),
+    CannotUnifyWithSelf,
 }
 
-impl From<ParseErr> for FOResErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
         Self::ParseErr(e)
     }
 }
 
-impl From<FOCNFErr> for FOResErr {
+impl From<FOCNFErr> for Err {
     fn from(e: FOCNFErr) -> Self {
         Self::CNFErr(e)
     }
 }
 
-impl From<FOToCNFParseErr> for FOResErr {
+impl From<FOToCNFParseErr> for Err {
     fn from(e: FOToCNFParseErr) -> Self {
         match e {
             FOToCNFParseErr::ParseErr(e) => Self::ParseErr(e),
@@ -77,69 +81,71 @@ impl From<FOToCNFParseErr> for FOResErr {
     }
 }
 
-impl From<UnificationErr> for FOResErr {
+impl From<UnificationErr> for Err {
     fn from(e: UnificationErr) -> Self {
         Self::UnificationErr(e)
     }
 }
 
-impl From<UtilErr<Relation>> for FOResErr {
+impl From<UtilErr<Relation>> for Err {
     fn from(e: UtilErr<Relation>) -> Self {
         Self::UtilErr(e)
     }
 }
 
-impl fmt::Display for FOResErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FOResErr::ParseErr(e) => fmt::Display::fmt(e, f),
-            FOResErr::CNFErr(e) => fmt::Display::fmt(e, f),
-            FOResErr::UnificationErr(e) => fmt::Display::fmt(e, f),
-            FOResErr::UtilErr(e) => fmt::Display::fmt(e, f),
-            FOResErr::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
-            FOResErr::NoSuchAtom(c, id) => {
+            Err::ParseErr(e) => fmt::Display::fmt(e, f),
+            Err::CNFErr(e) => fmt::Display::fmt(e, f),
+            Err::UnificationErr(e) => fmt::Display::fmt(e, f),
+            Err::UtilErr(e) => fmt::Display::fmt(e, f),
+            Err::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
+            Err::NoSuchAtom(c, id) => {
                 write!(f, "There is no atom with id {id} in clause '{c}'")
             }
-            FOResErr::TooFewAtoms => write!(f, "Please select more than 1 atom to factorize"),
-            FOResErr::NEAfterInst(a1, a2) => write!(
+            Err::TooFewAtoms => write!(f, "Please select more than 1 atom to factorize"),
+            Err::NEAfterInst(a1, a2) => write!(
                 f,
                 "Atoms '${a1}' and '${a2}' are not equal after instantiation"
             ),
-            FOResErr::NoSuchAtomInMain(c, id) => write!(
+            Err::NoSuchAtomInMain(c, id) => write!(
                 f,
                 "There is no atom with id {id} in (main premiss) clause '{c}'"
             ),
-            FOResErr::NoSuchAtomInSide(c, id) => write!(
+            Err::NoSuchAtomInSide(c, id) => write!(
                 f,
                 "There is no atom with id {id} in (side premiss) clause '{c}'"
             ),
-            FOResErr::EmptyHyperMap => {
+            Err::EmptyHyperMap => {
                 write!(f, "Please select side premisses for hyper resolution")
             }
-            FOResErr::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
-            FOResErr::MainAtomNotNeg(a) => {
+            Err::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
+            Err::MainAtomNotNeg(a) => {
                 write!(f, "Literal '{a}' in main premiss has to be negative")
             }
-            FOResErr::ResultingMainNotPos(c) => {
+            Err::ResultingMainNotPos(c) => {
                 write!(f, "Resulting clause '{c}' is not positive")
             }
+            Err::CannotUnifyWithSelf => write!(f, "Cannot unify an atom with itself"),
         }
     }
 }
 
-pub type FOResResult<T> = Result<T, FOResErr>;
+pub type FOResResult<T> = Result<T, Err>;
 
-pub struct FOResState {
+#[derive(Debug, Clone)]
+pub struct State {
     pub clause_set: ClauseSet<Relation>,
     pub visual_help: VisualHelp,
     pub newest_node: Option<usize>,
     pub hidden_clauses: ClauseSet<Relation>,
     pub clause_counter: u32,
     pub status_msg: Option<String>,
-    pub last_move: Option<FOResMove>,
+    pub last_move: Option<Move>,
 }
 
-impl FOResState {
+impl State {
     pub fn new(clause_set: ClauseSet<Relation>, visual_help: VisualHelp) -> Self {
         Self {
             clause_set,
@@ -184,7 +190,7 @@ impl FOResState {
 }
 
 #[derive(Debug, Clone)]
-pub enum FOResMove {
+pub enum Move {
     ResolveUnify(usize, usize, usize, usize),
     ResolveCustom(usize, usize, usize, usize, Substitution),
     Hide(usize),
@@ -193,7 +199,7 @@ pub enum FOResMove {
     Factorize(usize, Vec<usize>),
 }
 
-impl ProtectedState for FOResState {
+impl ProtectedState for State {
     fn compute_seal_info(&self) -> String {
         format!(
             "resolutionstate|{}|{}|{}|{}|{}",
@@ -212,13 +218,13 @@ impl ProtectedState for FOResState {
 pub struct FOResolution;
 
 impl<'f> Calculus<'f> for FOResolution {
-    type Params = FOResParam;
+    type Params = Params;
 
-    type State = FOResState;
+    type State = State;
 
-    type Move = FOResMove;
+    type Move = Move;
 
-    type Error = FOResErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
@@ -226,7 +232,7 @@ impl<'f> Calculus<'f> for FOResolution {
     ) -> Result<Self::State, Self::Error> {
         let cs = parse_fo_flexibly_to_cnf(formula)?;
 
-        let mut s = FOResState::new(cs, params.unwrap_or_default().visual_help);
+        let mut s = State::new(cs, params.unwrap_or_default().visual_help);
 
         // Distinguish variables in each clause by appending suffixes
         s.init_suffix();
@@ -237,14 +243,14 @@ impl<'f> Calculus<'f> for FOResolution {
         state.status_msg.take();
 
         state = match k_move.clone() {
-            FOResMove::ResolveUnify(c1, c2, l1, l2) => apply_resolve_unify(state, c1, c2, l1, l2)?,
-            FOResMove::ResolveCustom(c1, c2, l1, l2, u) => {
+            Move::ResolveUnify(c1, c2, l1, l2) => apply_resolve_unify(state, c1, c2, l1, l2)?,
+            Move::ResolveCustom(c1, c2, l1, l2, u) => {
                 apply_resolve_custom(state, c1, c2, l1, l2, u)?
             }
-            FOResMove::Hide(c) => apply_hide(state, c)?,
-            FOResMove::Show => apply_show(state),
-            FOResMove::Hyper(c, m) => apply_hyper(state, c, m)?,
-            FOResMove::Factorize(c, a) => apply_factorize(state, c, a)?,
+            Move::Hide(c) => apply_hide(state, c)?,
+            Move::Show => apply_show(state),
+            Move::Hyper(c, m) => apply_hyper(state, c, m)?,
+            Move::Factorize(c, a) => apply_factorize(state, c, a)?,
         };
 
         state.last_move = Some(k_move);
@@ -266,12 +272,12 @@ impl<'f> Calculus<'f> for FOResolution {
 }
 
 fn apply_resolve_unify(
-    state: FOResState,
+    state: State,
     c1: usize,
     c2: usize,
     l1: usize,
     l2: usize,
-) -> FOResResult<FOResState> {
+) -> FOResResult<State> {
     resolve_check_ids(&state, c1, c2, l1, l2)?;
 
     let cl1 = &state.clause_set.clauses()[c1];
@@ -285,13 +291,13 @@ fn apply_resolve_unify(
 }
 
 fn apply_resolve_custom(
-    mut state: FOResState,
+    mut state: State,
     c1: usize,
     c2: usize,
     l1: usize,
     l2: usize,
     u: Substitution,
-) -> FOResResult<FOResState> {
+) -> FOResResult<State> {
     resolve_check_ids(&state, c1, c2, l1, l2)?;
 
     let cl1 = &state.clause_set.clauses()[c1];
@@ -307,9 +313,9 @@ fn apply_resolve_custom(
     apply_resolve(state, c1, c2, l1, u)
 }
 
-fn apply_hide(mut state: FOResState, c: usize) -> FOResResult<FOResState> {
+fn apply_hide(mut state: State, c: usize) -> FOResResult<State> {
     if c >= state.clause_set.size() {
-        return Err(FOResErr::InvalidClauseId(c));
+        return Err(Err::InvalidClauseId(c));
     }
 
     // Move clause from main clause set to hidden clause set
@@ -320,7 +326,7 @@ fn apply_hide(mut state: FOResState, c: usize) -> FOResResult<FOResState> {
     Ok(state)
 }
 
-fn apply_show(mut state: FOResState) -> FOResState {
+fn apply_show(mut state: State) -> State {
     state.clause_set.unite(&state.hidden_clauses);
     state.hidden_clauses.clear();
     state.newest_node = None;
@@ -329,14 +335,14 @@ fn apply_show(mut state: FOResState) -> FOResState {
 }
 
 fn apply_hyper(
-    mut state: FOResState,
+    mut state: State,
     main_id: usize,
     atom_map: HashMap<usize, (usize, usize)>,
-) -> FOResResult<FOResState> {
+) -> FOResResult<State> {
     check_hyper(&state, main_id, &atom_map)?;
 
     if atom_map.is_empty() {
-        return Err(FOResErr::EmptyHyperMap);
+        return Err(Err::EmptyHyperMap);
     }
 
     let main_premiss = state.clause_set.clauses()[main_id].clone();
@@ -351,12 +357,12 @@ fn apply_hyper(
 
         // Check side premise for positiveness
         if !side.is_positive() {
-            return Err(FOResErr::SidePremissNotPos(side.clone()));
+            return Err(Err::SidePremissNotPos(side.clone()));
         }
 
         let ma = &state.clause_set.clauses()[main_id].atoms()[ma_id];
         if !ma.negated() {
-            return Err(FOResErr::MainAtomNotNeg(ma.clone()));
+            return Err(Err::MainAtomNotNeg(ma.clone()));
         }
         let sa = &state.clause_set.clauses()[sc_id].atoms()[sa_id];
 
@@ -379,7 +385,7 @@ fn apply_hyper(
     }
 
     if !new_main.is_positive() {
-        return Err(FOResErr::ResultingMainNotPos(main_premiss));
+        return Err(Err::ResultingMainNotPos(main_premiss));
     }
 
     state.clause_set.add(new_main);
@@ -388,25 +394,33 @@ fn apply_hyper(
     Ok(state)
 }
 
-fn apply_factorize(mut state: FOResState, c: usize, atoms: Vec<usize>) -> FOResResult<FOResState> {
+fn apply_factorize(mut state: State, c: usize, atoms: Vec<usize>) -> FOResResult<State> {
     if c >= state.clause_set.size() {
-        return Err(FOResErr::InvalidClauseId(c));
+        return Err(Err::InvalidClauseId(c));
     }
     if atoms.len() < 2 {
-        return Err(FOResErr::TooFewAtoms);
+        return Err(Err::TooFewAtoms);
     }
 
     let c = &state.clause_set.clauses()[c];
     let mut first: Option<&Atom<Relation>> = None;
     let mut to_unify = Vec::new();
     let last = *atoms.last().unwrap();
+    let mut seen_ids = HashSet::new();
 
     for i in atoms.iter() {
-        let a = &c.atoms()[*i];
+        let i = *i;
+        if !seen_ids.insert(i) {
+            return Err(Err::CannotUnifyWithSelf);
+        }
+        if i >= c.atoms().len() {
+            return Err(Err::NoSuchAtom(c.clone(), i));
+        }
+        let a = &c.atoms()[i];
         match first {
             Some(f) => {
                 if f.negated() != a.negated() {
-                    return Err(FOResErr::NEAfterInst(f.clone(), a.clone()));
+                    return Err(Err::NEAfterInst(f.clone(), a.clone()));
                 }
                 to_unify.push((f.lit(), a.lit()));
             }
@@ -440,12 +454,12 @@ fn apply_factorize(mut state: FOResState, c: usize, atoms: Vec<usize>) -> FOResR
 }
 
 fn apply_resolve(
-    mut state: FOResState,
+    mut state: State,
     c1: usize,
     c2: usize,
     l1: usize,
     u: Substitution,
-) -> FOResResult<FOResState> {
+) -> FOResResult<State> {
     let cl1 = &state.clause_set.clauses()[c1];
     let cl2 = &state.clause_set.clauses()[c2];
     let lit1 = cl1.atoms()[l1].lit();
@@ -466,25 +480,19 @@ fn apply_resolve(
     Ok(state)
 }
 
-fn resolve_check_ids(
-    state: &FOResState,
-    c1: usize,
-    c2: usize,
-    l1: usize,
-    l2: usize,
-) -> FOResResult<()> {
+fn resolve_check_ids(state: &State, c1: usize, c2: usize, l1: usize, l2: usize) -> FOResResult<()> {
     if c1 >= state.clause_set.size() {
-        Err(FOResErr::InvalidClauseId(c1))
+        Err(Err::InvalidClauseId(c1))
     } else if c2 >= state.clause_set.size() {
-        Err(FOResErr::InvalidClauseId(c2))
+        Err(Err::InvalidClauseId(c2))
     } else {
         let c1 = &state.clause_set.clauses()[c1];
         let c2 = &state.clause_set.clauses()[c2];
 
         if l1 >= c1.atoms().len() {
-            Err(FOResErr::NoSuchAtom(c1.clone(), l1))
+            Err(Err::NoSuchAtom(c1.clone(), l1))
         } else if l2 >= c2.atoms().len() {
-            Err(FOResErr::NoSuchAtom(c2.clone(), l2))
+            Err(Err::NoSuchAtom(c2.clone(), l2))
         } else {
             Ok(())
         }
@@ -492,12 +500,12 @@ fn resolve_check_ids(
 }
 
 fn check_hyper(
-    state: &FOResState,
+    state: &State,
     c_id: usize,
     atom_map: &HashMap<usize, (usize, usize)>,
 ) -> FOResResult<()> {
     if c_id >= state.clause_set.size() {
-        return Err(FOResErr::InvalidClauseId(c_id));
+        return Err(Err::InvalidClauseId(c_id));
     }
 
     let main = state.clause_set.clauses()[c_id].atoms();
@@ -505,17 +513,17 @@ fn check_hyper(
     // Check that (mainAtomID -> (sideClauseID, atomID)) map elements are correct
     for (m_id, (sc_id, sa_id)) in atom_map {
         if *m_id >= main.len() {
-            return Err(FOResErr::NoSuchAtomInMain(
+            return Err(Err::NoSuchAtomInMain(
                 state.clause_set.clauses()[*m_id].clone(),
                 *m_id,
             ));
         }
         if *sc_id >= state.clause_set.size() {
-            return Err(FOResErr::InvalidClauseId(c_id));
+            return Err(Err::InvalidClauseId(c_id));
         }
         let c = state.clause_set.clauses()[*sc_id].atoms();
         if *sa_id >= c.len() {
-            return Err(FOResErr::NoSuchAtomInSide(
+            return Err(Err::NoSuchAtomInSide(
                 state.clause_set.clauses()[*sa_id].clone(),
                 *sa_id,
             ));
@@ -525,7 +533,7 @@ fn check_hyper(
     Ok(())
 }
 
-impl Serialize for FOResState {
+impl Serialize for State {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -549,7 +557,7 @@ impl Serialize for FOResState {
     }
 }
 
-impl<'de> Deserialize<'de> for FOResState {
+impl<'de> Deserialize<'de> for State {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -577,13 +585,13 @@ impl<'de> Deserialize<'de> for FOResState {
         struct StateVisitor;
 
         impl<'de> Visitor<'de> for StateVisitor {
-            type Value = FOResState;
+            type Value = State;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct FOResState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<FOResState, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -591,7 +599,7 @@ impl<'de> Deserialize<'de> for FOResState {
                 let mut visual_help: Option<VisualHelp> = None;
                 let mut newest_node: Option<i32> = None;
                 let mut hidden_clauses: Option<ClauseSet<Relation>> = None;
-                let mut last_move: Option<FOResMove> = None;
+                let mut last_move: Option<Move> = None;
                 let mut clause_counter: Option<u32> = None;
                 let mut status_msg: Option<String> = None;
                 let mut seal: Option<String> = None;
@@ -670,7 +678,7 @@ impl<'de> Deserialize<'de> for FOResState {
                     clause_counter.ok_or_else(|| de::Error::missing_field("clauseCounter"))?;
                 let seal = seal.ok_or_else(|| de::Error::missing_field("seal"))?;
 
-                let s = FOResState {
+                let s = State {
                     clause_set,
                     visual_help,
                     newest_node,
@@ -703,44 +711,44 @@ impl<'de> Deserialize<'de> for FOResState {
     }
 }
 
-impl Serialize for FOResMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let (ty, num_fields) = match self {
-            FOResMove::ResolveUnify(..) => ("res-resolveunify", 5),
-            FOResMove::ResolveCustom(..) => ("res-resolvecustom", 6),
-            FOResMove::Hide(_) => ("res-hide", 2),
-            FOResMove::Show => ("res-show", 1),
-            FOResMove::Hyper(..) => ("res-hyper", 3),
-            FOResMove::Factorize(..) => ("res-factorize", 3),
+            Move::ResolveUnify(..) => ("res-resolveunify", 5),
+            Move::ResolveCustom(..) => ("res-resolvecustom", 6),
+            Move::Hide(_) => ("res-hide", 2),
+            Move::Show => ("res-show", 1),
+            Move::Hyper(..) => ("res-hyper", 3),
+            Move::Factorize(..) => ("res-factorize", 3),
         };
         let mut state = serializer.serialize_struct("FOResMove", num_fields)?;
         state.serialize_field("type", ty)?;
         match self {
-            FOResMove::ResolveUnify(c1, c2, l1, l2) => {
+            Move::ResolveUnify(c1, c2, l1, l2) => {
                 state.serialize_field("c1", c1)?;
                 state.serialize_field("c2", c2)?;
                 state.serialize_field("l1", l1)?;
                 state.serialize_field("l2", l2)?;
             }
-            FOResMove::ResolveCustom(c1, c2, l1, l2, u) => {
+            Move::ResolveCustom(c1, c2, l1, l2, u) => {
                 state.serialize_field("c1", c1)?;
                 state.serialize_field("c2", c2)?;
                 state.serialize_field("l1", l1)?;
                 state.serialize_field("l2", l2)?;
                 state.serialize_field("varAssign", &u.rendered_map())?;
             }
-            FOResMove::Hide(c1) => {
+            Move::Hide(c1) => {
                 state.serialize_field("c1", c1)?;
             }
-            FOResMove::Show => {}
-            FOResMove::Hyper(main_id, atom_map) => {
+            Move::Show => {}
+            Move::Hyper(main_id, atom_map) => {
                 state.serialize_field("mainID", main_id)?;
                 state.serialize_field("atomMap", atom_map)?;
             }
-            FOResMove::Factorize(c, atoms) => {
+            Move::Factorize(c, atoms) => {
                 state.serialize_field("c1", c)?;
                 state.serialize_field("atoms", atoms)?;
             }
@@ -749,7 +757,7 @@ impl Serialize for FOResMove {
     }
 }
 
-impl<'de> Deserialize<'de> for FOResMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -779,13 +787,13 @@ impl<'de> Deserialize<'de> for FOResMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = FOResMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct FOResMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<FOResMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -861,13 +869,13 @@ impl<'de> Deserialize<'de> for FOResMove {
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 let ty: &str = &ty;
                 Ok(match ty {
-                    "res-resolveunify" => FOResMove::ResolveUnify(
+                    "res-resolveunify" => Move::ResolveUnify(
                         c1.ok_or_else(|| de::Error::missing_field("c1"))?,
                         c2.ok_or_else(|| de::Error::missing_field("c2"))?,
                         l1.ok_or_else(|| de::Error::missing_field("l1"))?,
                         l2.ok_or_else(|| de::Error::missing_field("l2"))?,
                     ),
-                    "res-resolvecustom" => FOResMove::ResolveCustom(
+                    "res-resolvecustom" => Move::ResolveCustom(
                         c1.ok_or_else(|| de::Error::missing_field("c1"))?,
                         c2.ok_or_else(|| de::Error::missing_field("c2"))?,
                         l1.ok_or_else(|| de::Error::missing_field("l1"))?,
@@ -881,15 +889,13 @@ impl<'de> Deserialize<'de> for FOResMove {
                             }
                         },
                     ),
-                    "res-hide" => {
-                        FOResMove::Hide(c1.ok_or_else(|| de::Error::missing_field("c1"))?)
-                    }
-                    "res-show" => FOResMove::Show,
-                    "res-hyper" => FOResMove::Hyper(
+                    "res-hide" => Move::Hide(c1.ok_or_else(|| de::Error::missing_field("c1"))?),
+                    "res-show" => Move::Show,
+                    "res-hyper" => Move::Hyper(
                         main_id.ok_or_else(|| de::Error::missing_field("mainID"))?,
                         atom_map.ok_or_else(|| de::Error::missing_field("atomMap"))?,
                     ),
-                    "res-factorize" => FOResMove::Factorize(
+                    "res-factorize" => Move::Factorize(
                         c1.ok_or_else(|| de::Error::missing_field("c1"))?,
                         atoms.ok_or_else(|| de::Error::missing_field("atoms"))?,
                     ),
@@ -930,5 +936,97 @@ mod tests {
             let expected = "{!Subset(M_1, N_1), !In(A_1, M_1), In(A_1, N_1)}, {Subset(M_2, N_2), In(sk1(M_2, N_2), M_2)}, {Subset(M_3, N_3), !In(sk1(M_3, N_3), N_3)}";
             assert_eq!(expected, s.clause_set.to_string());
         })
+    }
+
+    mod factorize {
+        use super::*;
+
+        #[test]
+        fn invalid_clause() {
+            session(|| {
+                let s = FOResolution::parse_formula("P(c) & R(c) | R(y)", None).unwrap();
+                assert!(FOResolution::apply_move(s, Move::Factorize(2, vec![0, 1])).is_err());
+            })
+        }
+
+        #[test]
+        fn invalid_atom() {
+            session(|| {
+                let s = FOResolution::parse_formula("R(c) | R(y)", None).unwrap();
+                assert!(
+                    FOResolution::apply_move(s.clone(), Move::Factorize(0, vec![0, 0])).is_err()
+                );
+                assert!(
+                    FOResolution::apply_move(s.clone(), Move::Factorize(0, vec![2, 0])).is_err()
+                );
+                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![1, 2])).is_err());
+            })
+        }
+
+        #[test]
+        fn unification_fail() {
+            session(|| {
+                let s = FOResolution::parse_formula("R(c) | R(y)", None).unwrap();
+                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1])).is_err());
+
+                let s = FOResolution::parse_formula("\\all X: (R(X) | R(f(X)))", None).unwrap();
+                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1])).is_err());
+
+                let s =
+                    FOResolution::parse_formula("\\all X: \\all Y: (R(X,X) | R(Y))", None).unwrap();
+                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1])).is_err());
+            })
+        }
+
+        #[test]
+        fn fo_f() {
+            session(|| {
+                let s = FOResolution::parse_formula(
+                    "\\all X: (Q(z) | R(X,c) | R(f(c),c) | Q(y))",
+                    None,
+                )
+                .unwrap();
+                let s = FOResolution::apply_move(s, Move::Factorize(0, vec![1, 2])).unwrap();
+                assert_eq!(2, s.clause_set.size());
+                assert_eq!(
+                    "{Q(z), R(f(c), c), Q(y)}",
+                    s.clause_set.clauses()[1].to_string()
+                );
+                assert_eq!(
+                    "{Q(z), R(X_1, c), R(f(c), c), Q(y)}",
+                    s.clause_set.clauses()[0].to_string()
+                );
+            })
+        }
+
+        #[test]
+        fn clause_positioning() {
+            session(|| {
+                let s = FOResolution::parse_formula("Q(a) & (R(z) | R(z)) & Q(b) & Q(c)", None)
+                    .unwrap();
+                let s = FOResolution::apply_move(s, Move::Factorize(1, vec![0, 1])).unwrap();
+                assert_eq!("{R(z)}", s.clause_set.clauses()[4].to_string());
+                assert_eq!("{R(z), R(z)}", s.clause_set.clauses()[1].to_string());
+            })
+        }
+
+        #[test]
+        fn multiple() {
+            session(|| {
+                let s = FOResolution::parse_formula("/all X: (Q(f(X)) | Q(f(c)) | Q(f(X)))", None)
+                    .unwrap();
+                let s = FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1, 2])).unwrap();
+                assert_eq!("{Q(f(c))}", s.clause_set.clauses()[1].to_string());
+            })
+        }
+
+        #[test]
+        fn multiple_invalid() {
+            session(|| {
+                let s = FOResolution::parse_formula("/all X: (Q(X) | Q(g(c)) | Q(f(X)))", None)
+                    .unwrap();
+                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1, 2])).is_err());
+            })
+        }
     }
 }

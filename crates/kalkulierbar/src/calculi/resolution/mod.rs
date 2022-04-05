@@ -9,7 +9,7 @@ mod util;
 pub use fo::FOResolution as FO;
 pub use prop::PropResolution as Prop;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum VisualHelp {
     None,
@@ -48,7 +48,7 @@ mod tests {
 
             let s = Prop::apply_move(
                 s,
-                prop::PropResMove::Hyper(0, HashMap::from([(1, (1, 0)), (3, (2, 0)), (4, (3, 0))])),
+                prop::Move::Hyper(0, HashMap::from([(1, (1, 0)), (3, (2, 0)), (4, (3, 0))])),
             )
             .unwrap();
             assert_eq!(
@@ -61,7 +61,7 @@ mod tests {
 
             let s = FO::apply_move(
                 s,
-                fo::FOResMove::Hyper(0, HashMap::from([(0, (1, 0)), (2, (2, 0))])),
+                fo::Move::Hyper(0, HashMap::from([(0, (1, 0)), (2, (2, 0))])),
             )
             .unwrap();
 

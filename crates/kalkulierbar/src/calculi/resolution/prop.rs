@@ -17,20 +17,21 @@ use super::VisualHelp;
 #[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
-pub struct PropResParam {
+pub struct Params {
     cnf_strategy: CNFStrategy,
     visual_help: VisualHelp,
 }
 
-pub struct PropResState {
+#[derive(Debug, Clone)]
+pub struct State {
     pub clause_set: ClauseSet<Symbol>,
     pub visual_help: VisualHelp,
     pub newest_node: Option<usize>,
     pub hidden_clauses: ClauseSet<Symbol>,
-    pub last_move: Option<PropResMove>,
+    pub last_move: Option<Move>,
 }
 
-impl PropResState {
+impl State {
     pub fn new(clause_set: ClauseSet<Symbol>, visual_help: VisualHelp) -> Self {
         Self {
             clause_set,
@@ -42,7 +43,7 @@ impl PropResState {
     }
 }
 
-impl ProtectedState for PropResState {
+impl ProtectedState for State {
     fn compute_seal_info(&self) -> String {
         format!(
             "resolutionstate|{}|{}|{}|{}",
@@ -58,7 +59,7 @@ impl ProtectedState for PropResState {
 }
 
 #[derive(Debug, Clone)]
-pub enum PropResMove {
+pub enum Move {
     Resolve(usize, usize, Option<Symbol>),
     Hide(usize),
     Show,
@@ -67,7 +68,7 @@ pub enum PropResMove {
 }
 
 #[derive(Debug)]
-pub enum PropResErr {
+pub enum Err {
     Parse(ParseErr),
     InvalidClauseId(usize),
     NothingToFactorize,
@@ -81,60 +82,60 @@ pub enum PropResErr {
     ResultingMainNotPos(Clause<Symbol>),
 }
 
-impl From<ParseErr> for PropResErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
         Self::Parse(e)
     }
 }
 
-impl From<UtilErr<Symbol>> for PropResErr {
+impl From<UtilErr<Symbol>> for Err {
     fn from(e: UtilErr<Symbol>) -> Self {
         Self::UtilErr(e)
     }
 }
 
-impl fmt::Display for PropResErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PropResErr::Parse(e) => fmt::Display::fmt(e, f),
-            PropResErr::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
-            PropResErr::NothingToFactorize => write!(f, "Nothing to factorize"),
-            PropResErr::SameIds => write!(f, "Both ids refer to the same clause"),
-            PropResErr::UtilErr(e) => fmt::Display::fmt(e, f),
-            PropResErr::NoSuchAtomInMain(c, id) => write!(
+            Err::Parse(e) => fmt::Display::fmt(e, f),
+            Err::InvalidClauseId(c) => write!(f, "There is no clause with id {c}"),
+            Err::NothingToFactorize => write!(f, "Nothing to factorize"),
+            Err::SameIds => write!(f, "Both ids refer to the same clause"),
+            Err::UtilErr(e) => fmt::Display::fmt(e, f),
+            Err::NoSuchAtomInMain(c, id) => write!(
                 f,
                 "There is no atom with id {id} in (main premiss) clause '{c}'"
             ),
-            PropResErr::NoSuchAtomInSide(c, id) => write!(
+            Err::NoSuchAtomInSide(c, id) => write!(
                 f,
                 "There is no atom with id {id} in (side premiss) clause '{c}'"
             ),
-            PropResErr::EmptyHyperMap => {
+            Err::EmptyHyperMap => {
                 write!(f, "Please select side premisses for hyper resolution")
             }
-            PropResErr::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
-            PropResErr::MainAtomNotNeg(a) => {
+            Err::SidePremissNotPos(c) => write!(f, "Side premiss '{c}' is not positive"),
+            Err::MainAtomNotNeg(a) => {
                 write!(f, "Literal '{a}' in main premiss has to be negative")
             }
-            PropResErr::ResultingMainNotPos(c) => {
+            Err::ResultingMainNotPos(c) => {
                 write!(f, "Resulting clause '{c}' is not positive")
             }
         }
     }
 }
 
-pub type PropResResult<T> = Result<T, PropResErr>;
+pub type PropResResult<T> = Result<T, Err>;
 
 pub struct PropResolution;
 
 impl<'f> Calculus<'f> for PropResolution {
-    type Params = PropResParam;
+    type Params = Params;
 
-    type State = PropResState;
+    type State = State;
 
-    type Move = PropResMove;
+    type Move = Move;
 
-    type Error = PropResErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
@@ -142,16 +143,16 @@ impl<'f> Calculus<'f> for PropResolution {
     ) -> Result<Self::State, Self::Error> {
         let params = params.unwrap_or_default();
         let parsed = parse_prop_flexible(formula, params.cnf_strategy)?;
-        Ok(PropResState::new(parsed, params.visual_help))
+        Ok(State::new(parsed, params.visual_help))
     }
 
     fn apply_move(state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
         let mut state = match k_move.clone() {
-            PropResMove::Resolve(c1, c2, lit) => apply_resolve(state, c1, c2, lit)?,
-            PropResMove::Hide(c) => apply_hide(state, c)?,
-            PropResMove::Show => apply_show(state),
-            PropResMove::Hyper(main, map) => apply_hyper(state, main, map)?,
-            PropResMove::Factorize(c) => apply_factorize(state, c)?,
+            Move::Resolve(c1, c2, lit) => apply_resolve(state, c1, c2, lit)?,
+            Move::Hide(c) => apply_hide(state, c)?,
+            Move::Show => apply_show(state),
+            Move::Hyper(main, map) => apply_hyper(state, main, map)?,
+            Move::Factorize(c) => apply_factorize(state, c)?,
         };
         state.last_move = Some(k_move);
         Ok(state)
@@ -172,19 +173,19 @@ impl<'f> Calculus<'f> for PropResolution {
 }
 
 fn apply_resolve(
-    mut state: PropResState,
+    mut state: State,
     c1: usize,
     c2: usize,
     lit: Option<Symbol>,
-) -> PropResResult<PropResState> {
+) -> PropResResult<State> {
     if c1 == c2 {
-        return Err(PropResErr::SameIds);
+        return Err(Err::SameIds);
     }
     if c1 >= state.clause_set.size() {
-        return Err(PropResErr::InvalidClauseId(c1));
+        return Err(Err::InvalidClauseId(c1));
     }
     if c2 >= state.clause_set.size() {
-        return Err(PropResErr::InvalidClauseId(c2));
+        return Err(Err::InvalidClauseId(c2));
     }
 
     let newest_node = c2;
@@ -205,9 +206,9 @@ fn apply_resolve(
     Ok(state)
 }
 
-fn apply_hide(mut state: PropResState, c: usize) -> PropResResult<PropResState> {
+fn apply_hide(mut state: State, c: usize) -> PropResResult<State> {
     if c >= state.clause_set.size() {
-        return Err(PropResErr::InvalidClauseId(c));
+        return Err(Err::InvalidClauseId(c));
     }
 
     // Move clause from main clause set to hidden clause set
@@ -218,7 +219,7 @@ fn apply_hide(mut state: PropResState, c: usize) -> PropResResult<PropResState> 
     Ok(state)
 }
 
-fn apply_show(mut state: PropResState) -> PropResState {
+fn apply_show(mut state: State) -> State {
     state.clause_set.unite(&state.hidden_clauses);
     state.hidden_clauses.clear();
     state.newest_node = None;
@@ -227,14 +228,14 @@ fn apply_show(mut state: PropResState) -> PropResState {
 }
 
 fn apply_hyper(
-    mut state: PropResState,
+    mut state: State,
     main: usize,
     atom_map: HashMap<usize, (usize, usize)>,
-) -> PropResResult<PropResState> {
+) -> PropResResult<State> {
     check_hyper(&state, main, &atom_map)?;
 
     if atom_map.is_empty() {
-        return Err(PropResErr::EmptyHyperMap);
+        return Err(Err::EmptyHyperMap);
     }
 
     let mut main_premiss = state.clause_set.clauses()[main].clone();
@@ -244,12 +245,12 @@ fn apply_hyper(
 
         // Check side premise for positiveness
         if !side.is_positive() {
-            return Err(PropResErr::SidePremissNotPos(side.clone()));
+            return Err(Err::SidePremissNotPos(side.clone()));
         }
 
         let ma = state.clause_set.clauses()[main].atoms()[ma_id].clone();
         if !ma.negated() {
-            return Err(PropResErr::MainAtomNotNeg(ma));
+            return Err(Err::MainAtomNotNeg(ma));
         }
         let sa = state.clause_set.clauses()[sc_id].atoms()[sa_id].clone();
 
@@ -257,7 +258,7 @@ fn apply_hyper(
     }
 
     if !main_premiss.is_positive() {
-        return Err(PropResErr::ResultingMainNotPos(main_premiss));
+        return Err(Err::ResultingMainNotPos(main_premiss));
     }
 
     state.clause_set.add(main_premiss);
@@ -266,21 +267,25 @@ fn apply_hyper(
     Ok(state)
 }
 
-fn apply_factorize(mut state: PropResState, c: usize) -> PropResResult<PropResState> {
+fn apply_factorize(mut state: State, c: usize) -> PropResResult<State> {
     let mut cs = state.clause_set;
 
     if c >= cs.size() {
-        return Err(PropResErr::InvalidClauseId(c));
+        return Err(Err::InvalidClauseId(c));
     }
 
     let old_c = &cs.clauses()[c];
-    let mut atoms = old_c.clone().take_atoms();
-    atoms.dedup();
+    let mut atoms = vec![];
+    for a in old_c {
+        if !atoms.contains(a) {
+            atoms.push(a.clone());
+        }
+    }
 
     let new_c = Clause::new(atoms);
 
     if new_c.size() == old_c.size() {
-        return Err(PropResErr::NothingToFactorize);
+        return Err(Err::NothingToFactorize);
     }
 
     cs.remove(c);
@@ -291,12 +296,12 @@ fn apply_factorize(mut state: PropResState, c: usize) -> PropResResult<PropResSt
 }
 
 fn check_hyper(
-    state: &PropResState,
+    state: &State,
     c_id: usize,
     atom_map: &HashMap<usize, (usize, usize)>,
 ) -> PropResResult<()> {
     if c_id >= state.clause_set.size() {
-        return Err(PropResErr::InvalidClauseId(c_id));
+        return Err(Err::InvalidClauseId(c_id));
     }
 
     let main = state.clause_set.clauses()[c_id].atoms();
@@ -304,17 +309,17 @@ fn check_hyper(
     // Check that (mainAtomID -> (sideClauseID, atomID)) map elements are correct
     for (m_id, (sc_id, sa_id)) in atom_map {
         if *m_id >= main.len() {
-            return Err(PropResErr::NoSuchAtomInMain(
+            return Err(Err::NoSuchAtomInMain(
                 state.clause_set.clauses()[*m_id].clone(),
                 *m_id,
             ));
         }
         if *sc_id >= state.clause_set.size() {
-            return Err(PropResErr::InvalidClauseId(c_id));
+            return Err(Err::InvalidClauseId(c_id));
         }
         let c = state.clause_set.clauses()[*sc_id].atoms();
         if *sa_id >= c.len() {
-            return Err(PropResErr::NoSuchAtomInSide(
+            return Err(Err::NoSuchAtomInSide(
                 state.clause_set.clauses()[*sa_id].clone(),
                 *sa_id,
             ));
@@ -324,7 +329,7 @@ fn check_hyper(
     Ok(())
 }
 
-impl Serialize for PropResState {
+impl Serialize for State {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -346,7 +351,7 @@ impl Serialize for PropResState {
     }
 }
 
-impl<'de> Deserialize<'de> for PropResState {
+impl<'de> Deserialize<'de> for State {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -370,13 +375,13 @@ impl<'de> Deserialize<'de> for PropResState {
         struct StateVisitor;
 
         impl<'de> Visitor<'de> for StateVisitor {
-            type Value = PropResState;
+            type Value = State;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct PropResState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<PropResState, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -384,7 +389,7 @@ impl<'de> Deserialize<'de> for PropResState {
                 let mut visual_help: Option<VisualHelp> = None;
                 let mut newest_node: Option<i32> = None;
                 let mut hidden_clauses: Option<ClauseSet<Symbol>> = None;
-                let mut last_move: Option<PropResMove> = None;
+                let mut last_move: Option<Move> = None;
                 let mut seal: Option<String> = None;
 
                 while let Some(key) = map.next_key()? {
@@ -447,7 +452,7 @@ impl<'de> Deserialize<'de> for PropResState {
                     hidden_clauses.ok_or_else(|| de::Error::missing_field("hiddenClauses"))?;
                 let seal = seal.ok_or_else(|| de::Error::missing_field("seal"))?;
 
-                let s = PropResState {
+                let s = State {
                     clause_set,
                     visual_help,
                     newest_node,
@@ -478,35 +483,35 @@ impl<'de> Deserialize<'de> for PropResState {
     }
 }
 
-impl Serialize for PropResMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let (ty, num_fields) = match self {
-            PropResMove::Resolve(..) => ("res-resolve", 4),
-            PropResMove::Hide(_) => ("res-hide", 2),
-            PropResMove::Show => ("res-show", 1),
-            PropResMove::Hyper(..) => ("res-hyper", 3),
-            PropResMove::Factorize(_) => ("res-factorize", 2),
+            Move::Resolve(..) => ("res-resolve", 4),
+            Move::Hide(_) => ("res-hide", 2),
+            Move::Show => ("res-show", 1),
+            Move::Hyper(..) => ("res-hyper", 3),
+            Move::Factorize(_) => ("res-factorize", 2),
         };
         let mut state = serializer.serialize_struct("PropResMove", num_fields)?;
         state.serialize_field("type", ty)?;
         match self {
-            PropResMove::Resolve(c1, c2, literal) => {
+            Move::Resolve(c1, c2, literal) => {
                 state.serialize_field("c1", c1)?;
                 state.serialize_field("c2", c2)?;
                 state.serialize_field("literal", literal)?;
             }
-            PropResMove::Hide(c1) => {
+            Move::Hide(c1) => {
                 state.serialize_field("c1", c1)?;
             }
-            PropResMove::Show => {}
-            PropResMove::Hyper(main_id, atom_map) => {
+            Move::Show => {}
+            Move::Hyper(main_id, atom_map) => {
                 state.serialize_field("mainID", main_id)?;
                 state.serialize_field("atomMap", atom_map)?;
             }
-            PropResMove::Factorize(c1) => {
+            Move::Factorize(c1) => {
                 state.serialize_field("c1", c1)?;
                 let empty: Vec<usize> = Vec::new();
                 state.serialize_field("atoms", &empty)?;
@@ -516,7 +521,7 @@ impl Serialize for PropResMove {
     }
 }
 
-impl<'de> Deserialize<'de> for PropResMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -542,13 +547,13 @@ impl<'de> Deserialize<'de> for PropResMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = PropResMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct PropResMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<PropResMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -610,21 +615,19 @@ impl<'de> Deserialize<'de> for PropResMove {
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 let ty: &str = &ty;
                 Ok(match ty {
-                    "res-resolve" => PropResMove::Resolve(
+                    "res-resolve" => Move::Resolve(
                         c1.ok_or_else(|| de::Error::missing_field("c1"))?,
                         c2.ok_or_else(|| de::Error::missing_field("c2"))?,
                         lit.map(|s| Symbol::intern(&s)),
                     ),
-                    "res-hide" => {
-                        PropResMove::Hide(c1.ok_or_else(|| de::Error::missing_field("c1"))?)
-                    }
-                    "res-show" => PropResMove::Show,
-                    "res-hyper" => PropResMove::Hyper(
+                    "res-hide" => Move::Hide(c1.ok_or_else(|| de::Error::missing_field("c1"))?),
+                    "res-show" => Move::Show,
+                    "res-hyper" => Move::Hyper(
                         main_id.ok_or_else(|| de::Error::missing_field("mainID"))?,
                         atom_map.ok_or_else(|| de::Error::missing_field("atomMap"))?,
                     ),
                     "res-factorize" => {
-                        PropResMove::Factorize(c1.ok_or_else(|| de::Error::missing_field("c1"))?)
+                        Move::Factorize(c1.ok_or_else(|| de::Error::missing_field("c1"))?)
                     }
                     _ => todo!(),
                 })
@@ -633,5 +636,112 @@ impl<'de> Deserialize<'de> for PropResMove {
 
         const FIELDS: &[&str] = &["type", "c1", "c2", "literal", "mainID", "atomMap", "atoms"];
         deserializer.deserialize_struct("PropResMove", FIELDS, MoveVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    mod check_close {
+        use super::*;
+
+        #[test]
+        fn simple() {
+            session(|| {
+                let s = PropResolution::parse_formula("a;!a", None).unwrap();
+                assert!(!PropResolution::check_close(s.clone()).closed);
+
+                let s = PropResolution::apply_move(s, Move::Resolve(0, 1, None)).unwrap();
+                assert!(PropResolution::check_close(s).closed);
+            })
+        }
+
+        #[test]
+        fn simple2() {
+            session(|| {
+                let s = PropResolution::parse_formula("a,b;!a;!b", None).unwrap();
+                assert!(!PropResolution::check_close(s.clone()).closed);
+
+                let s = PropResolution::apply_move(s, Move::Resolve(0, 1, None)).unwrap();
+                let s =
+                    PropResolution::apply_move(s, Move::Resolve(3, 1, Some("b".into()))).unwrap();
+                assert!(PropResolution::check_close(s).closed);
+            })
+        }
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s =
+                    PropResolution::parse_formula("a,b,!c,d;!a,b,d;!b,!c,d;!d;c", None).unwrap();
+                assert!(!PropResolution::check_close(s.clone()).closed);
+
+                let s = PropResolution::apply_move(s, Move::Resolve(0, 1, None)).unwrap();
+                let s =
+                    PropResolution::apply_move(s, Move::Resolve(1, 3, Some("b".into()))).unwrap();
+                let s =
+                    PropResolution::apply_move(s, Move::Resolve(3, 5, Some("d".into()))).unwrap();
+                assert!(!PropResolution::check_close(s.clone()).closed);
+
+                let s =
+                    PropResolution::apply_move(s, Move::Resolve(5, 7, Some("c".into()))).unwrap();
+                assert!(PropResolution::check_close(s).closed);
+            })
+        }
+
+        #[test]
+        fn negative() {
+            session(|| {
+                let s = PropResolution::parse_formula("a,b,c;!a;!b", None).unwrap();
+                assert!(!PropResolution::check_close(s.clone()).closed);
+
+                let s = PropResolution::apply_move(s, Move::Resolve(0, 1, None)).unwrap();
+                let s =
+                    PropResolution::apply_move(s, Move::Resolve(3, 1, Some("b".into()))).unwrap();
+                assert!(!PropResolution::check_close(s).closed);
+            })
+        }
+    }
+
+    mod factorize {
+        use super::*;
+
+        #[test]
+        fn invalid_clause() {
+            session(|| {
+                let s = PropResolution::parse_formula("a;!a", None).unwrap();
+                assert!(PropResolution::apply_move(s, Move::Factorize(2)).is_err());
+            })
+        }
+
+        #[test]
+        fn nothing_to_fact() {
+            session(|| {
+                let s = PropResolution::parse_formula("a;a,b,c", None).unwrap();
+                assert!(PropResolution::apply_move(s.clone(), Move::Factorize(0)).is_err());
+                assert!(PropResolution::apply_move(s, Move::Factorize(1)).is_err());
+            })
+        }
+
+        #[test]
+        fn prop_f() {
+            session(|| {
+                let s = PropResolution::parse_formula("a;a,b,c,a,b,c", None).unwrap();
+                let s = PropResolution::apply_move(s, Move::Factorize(1)).unwrap();
+                assert_eq!(2, s.clause_set.size());
+                assert_eq!("{a, b, c}", s.clause_set.clauses()[1].to_string())
+            })
+        }
+
+        #[test]
+        fn clause_positioning() {
+            session(|| {
+                let s = PropResolution::parse_formula("a;b,b;c;d;e", None).unwrap();
+                let s = PropResolution::apply_move(s, Move::Factorize(1)).unwrap();
+                assert_eq!("{b}", s.clause_set.clauses()[1].to_string())
+            })
+        }
     }
 }

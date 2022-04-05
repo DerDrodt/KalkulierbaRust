@@ -16,7 +16,7 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
 
     session(|| {
         let ParseForm { formula, params } = form.0;
-        let params: Option<prop::PropResParam> = match params {
+        let params: Option<prop::Params> = match params {
             Some(p) => Some(serde_json::from_str(&p)?),
             None => None,
         };
@@ -34,7 +34,7 @@ pub(crate) async fn prop_validate(form: web::Form<StateForm>) -> Result<HttpResp
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropResState = serde_json::from_str(&state)?;
+        let state: prop::State = serde_json::from_str(&state)?;
         let res = prop::PropResolution::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -47,8 +47,8 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: prop::PropResState = serde_json::from_str(&state)?;
-        let r#move: prop::PropResMove = serde_json::from_str(&r#move)?;
+        let state: prop::State = serde_json::from_str(&state)?;
+        let r#move: prop::Move = serde_json::from_str(&r#move)?;
 
         let state = prop::PropResolution::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -63,7 +63,7 @@ pub(crate) async fn prop_close(form: web::Form<StateForm>) -> Result<HttpRespons
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropResState = serde_json::from_str(&state)?;
+        let state: prop::State = serde_json::from_str(&state)?;
 
         let res = prop::PropResolution::check_close(state);
 
@@ -84,7 +84,7 @@ pub(crate) async fn fo_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
 
     session(|| {
         let ParseForm { formula, params } = form.0;
-        let params: Option<fo::FOResParam> = match params {
+        let params: Option<fo::Params> = match params {
             Some(p) => Some(serde_json::from_str(&p)?),
             None => None,
         };
@@ -102,7 +102,7 @@ pub(crate) async fn fo_validate(form: web::Form<StateForm>) -> Result<HttpRespon
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: fo::FOResState = serde_json::from_str(&state)?;
+        let state: fo::State = serde_json::from_str(&state)?;
         let res = fo::FOResolution::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -115,8 +115,8 @@ pub(crate) async fn fo_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: fo::FOResState = serde_json::from_str(&state)?;
-        let r#move: fo::FOResMove = serde_json::from_str(&r#move)?;
+        let state: fo::State = serde_json::from_str(&state)?;
+        let r#move: fo::Move = serde_json::from_str(&r#move)?;
 
         let state = fo::FOResolution::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -131,7 +131,7 @@ pub(crate) async fn fo_close(form: web::Form<StateForm>) -> Result<HttpResponse>
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: fo::FOResState = serde_json::from_str(&state)?;
+        let state: fo::State = serde_json::from_str(&state)?;
 
         let res = fo::FOResolution::check_close(state);
 
