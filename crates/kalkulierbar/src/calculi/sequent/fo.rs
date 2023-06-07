@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
+use std::{collections::HashSet, fmt};
 
 use serde::{
     de::{self, MapAccess, Visitor},
@@ -11,13 +8,8 @@ use serde::{
 
 use crate::{
     calculus::CloseMsg,
-    logic::{
-        fo::FOTerm,
-        transform::collectors::collect_symbols,
-        unify::{try_to_parse_unifier, Substitution},
-        LogicNode,
-    },
-    parse::sequent,
+    logic::{fo::FOTerm, transform::collectors::collect_symbols, unify::Substitution, LogicNode},
+    parse::{fo::parse_fo_term, sequent},
     Calculus, Symbol,
 };
 
@@ -38,10 +30,10 @@ pub enum FOSeqMove {
     OrR(usize, usize),
     ImplL(usize, usize),
     ImplR(usize, usize),
-    AllL(usize, usize, Substitution),
-    AllR(usize, usize, Substitution),
-    ExL(usize, usize, Substitution),
-    ExR(usize, usize, Substitution),
+    AllL(usize, usize, FOTerm),
+    AllR(usize, usize, Option<FOTerm>),
+    ExL(usize, usize, Option<FOTerm>),
+    ExR(usize, usize, FOTerm),
     Undo,
     Prune(usize),
 }
@@ -145,19 +137,14 @@ fn apply_all_l(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Substitution,
+    replace_with: FOTerm,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_left(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
     let formula = &node.left_formulas[f_id];
     if let LogicNode::All(var, c) = formula {
-        // Yes, this handling is weird, but I am mirroring the behavior of the Kotlin implementation, which is also weird
-        let replace_with = if let Some(t) = u.remove(var) {
-            t
-        } else {
-            todo!()
-        };
-        let nu = Substitution::from_value(*var, replace_with);
+        // TODO: signature check
+        let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = c.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -171,7 +158,7 @@ fn apply_all_l(
                 Some(node_id),
                 new_l,
                 new_r,
-                Some(FOSeqMove::AllL(node_id, f_id, u)),
+                Some(FOSeqMove::AllL(node_id, f_id, replace_with)),
             ),
         );
 
@@ -188,19 +175,14 @@ fn apply_all_r(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Substitution,
+    replace_with: Option<FOTerm>,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_right(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
     let formula = &node.right_formulas[f_id];
     if let LogicNode::All(var, child) = formula {
-        // Yes, this handling is weird, but I am mirroring the behavior of the Kotlin implementation, which is also weird
-        let replace_with = if let Some(t) = u.remove(var) {
-            t
-        } else {
-            todo!()
-        };
         // Check if swapVariable is a constant and not already in use in the current sequence
+        let replace_with = replace_with.unwrap_or_else(|| get_fresh_constant(node, *var));
         let c = if let FOTerm::Const(c) = &replace_with {
             *c
         } else {
@@ -217,7 +199,7 @@ fn apply_all_r(
         {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
-        let nu = Substitution::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = child.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -232,7 +214,7 @@ fn apply_all_r(
                 Some(node_id),
                 new_l,
                 new_r,
-                Some(FOSeqMove::ExR(node_id, f_id, u)),
+                Some(FOSeqMove::ExR(node_id, f_id, replace_with)),
             ),
         );
 
@@ -249,18 +231,13 @@ fn apply_ex_l(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Substitution,
+    replace_with: Option<FOTerm>,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_left(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
     let formula = &node.left_formulas[f_id];
     if let LogicNode::Ex(var, child) = formula {
-        // Yes, this handling is weird, but I am mirroring the behavior of the Kotlin implementation, which is also weird
-        let replace_with = if let Some(t) = u.remove(var) {
-            t
-        } else {
-            todo!()
-        };
+        let replace_with = replace_with.unwrap_or_else(|| get_fresh_constant(node, *var));
         // Check if swapVariable is a constant and not already in use in the current sequence
         let c = if let FOTerm::Const(c) = &replace_with {
             *c
@@ -278,7 +255,7 @@ fn apply_ex_l(
         {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
-        let nu = Substitution::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = child.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -293,7 +270,7 @@ fn apply_ex_l(
                 Some(node_id),
                 new_l,
                 new_r,
-                Some(FOSeqMove::ExR(node_id, f_id, u)),
+                Some(FOSeqMove::ExR(node_id, f_id, replace_with)),
             ),
         );
 
@@ -310,19 +287,14 @@ fn apply_ex_r(
     mut state: SequentState<FOSeqMove>,
     node_id: usize,
     f_id: usize,
-    mut u: Substitution,
+    replace_with: FOTerm,
 ) -> SequentResult<SequentState<FOSeqMove>> {
     check_right(&state, node_id, f_id)?;
     let node = &state.nodes[node_id];
     let formula = &node.right_formulas[f_id];
     if let LogicNode::Ex(var, c) = formula {
         // Yes, this handling is weird, but I am mirroring the behavior of the Kotlin implementation, which is also weird
-        let replace_with = if let Some(t) = u.remove(var) {
-            t
-        } else {
-            todo!()
-        };
-        let nu = Substitution::from_value(*var, replace_with);
+        let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = c.instantiate(&nu);
 
         // Add newFormula to the left hand side of the sequence
@@ -336,7 +308,7 @@ fn apply_ex_r(
                 Some(node_id),
                 new_l,
                 new_r,
-                Some(FOSeqMove::ExR(node_id, f_id, u)),
+                Some(FOSeqMove::ExR(node_id, f_id, replace_with)),
             ),
         );
 
@@ -349,12 +321,16 @@ fn apply_ex_r(
     }
 }
 
+fn get_fresh_constant(node: &SequentNode<FOSeqMove>, var_name: Symbol) -> FOTerm {
+    todo!()
+}
+
 impl Serialize for FOSeqMove {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let (ty, len, node_id, f_id, u) = match self {
+        let (ty, len, node_id, f_id, r_w) = match self {
             FOSeqMove::Ax(n) => ("Ax", 2, n, &0, None),
             FOSeqMove::NotL(n, f) => ("notLeft", 3, n, f, None),
             FOSeqMove::NotR(n, f) => ("notRight", 3, n, f, None),
@@ -366,10 +342,12 @@ impl Serialize for FOSeqMove {
             FOSeqMove::ImplR(n, f) => ("impRight", 3, n, f, None),
             FOSeqMove::Undo => ("undo", 1, &0, &0, None),
             FOSeqMove::Prune(n) => ("prune", 2, n, &0, None),
-            FOSeqMove::AllL(n, f, u) => ("allLeft", 4, n, f, Some(u)),
-            FOSeqMove::AllR(n, f, u) => ("allRight", 4, n, f, Some(u)),
-            FOSeqMove::ExL(n, f, u) => ("exLeft", 4, n, f, Some(u)),
-            FOSeqMove::ExR(n, f, u) => ("exRight", 4, n, f, Some(u)),
+            FOSeqMove::AllL(n, f, rw) => ("allLeft", 4, n, f, Some(rw)),
+            FOSeqMove::AllR(n, f, Some(rw)) => ("allRight", 4, n, f, Some(rw)),
+            FOSeqMove::AllR(n, f, None) => ("allRight", 4, n, f, None),
+            FOSeqMove::ExL(n, f, Some(rw)) => ("exLeft", 4, n, f, Some(rw)),
+            FOSeqMove::ExL(n, f, None) => ("exLeft", 4, n, f, None),
+            FOSeqMove::ExR(n, f, rw) => ("exRight", 4, n, f, Some(rw)),
         };
         let mut state = serializer.serialize_struct("PropSeqMove", len)?;
         state.serialize_field("type", ty)?;
@@ -379,8 +357,8 @@ impl Serialize for FOSeqMove {
         if len > 2 {
             state.serialize_field("listIndex", f_id)?;
         }
-        if let Some(u) = u {
-            state.serialize_field("varAssign", u)?;
+        if let Some(u) = r_w {
+            state.serialize_field("instTerm", &u)?;
         }
         state.end()
     }
@@ -399,8 +377,8 @@ impl<'de> Deserialize<'de> for FOSeqMove {
             NodeId,
             #[serde(rename = "listIndex")]
             FormulaId,
-            #[serde(rename = "varAssign")]
-            VarAssign,
+            #[serde(rename = "instTerm")]
+            InstTerm,
         }
 
         struct MoveVisitor;
@@ -419,7 +397,7 @@ impl<'de> Deserialize<'de> for FOSeqMove {
                 let mut ty: Option<String> = None;
                 let mut node_id: Option<usize> = None;
                 let mut f_id: Option<usize> = None;
-                let mut var_assign: Option<HashMap<Symbol, String>> = None;
+                let mut inst_term: Option<String> = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -441,19 +419,19 @@ impl<'de> Deserialize<'de> for FOSeqMove {
                             }
                             f_id = Some(map.next_value()?);
                         }
-                        Field::VarAssign => {
-                            if var_assign.is_some() {
-                                return Err(de::Error::duplicate_field("varAssign"));
+                        Field::InstTerm => {
+                            if inst_term.is_some() {
+                                return Err(de::Error::duplicate_field("instTerm"));
                             }
-                            var_assign = Some(map.next_value()?);
+                            inst_term = Some(map.next_value()?);
                         }
                     }
                 }
 
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 let ty: &str = &ty;
-                let u = if let Some(h) = var_assign {
-                    match try_to_parse_unifier(h) {
+                let inst_term = if let Some(t) = inst_term {
+                    match parse_fo_term(&t) {
                         Ok(u) => Some(u),
                         Err(e) => return Err(de::Error::custom(e.to_string())),
                     }
@@ -499,22 +477,22 @@ impl<'de> Deserialize<'de> for FOSeqMove {
                     "allLeft" => FOSeqMove::AllL(
                         node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
                         f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                        u.ok_or_else(|| de::Error::missing_field("varAssign"))?,
+                        inst_term.ok_or_else(|| de::Error::missing_field("instTerm"))?,
                     ),
                     "allRight" => FOSeqMove::AllR(
                         node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
                         f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                        u.ok_or_else(|| de::Error::missing_field("varAssign"))?,
+                        inst_term,
                     ),
                     "exLeft" => FOSeqMove::ExL(
                         node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
                         f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                        u.ok_or_else(|| de::Error::missing_field("varAssign"))?,
+                        inst_term,
                     ),
                     "exRight" => FOSeqMove::ExR(
                         node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
                         f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                        u.ok_or_else(|| de::Error::missing_field("varAssign"))?,
+                        inst_term.ok_or_else(|| de::Error::missing_field("instTerm"))?,
                     ),
                     "undo" => FOSeqMove::Undo,
                     "prune" => {
@@ -525,7 +503,7 @@ impl<'de> Deserialize<'de> for FOSeqMove {
             }
         }
 
-        const FIELDS: &[&str] = &["type", "nodeID", "listIndex", "varAssign"];
+        const FIELDS: &[&str] = &["type", "nodeID", "listIndex", "instTerm"];
         deserializer.deserialize_struct("FOSeqMove", FIELDS, MoveVisitor)
     }
 }
@@ -540,15 +518,15 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Substitution {
-            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn inst_term() -> FOTerm {
+            FOTerm::Const("a".into())
         }
 
         #[test]
         fn basic() {
             session(|| {
                 let s = FOSequent::parse_formula("\\all X: R(X) |-", None).unwrap();
-                let s = FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, u())).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, inst_term())).unwrap();
 
                 assert_eq!(2, s.nodes.len());
                 assert!(s.nodes[0].parent.is_none());
@@ -565,11 +543,43 @@ mod tests {
             })
         }
 
+        // See https://github.com/KalkulierbaR/kalkulierbar/issues/104
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = FOSequent::parse_formula("|- \\all X: P(X) -> P(f(a))", None).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::ImplR(0, 0)).unwrap();
+                let s = FOSequent::apply_move(
+                    s,
+                    FOSeqMove::AllL(
+                        1,
+                        0,
+                        FOTerm::Function("f".into(), vec![FOTerm::Const("a".into())]),
+                    ),
+                )
+                .unwrap();
+
+                assert_eq!(3, s.nodes.len());
+                assert_eq!(1, s.nodes[1].children.len());
+                assert_eq!(2, s.nodes[1].children[0]);
+                assert_eq!(1, s.nodes[2].parent.unwrap());
+
+                assert_eq!(2, s.nodes[2].left_formulas.len());
+                assert!(
+                    s.nodes[2].left_formulas[0].syn_eq(&parse_fo_formula(r"\all X: P(X)").unwrap())
+                );
+                assert!(s.nodes[2].left_formulas[1].syn_eq(&parse_fo_formula("P(f(a))").unwrap()));
+
+                assert_eq!(1, s.nodes[2].right_formulas.len());
+                assert!(s.nodes[2].right_formulas[0].syn_eq(&parse_fo_formula("P(f(a))").unwrap()));
+            })
+        }
+
         #[test]
         fn wrong_node() {
             session(|| {
                 let s = FOSequent::parse_formula("\\ex X: R(X) |-", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllL(0, 0, inst_term())).is_err());
             })
         }
     }
@@ -579,15 +589,15 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Substitution {
-            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn inst_term() -> Option<FOTerm> {
+            Some(FOTerm::Const("a".into()))
         }
 
         #[test]
         fn basic() {
             session(|| {
                 let s = FOSequent::parse_formula("\\all X: R(X)", None).unwrap();
-                let s = FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, inst_term())).unwrap();
 
                 assert_eq!(2, s.nodes.len());
                 assert!(s.nodes[0].parent.is_none());
@@ -606,7 +616,7 @@ mod tests {
         fn wrong_inst() {
             session(|| {
                 let s = FOSequent::parse_formula("\\all X: R(X), P(a)", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, inst_term())).is_err());
             })
         }
 
@@ -614,7 +624,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = FOSequent::parse_formula("\\ex X: R(X)", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::AllR(0, 0, inst_term())).is_err());
             })
         }
     }
@@ -748,15 +758,15 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Substitution {
-            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn inst_term() -> Option<FOTerm> {
+            Some(FOTerm::Const("a".into()))
         }
 
         #[test]
         fn basic() {
             session(|| {
                 let s = FOSequent::parse_formula("\\ex X: R(X) |-", None).unwrap();
-                let s = FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, inst_term())).unwrap();
 
                 assert_eq!(2, s.nodes.len());
                 assert!(s.nodes[0].parent.is_none());
@@ -775,7 +785,7 @@ mod tests {
         fn wrong_inst() {
             session(|| {
                 let s = FOSequent::parse_formula("\\ex X: R(X), P(a)", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, inst_term())).is_err());
             })
         }
 
@@ -783,7 +793,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = FOSequent::parse_formula("\\all X: R(X) |-", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExL(0, 0, inst_term())).is_err());
             })
         }
     }
@@ -793,15 +803,15 @@ mod tests {
 
         use super::*;
 
-        fn u() -> Substitution {
-            Substitution::from_value(Symbol::intern("X"), FOTerm::Const("a".into()))
+        fn inst_term() -> FOTerm {
+            FOTerm::Const("a".into())
         }
 
         #[test]
         fn basic() {
             session(|| {
                 let s = FOSequent::parse_formula("\\ex X: R(X)", None).unwrap();
-                let s = FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, u())).unwrap();
+                let s = FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, inst_term())).unwrap();
 
                 assert_eq!(2, s.nodes.len());
                 assert!(s.nodes[0].parent.is_none());
@@ -822,7 +832,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = FOSequent::parse_formula("\\all X: R(X)", None).unwrap();
-                assert!(FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, u())).is_err());
+                assert!(FOSequent::apply_move(s, FOSeqMove::ExR(0, 0, inst_term())).is_err());
             })
         }
     }
