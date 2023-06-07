@@ -16,6 +16,7 @@ use crate::{
         fo::Relation,
         transform::{
             fo_cnf::FOCNFErr,
+            signature::{SigAdherenceErr, Signature},
             term_manipulator::{VariableSuffixAppend, VariableSuffixStripper},
             visitor::FOTermVisitor,
         },
@@ -58,6 +59,7 @@ pub enum Err {
     MainAtomNotNeg(Atom<Relation>),
     ResultingMainNotPos(Clause<Relation>),
     CannotUnifyWithSelf,
+    SigAdherenceErr(SigAdherenceErr),
 }
 
 impl From<ParseErr> for Err {
@@ -90,6 +92,12 @@ impl From<UnificationErr> for Err {
 impl From<UtilErr<Relation>> for Err {
     fn from(e: UtilErr<Relation>) -> Self {
         Self::UtilErr(e)
+    }
+}
+
+impl From<SigAdherenceErr> for Err {
+    fn from(value: SigAdherenceErr) -> Self {
+        Self::SigAdherenceErr(value)
     }
 }
 
@@ -128,6 +136,7 @@ impl fmt::Display for Err {
                 write!(f, "Resulting clause '{c}' is not positive")
             }
             Err::CannotUnifyWithSelf => write!(f, "Cannot unify an atom with itself"),
+            Err::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -304,6 +313,11 @@ fn apply_resolve_custom(
     let cl2 = &state.clause_set.clauses()[c2];
     let lit1 = cl1.atoms()[l1].lit();
     let lit2 = cl2.atoms()[l2].lit();
+
+    let sig = Signature::of_clause_set(&state.clause_set);
+    for t in u.values() {
+        sig.check(t)?;
+    }
 
     if !is_mgu_or_not_unifiable(&u, lit1, lit2) {
         state.status_msg = Some("The unifier you specified is not an MGU".to_string());
@@ -972,9 +986,9 @@ mod tests {
                 let s = FOResolution::parse_formula("\\all X: (R(X) | R(f(X)))", None).unwrap();
                 assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1])).is_err());
 
-                let s =
-                    FOResolution::parse_formula("\\all X: \\all Y: (R(X,X) | R(Y))", None).unwrap();
-                assert!(FOResolution::apply_move(s, Move::Factorize(0, vec![0, 1])).is_err());
+                assert!(
+                    FOResolution::parse_formula("\\all X: \\all Y: (R(X,X) | R(Y))", None).is_err()
+                );
             })
         }
 

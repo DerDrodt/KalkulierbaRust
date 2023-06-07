@@ -233,7 +233,7 @@ mod tests {
     fn eq_terms() {
         session(|| {
             for (a, b) in &[
-                ("f(g(f(q)), c)", "f(g(f(q)), c)"),
+                ("f(g(f(q, a)), c)", "f(g(f(q, a)), c)"),
                 ("a", "a"),
                 ("f(X)", "f(X)"),
             ] {
@@ -247,7 +247,7 @@ mod tests {
     fn neq_terms() {
         session(|| {
             for (a, b) in &[
-                ("f(g(f(q)), c)", "f(g(f(q)), d)"),
+                ("f(g(f(q, a)), c)", "f(g(f(q, a)), d)"),
                 ("a", "d"),
                 ("f(X)", "f(X, X)"),
                 ("f(g(f(c)))", "f(g(f(g(c))))"),

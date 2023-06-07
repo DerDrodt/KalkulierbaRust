@@ -7,7 +7,7 @@ use serde::{
 };
 
 use crate::{
-    logic::{fo::FOTerm, LogicNode},
+    logic::{fo::FOTerm, transform::signature::SigAdherenceErr, LogicNode},
     parse::ParseErr,
     tamper_protect::ProtectedState,
     Symbol, SynEq,
@@ -34,6 +34,7 @@ pub enum SequentErr {
     NothingToUndo,
     ExpectedConst(FOTerm),
     SymbolAlreadyUsed(Symbol),
+    SigAdherenceErr(SigAdherenceErr),
 }
 
 impl From<ParseErr> for SequentErr {
@@ -42,10 +43,17 @@ impl From<ParseErr> for SequentErr {
     }
 }
 
+impl From<SigAdherenceErr> for SequentErr {
+    fn from(value: SigAdherenceErr) -> Self {
+        Self::SigAdherenceErr(value)
+    }
+}
+
 impl fmt::Display for SequentErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SequentErr::ParseErr(e) => fmt::Display::fmt(e, f),
+            SequentErr::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
             SequentErr::InvalidNodeId(n) => write!(f, "Node with ID {n} does not exist"),
             SequentErr::ExpectedLeaf => write!(f, "Rules can only be applied on leaf level"),
             SequentErr::AxNotApplicable => write!(
@@ -665,12 +673,6 @@ where
         }
 
         const FIELDS: &[&str] = &["tree", "showOnlyApplicableRules", "seal"];
-        deserializer.deserialize_struct(
-            "SequentState",
-            FIELDS,
-            StateVisitor {
-                _p: PhantomData,
-            },
-        )
+        deserializer.deserialize_struct("SequentState", FIELDS, StateVisitor { _p: PhantomData })
     }
 }

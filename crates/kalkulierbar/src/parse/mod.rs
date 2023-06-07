@@ -107,6 +107,10 @@ pub enum ParseErr {
     EmptyToken,
     EmptyFormula,
     EmptyFormulaAt(usize),
+    BoundAndRel(Symbol),
+    IncorrectRelArity(Symbol, usize, usize),
+    ConstAndFn(Symbol),
+    IncorrectFnArity(Symbol, usize, usize),
 }
 
 impl fmt::Display for ParseErr {
@@ -130,6 +134,10 @@ impl fmt::Display for ParseErr {
             ParseErr::UnboundVar(v) => write!(f, "Unbound var {}",v),
             ParseErr::EmptyFormula => write!(f, "Expected a formula but got an empty String"),
             ParseErr::EmptyFormulaAt(pos) => write!(f, "Empty formula at char {pos}"),
+            ParseErr::BoundAndRel(name) => write!(f, "Identifier '{name}' is used both as a relation and bound variable"),
+            ParseErr::IncorrectRelArity(name, expected, actual) => write!(f, "Relation {name} should have arity {expected} but has {actual}"),
+            ParseErr::ConstAndFn(name) => write!(f, "Identifier '{name}' is used both as a function and constant"),
+            ParseErr::IncorrectFnArity(name, expected, actual) =>  write!(f, "Function {name} should have arity {expected} but has {actual}"),
         }
     }
 }

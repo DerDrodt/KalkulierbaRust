@@ -207,7 +207,7 @@ mod tests {
                 ("\\all X: P(X)", " ⊢ (∀X: P(X))"),
                 ("\\all X:P(X)", " ⊢ (∀X: P(X))"),
                 ("\\all X:           P(X)", " ⊢ (∀X: P(X))"),
-                ("\\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y, Z)))", " ⊢ (∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y, Z))))))"),
+                ("\\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y), Z))", " ⊢ (∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y), Z)))))"),
                 ("\\ex Xyz: P(Xyz)", " ⊢ (∃Xyz: P(Xyz))"),
                 ("!\\ex X: (P(X) <-> !P(X))", " ⊢ ¬(∃X: ((P(X) → ¬P(X)) ∧ (¬P(X) → P(X))))"),
                 ("!(\\ex X: (P(X) <-> !P(X)))", " ⊢ ¬(∃X: ((P(X) → ¬P(X)) ∧ (¬P(X) → P(X))))"),
@@ -230,7 +230,7 @@ mod tests {
                 ("!(/ex X: (P(X) <-> !P(X)))  |-     ", "¬(∃X: ((P(X) → ¬P(X)) ∧ (¬P(X) → P(X)))) ⊢ "),
                 ("/ex Xyz: P(Xyz) & /all X: P(X) |-   ", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X))) ⊢ "),
 
-                ("\\ex Xyz: P(Xyz) & \\all X: P(X), P(c) |- /ex Xyz: P(Xyz) & /all X: P(X), \\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y, Z)))", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X))), P(c) ⊢ ((∃Xyz: P(Xyz)) ∧ (∀X: P(X))), (∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y, Z))))))")
+                ("\\ex Xyz: P(Xyz) & \\all X: P(X), P(c) |- /ex Xyz: P(Xyz) & /all X: P(X), \\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y), Z))", "((∃Xyz: P(Xyz)) ∧ (∀X: P(X))), P(c) ⊢ ((∃Xyz: P(Xyz)) ∧ (∀X: P(X))), (∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y), Z)))))")
             ];
 
             session(|| {

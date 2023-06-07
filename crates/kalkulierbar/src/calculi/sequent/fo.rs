@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 use serde::{
     de::{self, MapAccess, Visitor},
@@ -8,7 +8,12 @@ use serde::{
 
 use crate::{
     calculus::CloseMsg,
-    logic::{fo::FOTerm, transform::collectors::collect_symbols, unify::Substitution, LogicNode},
+    logic::{
+        fo::FOTerm,
+        transform::signature::{SigAdherenceErr, Signature},
+        unify::Substitution,
+        LogicNode,
+    },
     parse::{fo::parse_fo_term, sequent},
     Calculus, Symbol,
 };
@@ -143,6 +148,7 @@ fn apply_all_l(
     let node = &state.nodes[node_id];
     let formula = &node.left_formulas[f_id];
     if let LogicNode::All(var, c) = formula {
+        check_adherence_to_sig(&replace_with, node)?;
         // TODO: signature check
         let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = c.instantiate(&nu);
@@ -189,14 +195,7 @@ fn apply_all_r(
             return Err(SequentErr::ExpectedConst(replace_with));
         };
 
-        if node
-            .left_formulas
-            .iter()
-            .chain(&node.right_formulas)
-            .flat_map(collect_symbols)
-            .collect::<HashSet<_>>()
-            .contains(&c)
-        {
+        if sig_of_sequent_node(node).has_const_or_fn(c) {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
         let nu = Substitution::from_value(*var, replace_with.clone());
@@ -245,14 +244,7 @@ fn apply_ex_l(
             return Err(SequentErr::ExpectedConst(replace_with));
         };
 
-        if node
-            .left_formulas
-            .iter()
-            .chain(&node.right_formulas)
-            .flat_map(collect_symbols)
-            .collect::<HashSet<_>>()
-            .contains(&c)
-        {
+        if sig_of_sequent_node(node).has_const_or_fn(c) {
             return Err(SequentErr::SymbolAlreadyUsed(c));
         }
         let nu = Substitution::from_value(*var, replace_with.clone());
@@ -293,6 +285,7 @@ fn apply_ex_r(
     let node = &state.nodes[node_id];
     let formula = &node.right_formulas[f_id];
     if let LogicNode::Ex(var, c) = formula {
+        check_adherence_to_sig(&replace_with, node)?;
         // Yes, this handling is weird, but I am mirroring the behavior of the Kotlin implementation, which is also weird
         let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = c.instantiate(&nu);
@@ -321,8 +314,38 @@ fn apply_ex_r(
     }
 }
 
+fn sig_of_sequent_node(node: &SequentNode<FOSeqMove>) -> Signature {
+    Signature::of_nodes(
+        &node
+            .left_formulas
+            .iter()
+            .chain(node.right_formulas.iter())
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn check_adherence_to_sig(
+    t: &FOTerm,
+    node: &SequentNode<FOSeqMove>,
+) -> Result<(), SigAdherenceErr> {
+    if matches!(t, FOTerm::Const(_)) {
+        return Ok(());
+    }
+    let sig = sig_of_sequent_node(node);
+    sig.check(&t)?;
+    Ok(())
+}
+
 fn get_fresh_constant(node: &SequentNode<FOSeqMove>, var_name: Symbol) -> FOTerm {
-    todo!()
+    let sig = sig_of_sequent_node(node);
+    let base_name = var_name.to_string().to_lowercase();
+    let mut idx = 0;
+    while sig.has_const_or_fn(Symbol::intern(&format!("{base_name}_{idx}"))) {
+        idx += 1;
+    }
+
+    let s = Symbol::intern(&format!("{base_name}_{idx}"));
+    FOTerm::Const(s)
 }
 
 impl Serialize for FOSeqMove {

@@ -1,4 +1,7 @@
-use std::iter::Peekable;
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Peekable,
+};
 
 use crate::{
     logic::{fo::FOTerm, LogicNode},
@@ -27,6 +30,11 @@ struct FOParser<'t> {
     tokens: Peekable<Tokenizer<'t>>,
     quantifier_scope: Vec<Symbol>,
     bind_quant_vars: bool,
+    arities: HashMap<Symbol, usize>,
+    consts: HashSet<Symbol>,
+    fns: HashSet<Symbol>,
+    rels: HashSet<Symbol>,
+    bound_vars: HashSet<Symbol>,
 }
 
 impl<'t> FOParser<'t> {
@@ -35,6 +43,11 @@ impl<'t> FOParser<'t> {
             tokens: Tokenizer::new(formula, false).peekable(),
             quantifier_scope: Vec::new(),
             bind_quant_vars: true,
+            arities: HashMap::new(),
+            consts: HashSet::new(),
+            fns: HashSet::new(),
+            rels: HashSet::new(),
+            bound_vars: HashSet::new(),
         }
     }
 
@@ -43,6 +56,11 @@ impl<'t> FOParser<'t> {
             tokens: Tokenizer::new(term, true).peekable(),
             quantifier_scope: Vec::new(),
             bind_quant_vars: false,
+            arities: HashMap::new(),
+            consts: HashSet::new(),
+            fns: HashSet::new(),
+            rels: HashSet::new(),
+            bound_vars: HashSet::new(),
         }
     }
 
@@ -141,6 +159,10 @@ impl<'t> FOParser<'t> {
                 return Err(ParseErr::Expected("quantifier".to_string(), self.got_msg()));
             }
             let name = Symbol::intern(self.cur_token()?.spelling);
+            if self.rels.contains(&name) {
+                return Err(ParseErr::BoundAndRel(name));
+            }
+            self.bound_vars.insert(name);
             names.push(name);
             self.quantifier_scope.push(name);
             self.bump()?;
@@ -196,6 +218,24 @@ impl<'t> FOParser<'t> {
         }
 
         self.eat(TokenKind::RParen)?;
+
+        match self.arities.get(&rel_id) {
+            Some(&expected) => {
+                let arity = args.len();
+                if arity != expected {
+                    return Err(ParseErr::IncorrectRelArity(rel_id, expected, arity));
+                }
+            }
+            None => {
+                self.arities.insert(rel_id, args.len());
+            }
+        }
+        if self.bound_vars.contains(&rel_id) {
+            return Err(ParseErr::BoundAndRel(rel_id));
+        }
+
+        self.rels.insert(rel_id);
+
         Ok(Box::new(LogicNode::Rel(rel_id, args)))
     }
 
@@ -212,6 +252,9 @@ impl<'t> FOParser<'t> {
             if self.next_is(TokenKind::LParen) {
                 self.parse_fn(ident)
             } else {
+                if self.fns.contains(&ident) {
+                    return Err(ParseErr::ConstAndFn(ident));
+                }
                 Ok(FOTerm::Const(ident))
             }
         }
@@ -226,6 +269,10 @@ impl<'t> FOParser<'t> {
 
         self.eat(TokenKind::CapIdent)?;
 
+        if self.rels.contains(&spelling) {
+            return Err(ParseErr::BoundAndRel(spelling));
+        }
+
         Ok(FOTerm::QuantifiedVar(spelling))
     }
 
@@ -239,6 +286,24 @@ impl<'t> FOParser<'t> {
         }
 
         self.eat(TokenKind::RParen)?;
+
+        match self.arities.get(&ident) {
+            Some(&expected) => {
+                let arity = args.len();
+                if arity != expected {
+                    return Err(ParseErr::IncorrectFnArity(ident, expected, arity));
+                }
+            }
+            None => {
+                self.arities.insert(ident, args.len());
+            }
+        }
+
+        if self.consts.contains(&ident) {
+            return Err(ParseErr::ConstAndFn(ident));
+        }
+        self.fns.insert(ident);
+
         Ok(FOTerm::Function(ident, args))
     }
 
@@ -325,7 +390,7 @@ mod tests {
             "\\all X: P(X)", "(∀X: P(X))";
             "\\all X:P(X)", "(∀X: P(X))";
             "\\all X:           P(X)", "(∀X: P(X))";
-            "\\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y, Z)))", "(∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y, Z))))))";
+            "\\all X: \\all Y: \\all Z: R(m(X, m(Y, Z)), m(m(X,Y), Z))", "(∀X: (∀Y: (∀Z: R(m(X, m(Y, Z)), m(m(X, Y), Z)))))";
             "\\ex Xyz: P(Xyz)", "(∃Xyz: P(Xyz))";
             "!\\ex X: (P(X) <-> !P(X))", "¬(∃X: (P(X) <=> ¬P(X)))";
             "!(\\ex X: (P(X) <-> !P(X)))", "¬(∃X: (P(X) <=> ¬P(X)))";

@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
+use std::{collections::HashMap, fmt};
 
 use crate::{
     logic::{fo::FOTerm, LogicNode},
@@ -9,13 +6,13 @@ use crate::{
 };
 
 use super::{
-    collectors::collect_symbols,
+    signature::Signature,
     transformer::{MutFOTermTransformer, MutLogicNodeTransformer},
 };
 
 pub fn skolemize(n: LogicNode) -> Result<LogicNode, SkolemizationErr> {
-    let used_symbols = collect_symbols(&n);
-    Skolemization::new(used_symbols).visit(n)
+    let sig = Signature::of_node(&n);
+    Skolemization::new(sig).visit(n)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,16 +31,16 @@ pub struct Skolemization {
     counter: u32,
     quantified_vars: Vec<Symbol>,
     replacement_map: HashMap<Symbol, FOTerm>,
-    used_names: HashSet<Symbol>,
+    sig: Signature,
 }
 
 impl Skolemization {
-    pub fn new(used_names: HashSet<Symbol>) -> Self {
+    pub fn new(sig: Signature) -> Self {
         Self {
             counter: 0,
             quantified_vars: Vec::new(),
             replacement_map: HashMap::new(),
-            used_names,
+            sig,
         }
     }
 
@@ -51,7 +48,7 @@ impl Skolemization {
         self.counter += 1;
         let mut name = Symbol::intern(&format!("sk{}", self.counter));
 
-        while self.used_names.contains(&name) {
+        while self.sig.has_const_or_fn(name) {
             self.counter += 1;
             name = Symbol::intern(&format!("sk{}", self.counter));
         }

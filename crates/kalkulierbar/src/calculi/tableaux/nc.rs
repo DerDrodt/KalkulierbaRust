@@ -14,9 +14,10 @@ use crate::{
     logic::{
         fo::{FOTerm, Relation},
         transform::{
-            collectors::{collect_free_vars, collect_symbols},
+            collectors::collect_free_vars,
             logic_node_manipulation::append_suffix_selectively,
             negation_normal_form,
+            signature::Signature,
             transformer::{FOTermTransformer, LogicNodeTransformer},
         },
         unify::{
@@ -92,7 +93,7 @@ pub struct NCTabState {
 
 impl NCTabState {
     pub fn new(formula: LogicNode, backtracking: bool) -> Self {
-        let idents = collect_symbols(&formula);
+        let idents = Signature::of_node(&formula).get_const_and_fn_names();
         Self {
             formula: formula.clone(),
             backtracking,
@@ -454,7 +455,7 @@ fn apply_gamma(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     // conflict with suffixed variable names, but we'll do it still to ensure
     // that state.identifiers contains _all_ identifiers in the tableaux
 
-    for s in collect_symbols(&nf) {
+    for s in Signature::of_node(&nf).get_const_and_fn_names() {
         state.idents.insert(s);
     }
 

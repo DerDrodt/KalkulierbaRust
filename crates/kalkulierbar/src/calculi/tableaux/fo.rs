@@ -11,12 +11,16 @@ use crate::{
     clause::Atom,
     clause::{Clause, ClauseSet},
     logic::transform::{term_manipulator::VariableSuffixAppend, visitor::FOTermVisitor},
-    logic::unify::{try_to_parse_unifier, Substitution},
     logic::{
         fo::Relation,
+        transform::signature::SigAdherenceErr,
         unify::{unifier_eq::is_mgu_or_not_unifiable, unify, UnificationErr},
     },
     logic::{transform::fo_cnf::FOCNFErr, unify},
+    logic::{
+        transform::signature::Signature,
+        unify::{try_to_parse_unifier, Substitution},
+    },
     parse::{parse_fo_flexibly_to_cnf, FOToCNFParseErr, ParseErr},
     symbol::Symbol,
     tamper_protect::ProtectedState,
@@ -51,6 +55,7 @@ pub enum FOTabErr {
     WouldMakeNotStronglyUnconnected(FOTabNode),
     NotConnected,
     BacktrackingDisabled,
+    SigAdherenceErr(SigAdherenceErr),
 }
 
 impl From<ParseErr> for FOTabErr {
@@ -74,6 +79,12 @@ impl From<FOToCNFParseErr> for FOTabErr {
     }
 }
 
+impl From<SigAdherenceErr> for FOTabErr {
+    fn from(value: SigAdherenceErr) -> Self {
+        Self::SigAdherenceErr(value)
+    }
+}
+
 impl From<UnificationErr> for FOTabErr {
     fn from(e: UnificationErr) -> Self {
         FOTabErr::Unification(e)
@@ -85,6 +96,7 @@ impl fmt::Display for FOTabErr {
         match self {
             FOTabErr::Parse(e) => fmt::Display::fmt(e, f),
             FOTabErr::CNF(e) => fmt::Display::fmt(e, f),
+            FOTabErr::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
             FOTabErr::InvalidNodeId(id) => write!(f, "Node with ID {id} does not exist"),
             FOTabErr::InvalidClauseId(id) => write!(f, "Clause with ID {id} does not exist"),
             FOTabErr::ExpectedLeaf(n) => write!(f, "Node '{n}' is not a leaf"),
@@ -222,6 +234,10 @@ pub fn apply_close_assign(
         &state.nodes[node_id].relation,
     ) {
         state.status_msg = Some("The unifier you specified is not an MGU".to_string());
+    }
+    let sig = Signature::of_clause_set(&state.clause_set);
+    for t in unifier.values() {
+        sig.check(t)?;
     }
 
     close_branch_common(state, leaf_id, node_id, unifier)
