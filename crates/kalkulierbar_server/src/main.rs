@@ -1,9 +1,8 @@
 use std::env;
 
 use actix_web::http::{header, StatusCode};
-use actix_web::middleware::errhandlers::{ErrorHandlerResponse, ErrorHandlers};
-use actix_web::middleware::Logger;
-use actix_web::{dev, error, http, web, App, HttpResponse, HttpServer, Responder, Result};
+use actix_web::middleware::{ErrorHandlerResponse, ErrorHandlers, Logger};
+use actix_web::{dev, error, web, App, HttpResponse, HttpServer, Responder, Result};
 use env_logger::Env;
 
 use kalkulierbar::CalculusKind;
@@ -69,7 +68,7 @@ fn add_error_header<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerR
         header::HeaderValue::from_static("Error"),
     );
 
-    Ok(ErrorHandlerResponse::Response(res))
+    Ok(ErrorHandlerResponse::Response(res.map_into_left_body()))
 }
 
 async fn index() -> impl Responder {

@@ -1,6 +1,4 @@
- 
+
 [workspace]
-members = [
-    "crates/kalkulierbar",
-    "crates/kalkulierbar_server"
-]
+members = ["crates/kalkulierbar", "crates/kalkulierbar_server"]
+resolver = "2"

@@ -427,7 +427,7 @@ fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
         q.push(*c);
     }
 
-    while let Some(idx) = q.get(0) {
+    while let Some(idx) = q.first() {
         let idx = *idx;
         q.remove(0);
 
