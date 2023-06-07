@@ -51,7 +51,7 @@ impl SynEq for Relation {
     }
 }
 
-impl<'l> fmt::Display for Relation {
+impl fmt::Display for Relation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut arg_str = String::new();
 
@@ -204,7 +204,7 @@ impl<'de> Deserialize<'de> for FOTerm {
     }
 }
 
-impl<'l> fmt::Display for FOTerm {
+impl fmt::Display for FOTerm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FOTerm::QuantifiedVar(name) => write!(f, "{}", name),

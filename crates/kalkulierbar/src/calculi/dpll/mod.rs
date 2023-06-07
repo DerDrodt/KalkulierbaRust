@@ -1218,7 +1218,7 @@ mod tests {
                 )
                 .is_err());
                 assert!(
-                    DPLL::apply_move(s.clone(), DPLLMove::Split(2, "HELLO!".to_string())).is_err()
+                    DPLL::apply_move(s, DPLLMove::Split(2, "HELLO!".to_string())).is_err()
                 );
             })
         }
@@ -1342,7 +1342,7 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
-                assert_eq!(true, s.nodes[2].verified.unwrap());
+                assert!(s.nodes[2].verified.unwrap());
 
                 let close_msg = DPLL::check_close(s);
                 assert!(!close_msg.closed);
@@ -1370,7 +1370,7 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
-                assert_eq!(true, s.nodes[2].verified.unwrap());
+                assert!(s.nodes[2].verified.unwrap());
 
                 assert!(DPLL::apply_move(
                     s.clone(),
@@ -1424,7 +1424,7 @@ mod tests {
                 )
                 .is_err());
                 assert!(DPLL::apply_move(
-                    s.clone(),
+                    s,
                     DPLLMove::ModelCheck(1, HashMap::from([("a".into(), true)]))
                 )
                 .is_err());

@@ -156,7 +156,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(
                 actix_web::middleware::DefaultHeaders::new()
-                    .header("Access-Control-Allow-Origin", "*"),
+                    .add(("Access-Control-Allow-Origin", "*")),
             )
             .wrap(Logger::default())
             //.wrap(Logger::new("%a %{User-Agent}i"))

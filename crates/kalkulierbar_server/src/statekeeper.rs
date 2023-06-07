@@ -92,7 +92,7 @@ pub struct StateKeeper {
 
 lazy_static! {
     static ref DATE: String = {
-        let utc = Utc::today();
+        let utc = Utc::now();
         utc.format("%Y%m&d").to_string()
     };
 }

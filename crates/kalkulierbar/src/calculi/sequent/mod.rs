@@ -669,7 +669,7 @@ where
             "SequentState",
             FIELDS,
             StateVisitor {
-                _p: PhantomData::default(),
+                _p: PhantomData,
             },
         )
     }

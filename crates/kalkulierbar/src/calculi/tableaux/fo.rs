@@ -750,7 +750,7 @@ impl FOTabState {
 
         let parent = &self.nodes[node.parent.unwrap()];
 
-        matches!(unify::unify(&node.relation, &parent.relation), Ok(_))
+        unify::unify(&node.relation, &parent.relation).is_ok()
     }
 
     fn clause_expand_preprocessing(
@@ -856,7 +856,7 @@ pub struct FOTabNode {
     children: Vec<usize>,
 }
 
-impl<'f> FOTabNode {
+impl FOTabNode {
     pub fn new(
         parent: Option<usize>,
         relation: Relation,
@@ -911,19 +911,19 @@ impl<'f> FOTabNode {
     }
 }
 
-impl<'f> From<FOTabNode> for Atom<Relation> {
+impl From<FOTabNode> for Atom<Relation> {
     fn from(n: FOTabNode) -> Self {
         Atom::new(n.relation, n.negated)
     }
 }
 
-impl<'f> From<&FOTabNode> for Atom<Relation> {
+impl From<&FOTabNode> for Atom<Relation> {
     fn from(n: &FOTabNode) -> Self {
         Atom::new(n.relation.clone(), n.negated)
     }
 }
 
-impl<'f> TableauxNode<Relation> for FOTabNode {
+impl TableauxNode<Relation> for FOTabNode {
     fn parent(&self) -> Option<usize> {
         self.parent
     }

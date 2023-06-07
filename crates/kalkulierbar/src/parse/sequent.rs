@@ -3,7 +3,7 @@ use crate::logic::{transform::remove_equivs::remove_equivs, LogicNode};
 use super::{fo::parse_fo_formula, parse_prop_formula, ParseErr, ParseResult};
 
 pub fn parse_prop(formula: &str) -> ParseResult<(Vec<LogicNode>, Vec<LogicNode>)> {
-    parse(formula, parse_prop_formula, |s| s.split(",").collect())
+    parse(formula, parse_prop_formula, |s| s.split(',').collect())
 }
 
 pub fn parse_fo(formula: &str) -> ParseResult<(Vec<LogicNode>, Vec<LogicNode>)> {

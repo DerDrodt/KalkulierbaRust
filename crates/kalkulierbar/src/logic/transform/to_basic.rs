@@ -11,7 +11,7 @@ impl ToBasicOps {
     }
 }
 
-impl<'a> MutLogicNodeTransformer for ToBasicOps {
+impl MutLogicNodeTransformer for ToBasicOps {
     type Ret = LogicNode;
 
     fn visit_var(&mut self, spelling: Symbol) -> Self::Ret {

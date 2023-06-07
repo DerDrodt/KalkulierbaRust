@@ -1,4 +1,4 @@
-use actix_web::{error, http, web, HttpResponse, Responder, Result};
+use actix_web::{error, web, HttpResponse, Responder, Result};
 use kalkulierbar::{session, Calculus};
 
 use crate::{MoveForm, ParseForm, StateForm};
