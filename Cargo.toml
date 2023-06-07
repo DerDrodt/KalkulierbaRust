@@ -2,3 +2,6 @@
 [workspace]
 members = ["crates/kalkulierbar", "crates/kalkulierbar_server"]
 resolver = "2"
+
+[profile.release]
+lto = true
