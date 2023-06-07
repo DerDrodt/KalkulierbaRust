@@ -332,7 +332,7 @@ fn check_adherence_to_sig(
         return Ok(());
     }
     let sig = sig_of_sequent_node(node);
-    sig.check(&t)?;
+    sig.check(t)?;
     Ok(())
 }
 

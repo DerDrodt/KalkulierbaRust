@@ -64,7 +64,7 @@ impl Signature {
 
     pub fn of_nodes(nodes: &[&LogicNode]) -> Self {
         let mut s = Self::empty();
-        for n in nodes.into_iter() {
+        for n in nodes.iter() {
             s += Self::of_node(n);
         }
         s
