@@ -30,6 +30,8 @@ impl LogicNodeTransformer for NegationNormalForm {
             LogicNode::Rel(name, args) => Ok(LogicNode::Not(Box::new(LogicNode::Rel(name, args)))),
             LogicNode::All(var, c) => Ok(LogicNode::Ex(var, self.visit(LogicNode::Not(c))?.into())),
             LogicNode::Ex(var, c) => Ok(LogicNode::All(var, self.visit(LogicNode::Not(c))?.into())),
+            LogicNode::Box(c) => Ok(LogicNode::Diamond(self.visit(LogicNode::Not(c))?.into())),
+            LogicNode::Diamond(c) => Ok(LogicNode::Box(self.visit(LogicNode::Not(c))?.into())),
             _ => Err("Unknown LogicNode encountered during Negation Normal Form transformation"),
         }
     }
@@ -78,6 +80,14 @@ impl LogicNodeTransformer for NegationNormalForm {
 
     fn visit_ex(&self, var: Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         Ok(LogicNode::Ex(var, self.visit(child)?.into()))
+    }
+
+    fn visit_box(&self, child: LogicNode) -> Self::Ret {
+        Ok(LogicNode::Box(self.visit(child)?.into()))
+    }
+
+    fn visit_diamond(&self, child: LogicNode) -> Self::Ret {
+        Ok(LogicNode::Diamond(self.visit(child)?.into()))
     }
 }
 

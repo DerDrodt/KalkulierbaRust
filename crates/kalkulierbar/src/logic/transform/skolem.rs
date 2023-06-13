@@ -157,6 +157,14 @@ impl MutLogicNodeTransformer for Skolemization {
 
         ret
     }
+
+    fn visit_box(&mut self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
+
+    fn visit_diamond(&mut self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
 }
 
 struct SkolemTermReplacer<'a> {

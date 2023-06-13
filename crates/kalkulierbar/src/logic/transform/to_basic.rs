@@ -61,6 +61,14 @@ impl MutLogicNodeTransformer for ToBasicOps {
         let child = self.visit(child).into();
         LogicNode::Ex(var, child)
     }
+
+    fn visit_box(&mut self, child: LogicNode) -> Self::Ret {
+        LogicNode::Box(self.visit(child).into())
+    }
+
+    fn visit_diamond(&mut self, child: LogicNode) -> Self::Ret {
+        LogicNode::Diamond(self.visit(child).into())
+    }
 }
 
 impl Default for ToBasicOps {

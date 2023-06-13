@@ -570,7 +570,7 @@ fn check_split_restrictions(state: &DPLLState, branch: usize, lit: String) -> DP
         return Err(DPLLErr::PropAnnotation(b.clone()));
     }
 
-    let tokenized: Result<Vec<Token>, ParseErr> = Tokenizer::new(&lit, false).collect();
+    let tokenized: Result<Vec<Token>, ParseErr> = Tokenizer::new(&lit, false, false).collect();
     let mut tokenized = tokenized?;
 
     if tokenized.len() != 1 {
@@ -1217,9 +1217,7 @@ mod tests {
                     DPLLMove::Split(2, "This is nonsense".to_string())
                 )
                 .is_err());
-                assert!(
-                    DPLL::apply_move(s, DPLLMove::Split(2, "HELLO!".to_string())).is_err()
-                );
+                assert!(DPLL::apply_move(s, DPLLMove::Split(2, "HELLO!".to_string())).is_err());
             })
         }
     }

@@ -57,7 +57,12 @@ impl MutLogicNodeVisitor for NaiveCNF {
 
                 self.visit(&LogicNode::Not(LogicNode::And(impl_1, impl_2).into()))
             }
-            _ => panic!("Cannot create CNF of FO formula"),
+            LogicNode::All(..) | LogicNode::Ex(..) | LogicNode::Rel(..) => {
+                panic!("Cannot create CNF of FO formula")
+            }
+            LogicNode::Box(..) | LogicNode::Diamond(..) => {
+                panic!("Cannot create CNF of Modal formula")
+            }
         }
     }
 
@@ -125,6 +130,14 @@ impl MutLogicNodeVisitor for NaiveCNF {
 
     fn visit_ex(&mut self, _var: Symbol, _child: &crate::logic::LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
+    }
+
+    fn visit_box(&mut self, _: &LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
+
+    fn visit_diamond(&mut self, _: &LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
     }
 }
 

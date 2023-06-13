@@ -135,6 +135,14 @@ impl MutLogicNodeTransformer for PrenexNormalForm {
             self.visit(child)
         }
     }
+
+    fn visit_box(&mut self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
+
+    fn visit_diamond(&mut self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
 }
 
 #[cfg(test)]

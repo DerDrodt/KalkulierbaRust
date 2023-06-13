@@ -78,6 +78,14 @@ impl MutLogicNodeVisitor for FreeVarCollector {
             self.bound.remove(&var);
         }
     }
+
+    fn visit_box(&mut self, _: &LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
+
+    fn visit_diamond(&mut self, _: &LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
 }
 
 struct FreeVarTermCollector<'a> {

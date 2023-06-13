@@ -770,6 +770,14 @@ impl LogicNodeTransformer for DeltaSkolemization {
         };
         LogicNode::Ex(var, child.into())
     }
+
+    fn visit_box(&self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
+
+    fn visit_diamond(&self, _: LogicNode) -> Self::Ret {
+        panic!()
+    }
 }
 
 struct DeltaTermReplacer {

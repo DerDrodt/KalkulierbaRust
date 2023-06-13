@@ -1,37 +1,47 @@
 use std::iter::Peekable;
 
-use crate::{
-    logic::LogicNode,
-    parse::{ParseErr, ParseResult, Token, TokenKind},
-    symbol::Symbol,
-};
+use crate::{logic::LogicNode, Symbol};
 
-use super::Tokenizer;
+use super::{ParseErr, ParseResult, Token, TokenKind, Tokenizer};
 
-pub fn parse_prop_formula(formula: &str) -> ParseResult<LogicNode> {
-    PropParser::parse(formula)
+pub fn parse_modal_formula(formula: &str) -> ParseResult<(bool, LogicNode)> {
+    ModalParser::parse(formula)
 }
 
-pub struct PropParser<'t> {
+pub struct ModalParser<'t> {
     tokens: Peekable<Tokenizer<'t>>,
 }
 
-impl<'f> PropParser<'f> {
-    pub fn parse(formula: &'f str) -> ParseResult<LogicNode> {
-        let mut parser = PropParser {
-            tokens: Tokenizer::new(formula, false, false).peekable(),
+impl<'f> ModalParser<'f> {
+    pub fn parse(formula: &'f str) -> ParseResult<(bool, LogicNode)> {
+        let mut parser = Self {
+            tokens: Tokenizer::new(formula, false, true).peekable(),
         };
         if parser.tokens.peek().is_none() {
             return Err(ParseErr::EmptyFormula);
         }
-        let node = parser.parse_equiv()?;
+        let (assumption, node) = parser.parse_sign()?;
         match parser.tokens.next() {
             Some(_) => Err(ParseErr::Expected(
                 "end of input".to_string(),
                 parser.got_msg(),
             )),
-            None => Ok(*node),
+            None => Ok((assumption, *node)),
         }
+    }
+
+    fn parse_sign(&mut self) -> ParseResult<(bool, Box<LogicNode>)> {
+        let assumption = if self.next_is(TokenKind::SignT) {
+            self.bump()?;
+            true
+        } else if self.next_is(TokenKind::SignF) {
+            self.bump()?;
+            false
+        } else {
+            true
+        };
+
+        Ok((assumption, self.parse_equiv()?))
     }
 
     fn parse_equiv(&mut self) -> ParseResult<Box<LogicNode>> {
@@ -86,6 +96,24 @@ impl<'f> PropParser<'f> {
         if self.next_is(TokenKind::Not) {
             self.bump()?;
             Ok(Box::new(LogicNode::Not(self.parse_paren()?)))
+        } else {
+            self.parse_box()
+        }
+    }
+
+    fn parse_box(&mut self) -> ParseResult<Box<LogicNode>> {
+        if self.next_is(TokenKind::Box) {
+            self.bump()?;
+            Ok(Box::new(LogicNode::Box(self.parse_box()?)))
+        } else {
+            self.parse_diamond()
+        }
+    }
+
+    fn parse_diamond(&mut self) -> ParseResult<Box<LogicNode>> {
+        if self.next_is(TokenKind::Diamond) {
+            self.bump()?;
+            Ok(Box::new(LogicNode::Diamond(self.parse_box()?)))
         } else {
             self.parse_paren()
         }
@@ -157,67 +185,5 @@ impl<'f> PropParser<'f> {
                 "end of input".to_string(),
             )),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::session;
-
-    macro_rules! test_map {
-        ($func:ident, $( $f:expr, $e:expr );*) => {{
-            $(
-                session(|| {
-                    let cs = $func($f).expect($f);
-                    assert_eq!($e, cs.to_string());
-                });
-            )*
-        }};
-    }
-
-    macro_rules! test_list_invalid {
-        ($func:ident, $( $f:expr ),*) => {{
-            $(
-                session(|| {
-                    let res = $func($f);
-                    assert!(res.is_err(), "f: {}\nCS: {:?}", $f, res);
-                });
-            )*
-        }};
-    }
-
-    #[test]
-    fn prop_valid() {
-        test_map!(
-            parse_prop_formula,
-            "a", "a";
-            "!a", "¬a";
-            "a -> b", "(a → b)";
-            "a-> b", "(a → b)";
-            "a    ->b", "(a → b)";
-            "a->b", "(a → b)";
-            "a<->(b -> (!(c)))", "(a <=> (b → ¬c))";
-            "(b & a <-> (a) | !b)", "((b ∧ a) <=> (a ∨ ¬b))"
-        );
-    }
-
-    #[test]
-    fn prop_invalid() {
-        test_list_invalid!(
-            parse_prop_formula,
-            "",
-            "-->a",
-            "<--",
-            "--><=>",
-            "!->",
-            "a!",
-            "a-->",
-            "b<=>",
-            "<->a",
-            "<->",
-            "(a&b v2",
-            "(a|b"
-        );
     }
 }

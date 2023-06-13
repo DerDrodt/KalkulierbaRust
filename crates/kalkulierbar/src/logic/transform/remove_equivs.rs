@@ -64,4 +64,12 @@ impl LogicNodeTransformer for EquivRemover {
     fn visit_ex(&self, var: crate::Symbol, child: crate::logic::LogicNode) -> Self::Ret {
         LogicNode::Ex(var, self.visit(child).into())
     }
+
+    fn visit_box(&self, child: LogicNode) -> Self::Ret {
+        LogicNode::Box(self.visit(child).into())
+    }
+
+    fn visit_diamond(&self, child: LogicNode) -> Self::Ret {
+        LogicNode::Diamond(self.visit(child).into())
+    }
 }

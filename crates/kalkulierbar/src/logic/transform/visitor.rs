@@ -16,6 +16,8 @@ pub trait MutLogicNodeVisitor {
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
             LogicNode::All(var, child) => self.visit_all(*var, child),
             LogicNode::Ex(var, child) => self.visit_ex(*var, child),
+            LogicNode::Box(child) => self.visit_box(child),
+            LogicNode::Diamond(child) => self.visit_diamond(child),
         }
     }
 
@@ -36,6 +38,10 @@ pub trait MutLogicNodeVisitor {
     fn visit_all(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
     fn visit_ex(&mut self, var: Symbol, child: &LogicNode) -> Self::Ret;
+
+    fn visit_box(&mut self, child: &LogicNode) -> Self::Ret;
+
+    fn visit_diamond(&mut self, child: &LogicNode) -> Self::Ret;
 }
 
 pub trait LogicNodeVisitor {
@@ -52,6 +58,8 @@ pub trait LogicNodeVisitor {
             LogicNode::Rel(s, args) => self.visit_rel(*s, args),
             LogicNode::All(var, child) => self.visit_all(*var, child),
             LogicNode::Ex(var, child) => self.visit_ex(*var, child),
+            LogicNode::Box(child) => self.visit_box(child),
+            LogicNode::Diamond(child) => self.visit_diamond(child),
         }
     }
 
@@ -72,6 +80,10 @@ pub trait LogicNodeVisitor {
     fn visit_all(&self, var: Symbol, child: &LogicNode) -> Self::Ret;
 
     fn visit_ex(&self, var: Symbol, child: &LogicNode) -> Self::Ret;
+
+    fn visit_box(&self, child: &LogicNode) -> Self::Ret;
+
+    fn visit_diamond(&self, child: &LogicNode) -> Self::Ret;
 }
 
 pub trait MutFOTermVisitor {

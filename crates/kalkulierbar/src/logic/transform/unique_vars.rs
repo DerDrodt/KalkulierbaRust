@@ -125,6 +125,14 @@ impl MutLogicNodeTransformer for UniqueVars {
 
         LogicNode::Ex(disamb, Box::new(child))
     }
+
+    fn visit_box(&mut self, child: LogicNode) -> Self::Ret {
+        self.visit(child)
+    }
+
+    fn visit_diamond(&mut self, child: LogicNode) -> Self::Ret {
+        self.visit(child)
+    }
 }
 
 pub(crate) struct VariableRenamer<'a> {

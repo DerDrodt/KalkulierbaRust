@@ -271,6 +271,14 @@ impl MutLogicNodeVisitor for SigExtractor {
         self.bound_vars.insert(var);
         self.visit(child)
     }
+
+    fn visit_box(&mut self, child: &LogicNode) -> Self::Ret {
+        self.visit(child)
+    }
+
+    fn visit_diamond(&mut self, child: &LogicNode) -> Self::Ret {
+        self.visit(child)
+    }
 }
 
 struct TermSigExtractor<'a> {

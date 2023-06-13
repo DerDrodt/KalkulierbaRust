@@ -149,7 +149,6 @@ fn apply_all_l(
     let formula = &node.left_formulas[f_id];
     if let LogicNode::All(var, c) = formula {
         check_adherence_to_sig(&replace_with, node)?;
-        // TODO: signature check
         let nu = Substitution::from_value(*var, replace_with.clone());
         let new_f = c.instantiate(&nu);
 

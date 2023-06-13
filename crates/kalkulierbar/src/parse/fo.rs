@@ -40,7 +40,7 @@ struct FOParser<'t> {
 impl<'t> FOParser<'t> {
     fn new(formula: &'t str) -> Self {
         Self {
-            tokens: Tokenizer::new(formula, false).peekable(),
+            tokens: Tokenizer::new(formula, false, false).peekable(),
             quantifier_scope: Vec::new(),
             bind_quant_vars: true,
             arities: HashMap::new(),
@@ -53,7 +53,7 @@ impl<'t> FOParser<'t> {
 
     fn new_term_parser(term: &'t str) -> Self {
         Self {
-            tokens: Tokenizer::new(term, true).peekable(),
+            tokens: Tokenizer::new(term, true, false).peekable(),
             quantifier_scope: Vec::new(),
             bind_quant_vars: false,
             arities: HashMap::new(),

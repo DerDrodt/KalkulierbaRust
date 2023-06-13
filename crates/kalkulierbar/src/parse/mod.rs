@@ -17,6 +17,7 @@ use self::{clause_set::parse_fo_clause_set, fo::parse_fo_formula};
 
 pub mod clause_set;
 pub mod fo;
+pub mod modal;
 pub mod prop;
 pub mod sequent;
 
@@ -169,7 +170,11 @@ pub enum TokenKind {
     LowIdent,
     All,
     Ex,
+    Box,
+    Diamond,
     Unknown,
+    SignT,
+    SignF,
 }
 
 impl fmt::Display for TokenKind {
@@ -188,7 +193,11 @@ impl fmt::Display for TokenKind {
             TokenKind::LowIdent => "lower identifier",
             TokenKind::All => "\\all",
             TokenKind::Ex => "\\ex",
+            TokenKind::Box => "[]",
+            TokenKind::Diamond => "<>",
             TokenKind::Unknown => "unknown",
+            TokenKind::SignT => r"\sign T",
+            TokenKind::SignF => r"\sign F",
         };
 
         write!(f, "{}", s)
@@ -199,14 +208,16 @@ pub(crate) struct Tokenizer<'f> {
     formula: &'f str,
     pos: usize,
     extended: bool,
+    modal: bool,
 }
 
 impl<'f> Tokenizer<'f> {
-    pub(crate) fn new(formula: &'f str, extended: bool) -> Self {
+    pub(crate) fn new(formula: &'f str, extended: bool, modal: bool) -> Self {
         Self {
             formula,
             pos: 0,
             extended,
+            modal,
         }
     }
 
@@ -230,25 +241,46 @@ impl<'f> Tokenizer<'f> {
                     return Some(Err(ParseErr::Expected("->".to_string(), "-".to_string())));
                 }
             }
+            '[' => {
+                if self.formula.starts_with("[]") {
+                    (TokenKind::Box, "[]", 2)
+                } else {
+                    return Some(Err(ParseErr::Expected("[]".to_string(), "[".to_string())));
+                }
+            }
             '<' => {
-                let spelling = if self.formula.starts_with("<=>") {
-                    "<=>"
+                if self.formula.starts_with("<=>") {
+                    (TokenKind::Equiv, "<=>", 3)
                 } else if self.formula.starts_with("<->") {
-                    "<->"
+                    (TokenKind::Equiv, "<->", 3)
+                } else if self.modal && self.formula.starts_with("<>") {
+                    (TokenKind::Diamond, "<>", 2)
+                } else if self.modal {
+                    return Some(Err(ParseErr::Expected(
+                        "<=> or <>".to_string(),
+                        "<".to_string(),
+                    )));
                 } else {
                     return Some(Err(ParseErr::Expected("<=>".to_string(), "<".to_string())));
-                };
-
-                (TokenKind::Equiv, spelling, 3)
+                }
             }
             '\\' | '/' => {
                 if self.formula.starts_with("\\ex") | self.formula.starts_with("/ex") {
                     (TokenKind::Ex, "\\ex", 3)
                 } else if self.formula.starts_with("\\all") | self.formula.starts_with("/all") {
                     (TokenKind::All, "\\all", 4)
+                } else if self.modal & self.formula.starts_with(r"\sign T") {
+                    (TokenKind::SignT, r"\sign T", 7)
+                } else if self.modal & self.formula.starts_with(r"\sign F") {
+                    (TokenKind::SignF, r"\sign F", 7)
                 } else {
                     return Some(Err(ParseErr::Expected(
-                        "Quantifier".to_string(),
+                        if self.modal {
+                            "Quantifier or sign"
+                        } else {
+                            "Quantifier"
+                        }
+                        .to_string(),
                         "\\".to_string(),
                     )));
                 }

@@ -80,4 +80,12 @@ impl<'a> LogicNodeTransformer for SelectiveSuffixAppender<'a> {
             LogicNode::Ex(var, self.visit(child).into())
         }
     }
+
+    fn visit_box(&self, child: LogicNode) -> Self::Ret {
+        LogicNode::Box(self.visit(child).into())
+    }
+
+    fn visit_diamond(&self, child: LogicNode) -> Self::Ret {
+        LogicNode::Diamond(self.visit(child).into())
+    }
 }

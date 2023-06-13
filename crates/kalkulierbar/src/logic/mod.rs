@@ -29,6 +29,8 @@ pub enum LogicNode {
     Rel(Symbol, Vec<FOTerm>),
     All(Symbol, Box<LogicNode>),
     Ex(Symbol, Box<LogicNode>),
+    Box(Box<LogicNode>),
+    Diamond(Box<LogicNode>),
 }
 
 impl LogicNode {
@@ -49,6 +51,8 @@ impl LogicNode {
             }
             LogicNode::All(s, c) => Self::All(*s, c.instantiate(u).into()),
             LogicNode::Ex(s, c) => Self::Ex(*s, c.instantiate(u).into()),
+            LogicNode::Box(_) => panic!(),
+            LogicNode::Diamond(_) => panic!(),
         }
     }
 
@@ -112,6 +116,8 @@ impl fmt::Display for LogicNode {
             }
             LogicNode::All(var, child) => write!(f, "(∀{}: {})", var, child),
             LogicNode::Ex(var, child) => write!(f, "(∃{}: {})", var, child),
+            LogicNode::Box(child) => write!(f, "□{child}"),
+            LogicNode::Diamond(child) => write!(f, "◇{child}"),
         }
     }
 }
@@ -131,6 +137,8 @@ impl SynEq for LogicNode {
             }
             (Self::All(v1, c1), Self::All(v2, c2)) => v1 == v2 && c1.syn_eq(c2),
             (Self::Ex(v1, c1), Self::Ex(v2, c2)) => v1 == v2 && c1.syn_eq(c2),
+            (Self::Box(c1), Self::Box(c2)) => c1.syn_eq(c2),
+            (Self::Diamond(c1), Self::Diamond(c2)) => c1.syn_eq(c2),
             _ => false,
         }
     }
@@ -151,6 +159,8 @@ impl Serialize for LogicNode {
             LogicNode::Rel(_, _) => ("relation", 3),
             LogicNode::All(_, _) => ("allquant", 3),
             LogicNode::Ex(_, _) => ("exquant", 3),
+            LogicNode::Box(_) => ("box", 2),
+            LogicNode::Diamond(_) => ("diamond", 2),
         };
 
         let mut state = serializer.serialize_struct("LogicNode", len)?;
@@ -159,7 +169,7 @@ impl Serialize for LogicNode {
             Self::Var(s) => {
                 state.serialize_field("spelling", s)?;
             }
-            Self::Not(c) => {
+            Self::Not(c) | Self::Box(c) | Self::Diamond(c) => {
                 state.serialize_field("child", c)?;
             }
             Self::And(l, r) | Self::Or(l, r) | Self::Impl(l, r) | Self::Equiv(l, r) => {
@@ -329,6 +339,16 @@ impl<'de> Deserialize<'de> for LogicNode {
                     ),
                     "exquant" => LogicNode::Ex(
                         var_name.ok_or_else(|| de::Error::missing_field("varName"))?,
+                        child
+                            .ok_or_else(|| de::Error::missing_field("child"))?
+                            .into(),
+                    ),
+                    "box" => LogicNode::Box(
+                        child
+                            .ok_or_else(|| de::Error::missing_field("child"))?
+                            .into(),
+                    ),
+                    "diamond" => LogicNode::Diamond(
                         child
                             .ok_or_else(|| de::Error::missing_field("child"))?
                             .into(),

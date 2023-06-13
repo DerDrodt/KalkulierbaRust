@@ -174,6 +174,14 @@ impl MutLogicNodeTransformer for TseytinCNF {
     fn visit_ex(&mut self, _var: Symbol, _child: LogicNode) -> Self::Ret {
         panic!("Cannot create CNF of FO formula")
     }
+
+    fn visit_box(&mut self, _: LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
+
+    fn visit_diamond(&mut self, _: LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
 }
 
 #[cfg(test)]

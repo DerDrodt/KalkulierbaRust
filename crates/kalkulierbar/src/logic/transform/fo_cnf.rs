@@ -122,6 +122,14 @@ impl MutLogicNodeTransformer for FOcnf {
     fn visit_ex(&mut self, _: Symbol, _: crate::logic::LogicNode) -> Self::Ret {
         panic!("The formula is not a FO formula in skolem normal form")
     }
+
+    fn visit_box(&mut self, _: LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
+
+    fn visit_diamond(&mut self, _: LogicNode) -> Self::Ret {
+        panic!("Cannot create CNF of Modal formula")
+    }
 }
 
 #[cfg(test)]
