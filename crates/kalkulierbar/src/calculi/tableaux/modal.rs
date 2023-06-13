@@ -387,7 +387,7 @@ fn apply_negation(
                 }
                 Ok(state)
             }
-            _ => return Err(SignedModalTabErr::RuleNotApplicable("negation", "negation")),
+            _ => Err(SignedModalTabErr::RuleNotApplicable("negation", "negation")),
         }
     } else {
         for l in state.child_leaves_of(node_id) {
