@@ -86,7 +86,7 @@ impl fmt::Display for SignedModalTabErr {
 
 pub type SignedModalTabResult<T> = Result<T, SignedModalTabErr>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedModalTabParams {
     backtracking: bool,
 }

@@ -242,6 +242,24 @@ async fn main() -> std::io::Result<()> {
             .route("/fo-sequent/validate", web::post().to(sequent::fo_validate))
             .route("/fo-sequent/move", web::post().to(sequent::fo_move))
             .route("/fo-sequent/close", web::post().to(sequent::fo_close))
+            // Modal Tableaux
+            .route("/signed-modal-tableaux", web::get().to(tableaux::modal))
+            .route(
+                "/signed-modal-tableaux/parse",
+                web::get().to(tableaux::modal_parse),
+            )
+            .route(
+                "/signed-modal-tableaux/validate",
+                web::get().to(tableaux::modal_validate),
+            )
+            .route(
+                "/signed-modal-tableaux/move",
+                web::get().to(tableaux::modal_move),
+            )
+            .route(
+                "/signed-modal-tableaux/close",
+                web::get().to(tableaux::modal_close),
+            )
             // App data
             .app_data(StateKeeper::new())
     })

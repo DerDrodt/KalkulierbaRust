@@ -206,3 +206,71 @@ pub(crate) async fn nc_close(form: web::Form<StateForm>) -> Result<HttpResponse>
         Ok(HttpResponse::Ok().json(res))
     })
 }
+
+pub(crate) async fn modal() -> impl Responder {
+    HttpResponse::Ok().body(
+        "Calculus signed-modal-tableaux loaded.
+Interact via the /parse /move /close and /validate endpoints"
+            .to_string(),
+    )
+}
+
+pub(crate) async fn modal_parse(form: web::Form<ParseForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::modal;
+
+    session(|| {
+        let ParseForm { formula, params } = form.0;
+        let params: Option<modal::SignedModalTabParams> = match params {
+            Some(p) => Some(serde_json::from_str(&p)?),
+            None => None,
+        };
+
+        let state = modal::SignedModalTableaux::parse_formula(&formula, params)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+
+        Ok(HttpResponse::Ok().json(state))
+    })
+}
+
+pub(crate) async fn modal_validate(form: web::Form<StateForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::modal;
+
+    session(|| {
+        let StateForm { state } = form.0;
+
+        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
+        let res = modal::SignedModalTableaux::validate(state);
+
+        Ok(HttpResponse::Ok().json(res))
+    })
+}
+
+pub(crate) async fn modal_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::modal;
+
+    session(|| {
+        let MoveForm { state, r#move } = form.0;
+
+        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
+        let r#move: modal::SignedModalTabMove = serde_json::from_str(&r#move)?;
+
+        let state = modal::SignedModalTableaux::apply_move(state, r#move)
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+
+        Ok(HttpResponse::Ok().json(state))
+    })
+}
+
+pub(crate) async fn modal_close(form: web::Form<StateForm>) -> Result<HttpResponse> {
+    use kalkulierbar::calculi::tableaux::modal;
+
+    session(|| {
+        let StateForm { state } = form.0;
+
+        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
+
+        let res = modal::SignedModalTableaux::check_close(state);
+
+        Ok(HttpResponse::Ok().json(res))
+    })
+}
