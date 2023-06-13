@@ -374,7 +374,7 @@ impl<'de> Deserialize<'de> for LogicNode {
 
 #[cfg(test)]
 mod tests {
-    use super::LogicNode::*;
+    use super::LogicNode::{And, Equiv, Impl, Not, Or, Var};
     use crate::session;
     use crate::symbol::Symbol;
 
