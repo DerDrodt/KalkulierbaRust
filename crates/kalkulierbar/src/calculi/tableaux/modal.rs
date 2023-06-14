@@ -91,7 +91,7 @@ pub struct SignedModalTabParams {
     backtracking: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SignedModalTabMove {
     Negation(usize, Option<usize>),
     Alpha(usize, Option<usize>),
@@ -120,7 +120,7 @@ impl fmt::Display for SignedModalTabMove {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedModalTabState {
     formula: LogicNode,
     assumption: bool,
@@ -248,7 +248,7 @@ impl SignedModalTabState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SignedModalTabNode {
     parent: Option<usize>,
@@ -1502,6 +1502,267 @@ mod tests {
                 let s = SignedModalTableaux::parse_formula("a & b", None).unwrap();
                 let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None));
                 assert!(r.is_err())
+            })
+        }
+    }
+
+    mod nu {
+        use super::*;
+
+        #[test]
+        fn basic_box() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: <>a & []a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 1, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Nu(1, 2, None)).unwrap();
+
+                let f = parse_modal_formula("a").unwrap().1;
+
+                assert!(s.nodes[4].formula.syn_eq(&f));
+                assert_eq!(vec![1, 1], s.nodes[4].prefix);
+            })
+        }
+
+        #[test]
+        fn basic_diamond() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign F: []a | <>a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 1, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Nu(1, 2, None)).unwrap();
+
+                let f = parse_modal_formula("a").unwrap().1;
+
+                assert!(s.nodes[4].formula.syn_eq(&f));
+                assert_eq!(vec![1, 1], s.nodes[4].prefix);
+            })
+        }
+
+        #[test]
+        fn wrong_sign_box() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign F: []a | []a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 1, None)).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Nu(1, 2, None));
+
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn wrong_sign_diamond() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: <>a & <>a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 1, None)).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Nu(1, 2, None));
+
+                assert!(r.is_err())
+            })
+        }
+    }
+
+    mod pi {
+        use super::*;
+
+        #[test]
+        fn basic_box() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign F: []a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(2, 0, None)).unwrap();
+
+                let f = parse_modal_formula("a").unwrap().1;
+
+                assert!(s.nodes[1].formula.syn_eq(&f));
+                assert_eq!(vec![1, 2], s.nodes[1].prefix);
+            })
+        }
+
+        #[test]
+        fn basic_diamond() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: <>a", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 0, None)).unwrap();
+
+                let f = parse_modal_formula("a").unwrap().1;
+
+                assert!(s.nodes[1].formula.syn_eq(&f));
+                assert_eq!(vec![1, 1], s.nodes[1].prefix);
+            })
+        }
+
+        #[test]
+        fn wrong_sign_box() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: []a", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 0, None));
+
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn wrong_sign_diamond() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign F: <>a", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 0, None));
+
+                assert!(r.is_err())
+            })
+        }
+    }
+
+    mod prune {
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: a & (b & c)", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Prune(0)).unwrap();
+                assert_eq!(1, s.nodes.len())
+            })
+        }
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: a & (b | c)", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(2, None)).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, Some(3)))
+                    .unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Prune(3)).unwrap();
+
+                assert_eq!(5, s.nodes.len())
+            })
+        }
+
+        #[test]
+        fn wrong() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula(
+                    "!(a -> b)",
+                    Some(SignedModalTabParams {
+                        backtracking: false,
+                    }),
+                )
+                .unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Prune(0));
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn nothing_to_prune() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a -> b)", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s.clone(), SignedModalTabMove::Prune(0))
+                    .unwrap();
+            })
+        }
+    }
+
+    mod undo {
+        use super::*;
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s1 = SignedModalTableaux::parse_formula("!(<>(!a)) -> []a", None).unwrap();
+                let mut s2 = SignedModalTableaux::parse_formula("!(<>(!a)) -> []a", None).unwrap();
+                s2.used_backtracking = true;
+
+                let h0 = s2.compute_seal_info();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Alpha(0, None))
+                    .unwrap();
+                let s2 = SignedModalTableaux::apply_move(s2, SignedModalTabMove::Alpha(0, None))
+                    .unwrap();
+                let h1 = s2.compute_seal_info();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Negation(1, None))
+                    .unwrap();
+                let s2 = SignedModalTableaux::apply_move(s2, SignedModalTabMove::Negation(1, None))
+                    .unwrap();
+                let h2 = s2.compute_seal_info();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Pi(1, 2, None))
+                    .unwrap();
+                let s2 = SignedModalTableaux::apply_move(s2, SignedModalTabMove::Pi(1, 2, None))
+                    .unwrap();
+                let h3 = s2.compute_seal_info();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Nu(1, 3, None))
+                    .unwrap();
+                let s2 = SignedModalTableaux::apply_move(s2, SignedModalTabMove::Nu(1, 3, None))
+                    .unwrap();
+                let h4 = s2.compute_seal_info();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Negation(5, None))
+                    .unwrap();
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+                assert_eq!(h4, s1.compute_seal_info());
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+                assert_eq!(h3, s1.compute_seal_info());
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+                assert_eq!(h2, s1.compute_seal_info());
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+                assert_eq!(h1, s1.compute_seal_info());
+
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+                assert_eq!(h0, s1.compute_seal_info());
+            })
+        }
+
+        #[test]
+        fn undo_two_children() {
+            session(|| {
+                let s1 = SignedModalTableaux::parse_formula("a & b", None).unwrap();
+                let mut s2 = SignedModalTableaux::parse_formula("a & b", None).unwrap();
+                s2.used_backtracking = true;
+
+                let h0 = s2.compute_seal_info();
+
+                let s1 =
+                    SignedModalTableaux::apply_move(s1, SignedModalTabMove::Beta(0, None)).unwrap();
+                let s1 = SignedModalTableaux::apply_move(s1, SignedModalTabMove::Undo).unwrap();
+
+                assert_eq!(h0, s1.compute_seal_info())
+            })
+        }
+
+        #[test]
+        fn wrong() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a -> b)", None).unwrap();
+                assert!(SignedModalTableaux::apply_move(s, SignedModalTabMove::Undo).is_err())
             })
         }
     }
