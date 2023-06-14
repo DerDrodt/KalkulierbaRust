@@ -207,6 +207,7 @@ impl StateKeeper {
         c_mac == mac.to_uppercase()
     }
 
+    #[allow(dead_code)]
     fn reset(&self) {
         let mut state = self.state.lock().unwrap();
         state.disabled_calculi.clear();

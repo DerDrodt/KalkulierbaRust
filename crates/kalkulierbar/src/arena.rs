@@ -1,4 +1,3 @@
-use smallvec::SmallVec;
 use std::{
     alloc::Layout,
     cell::{Cell, RefCell},
@@ -7,17 +6,9 @@ use std::{
     ptr, slice,
 };
 
-#[inline(never)]
-#[cold]
-fn cold_path<F: FnOnce() -> R, R>(f: F) -> R {
-    f()
-}
-
 struct TypedArenaChunk<T> {
     /// The raw storage for the arena chunk.
     storage: Box<[MaybeUninit<T>]>,
-    /// The number of valid entries in the chunk.
-    entries: usize,
 }
 
 impl<T> TypedArenaChunk<T> {
@@ -25,17 +16,6 @@ impl<T> TypedArenaChunk<T> {
     unsafe fn new(capacity: usize) -> TypedArenaChunk<T> {
         TypedArenaChunk {
             storage: Box::new_uninit_slice(capacity),
-            entries: 0,
-        }
-    }
-
-    /// Destroys this arena chunk.
-    #[inline]
-    unsafe fn destroy(&mut self, len: usize) {
-        // The branch on needs_drop() is an -O1 performance optimization.
-        // Without the branch, dropping TypedArena<u8> takes linear time.
-        if mem::needs_drop::<T>() {
-            ptr::drop_in_place(MaybeUninit::slice_assume_init_mut(&mut self.storage[..len]));
         }
     }
 
@@ -161,19 +141,6 @@ impl DroplessArena {
         }
     }
 
-    #[inline]
-    pub fn alloc<T>(&self, object: T) -> &mut T {
-        assert!(!mem::needs_drop::<T>());
-
-        let mem = self.alloc_raw(Layout::for_value::<T>(&object)) as *mut T;
-
-        unsafe {
-            // Write into uninitialized memory.
-            ptr::write(mem, object);
-            &mut *mem
-        }
-    }
-
     /// Allocates a slice of objects that are copied into the `DroplessArena`, returning a mutable
     /// reference to it. Will panic if passed a zero-sized type.
     ///
@@ -195,69 +162,6 @@ impl DroplessArena {
         unsafe {
             mem.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
             slice::from_raw_parts_mut(mem, slice.len())
-        }
-    }
-
-    #[inline]
-    unsafe fn write_from_iter<T, I: Iterator<Item = T>>(
-        &self,
-        mut iter: I,
-        len: usize,
-        mem: *mut T,
-    ) -> &mut [T] {
-        let mut i = 0;
-        // Use a manual loop since LLVM manages to optimize it better for
-        // slice iterators
-        loop {
-            let value = iter.next();
-            if i >= len || value.is_none() {
-                // We only return as many items as the iterator gave us, even
-                // though it was supposed to give us `len`
-                return slice::from_raw_parts_mut(mem, i);
-            }
-            ptr::write(mem.add(i), value.unwrap());
-            i += 1;
-        }
-    }
-
-    #[inline]
-    pub fn alloc_from_iter<T, I: IntoIterator<Item = T>>(&self, iter: I) -> &mut [T] {
-        let iter = iter.into_iter();
-        assert!(mem::size_of::<T>() != 0);
-        assert!(!mem::needs_drop::<T>());
-
-        let size_hint = iter.size_hint();
-
-        match size_hint {
-            (min, Some(max)) if min == max => {
-                // We know the exact number of elements the iterator will produce here
-                let len = min;
-
-                if len == 0 {
-                    return &mut [];
-                }
-
-                let mem = self.alloc_raw(Layout::array::<T>(len).unwrap()) as *mut T;
-                unsafe { self.write_from_iter(iter, len, mem) }
-            }
-            (_, _) => {
-                cold_path(move || -> &mut [T] {
-                    let mut vec: SmallVec<[_; 8]> = iter.collect();
-                    if vec.is_empty() {
-                        return &mut [];
-                    }
-                    // Move the content to the arena by copying it and then forgetting
-                    // the content of the SmallVec
-                    unsafe {
-                        let len = vec.len();
-                        let start_ptr =
-                            self.alloc_raw(Layout::for_value::<[T]>(vec.as_slice())) as *mut T;
-                        vec.as_ptr().copy_to_nonoverlapping(start_ptr, len);
-                        vec.set_len(0);
-                        slice::from_raw_parts_mut(start_ptr, len)
-                    }
-                })
-            }
         }
     }
 }
