@@ -1679,7 +1679,7 @@ mod tests {
         fn nothing_to_prune() {
             session(|| {
                 let s = SignedModalTableaux::parse_formula("!(a -> b)", None).unwrap();
-                let r = SignedModalTableaux::apply_move(s.clone(), SignedModalTabMove::Prune(0))
+                let _r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Prune(0))
                     .unwrap();
             })
         }
