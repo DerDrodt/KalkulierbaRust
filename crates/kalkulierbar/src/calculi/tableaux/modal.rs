@@ -158,7 +158,7 @@ impl SignedModalTabState {
             formula: formula.clone(),
             assumption,
             backtracking,
-            nodes: vec![SignedModalTabNode::new(None, vec![1], true, formula)],
+            nodes: vec![SignedModalTabNode::new(None, vec![1], assumption, formula)],
             moves: vec![],
             used_backtracking: false,
             status_msg: None,
@@ -294,7 +294,25 @@ impl SignedModalTabNode {
     }
 
     fn info(&self) -> String {
-        todo!()
+        let parent = if let Some(p) = self.parent {
+            p.to_string()
+        } else {
+            "null".to_string()
+        };
+        let children = self
+            .children
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let is_closed = self.is_closed;
+        let close_ref = if let Some(r) = self.close_ref {
+            r.to_string()
+        } else {
+            "null".to_string()
+        };
+        let formula = &self.formula;
+        format!("({parent}|{children}|{is_closed}|{close_ref}|{formula})")
     }
 }
 
@@ -486,7 +504,7 @@ fn apply_alpha(
         };
 
         state.add_child(leaf_id, a1);
-        state.add_child(state.nodes.len(), a2);
+        state.add_child(state.nodes.len() - 1, a2);
 
         if state.backtracking {
             state
@@ -603,7 +621,7 @@ fn apply_beta(
         Ok(state)
     } else {
         for l in state.child_leaves_of(node_id) {
-            state = apply_alpha(state, node_id, Some(l))?;
+            state = apply_beta(state, node_id, Some(l))?;
         }
         Ok(state)
     }
@@ -663,7 +681,7 @@ fn apply_nu(
         Ok(state)
     } else {
         for l in state.child_leaves_of(node_id) {
-            state = apply_alpha(state, node_id, Some(l))?;
+            state = apply_nu(state, prefix, node_id, Some(l))?;
         }
         Ok(state)
     }
@@ -723,7 +741,7 @@ fn apply_pi(
         Ok(state)
     } else {
         for l in state.child_leaves_of(node_id) {
-            state = apply_alpha(state, node_id, Some(l))?;
+            state = apply_pi(state, prefix, node_id, Some(l))?;
         }
         Ok(state)
     }
@@ -1195,5 +1213,296 @@ impl<'de> Deserialize<'de> for SignedModalTabState {
             "seal",
         ];
         deserializer.deserialize_struct("SignedModalTabState", FIELDS, StateVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    mod alpha {
+        use super::*;
+
+        #[test]
+        fn basic_and() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a & b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(1, None)).unwrap();
+
+                let s2 = SignedModalTableaux::apply_move(
+                    SignedModalTableaux::parse_formula("!a", None).unwrap(),
+                    SignedModalTabMove::Negation(0, None),
+                )
+                .unwrap();
+                let s3 = SignedModalTableaux::apply_move(
+                    SignedModalTableaux::parse_formula("!b", None).unwrap(),
+                    SignedModalTabMove::Negation(0, None),
+                )
+                .unwrap();
+
+                assert_eq!(1, s.nodes[1].children.len());
+                assert!(s.nodes[2].sign);
+                assert!(s.nodes[3].sign);
+                assert!(s.nodes[2].formula.syn_eq(&s2.nodes[1].formula));
+                assert!(s.nodes[3].formula.syn_eq(&s3.nodes[1].formula));
+            })
+        }
+
+        #[test]
+        fn wrong_and() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("(a & b)", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None));
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn basic_or() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("a | b", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+
+                let f1 = parse_modal_formula("a").unwrap().1;
+                let f2 = parse_modal_formula("b").unwrap().1;
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert!(!s.nodes[1].sign);
+                assert!(!s.nodes[2].sign);
+                assert!(s.nodes[1].formula.syn_eq(&f1));
+                assert!(s.nodes[2].formula.syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_or() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a | b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(1, None));
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn basic_impl() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("a -> b", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+
+                let f1 = parse_modal_formula("a").unwrap().1;
+                let f2 = parse_modal_formula("b").unwrap().1;
+
+                assert_eq!(1, s.nodes[0].children.len());
+                assert!(s.nodes[1].sign);
+                assert!(!s.nodes[2].sign);
+                assert!(s.nodes[1].formula.syn_eq(&f1));
+                assert!(s.nodes[2].formula.syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_impl() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a -> b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(1, None));
+                assert!(r.is_err())
+            })
+        }
+    }
+
+    mod beta {
+        use super::*;
+
+        #[test]
+        fn basic_or() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a | b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(1, None)).unwrap();
+
+                let s2 = SignedModalTableaux::apply_move(
+                    SignedModalTableaux::parse_formula("!a", None).unwrap(),
+                    SignedModalTabMove::Negation(0, None),
+                )
+                .unwrap();
+                let s3 = SignedModalTableaux::apply_move(
+                    SignedModalTableaux::parse_formula("!b", None).unwrap(),
+                    SignedModalTabMove::Negation(0, None),
+                )
+                .unwrap();
+
+                assert_eq!(2, s.nodes[1].children.len());
+                assert!(s.nodes[2].sign);
+                assert!(s.nodes[3].sign);
+                assert!(s.nodes[2].formula.syn_eq(&s2.nodes[1].formula));
+                assert!(s.nodes[3].formula.syn_eq(&s3.nodes[1].formula));
+            })
+        }
+
+        #[test]
+        fn wrong_or() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("(a | b)", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(0, None));
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn basic_and() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("a & b", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(0, None)).unwrap();
+
+                let f1 = parse_modal_formula("a").unwrap().1;
+                let f2 = parse_modal_formula("b").unwrap().1;
+
+                assert_eq!(2, s.nodes[0].children.len());
+                assert!(!s.nodes[1].sign);
+                assert!(!s.nodes[2].sign);
+                assert!(s.nodes[1].formula.syn_eq(&f1));
+                assert!(s.nodes[2].formula.syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_and() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a & b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(1, None));
+                assert!(r.is_err())
+            })
+        }
+
+        #[test]
+        fn basic_impl() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("\\sign T: a -> b", None).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(0, None)).unwrap();
+
+                let f1 = parse_modal_formula("a").unwrap().1;
+                let f2 = parse_modal_formula("b").unwrap().1;
+
+                assert_eq!(2, s.nodes[0].children.len());
+                assert!(!s.nodes[1].sign);
+                assert!(s.nodes[2].sign);
+                assert!(s.nodes[1].formula.syn_eq(&f1));
+                assert!(s.nodes[2].formula.syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn wrong_impl() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("a -> b", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(0, None));
+                assert!(r.is_err())
+            })
+        }
+    }
+
+    mod close {
+        use super::*;
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(<>(!a)) -> []a", None).unwrap();
+
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Alpha(0, None)).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(1, None))
+                    .unwrap();
+                let str = s.compute_seal_info();
+                println!("{str}");
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Pi(1, 2, None)).unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Nu(1, 3, None)).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(5, None))
+                    .unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Close(4, 6)).unwrap();
+
+                for n in s.nodes {
+                    assert!(n.is_closed);
+                }
+            })
+        }
+    }
+
+    mod negation {
+        use super::*;
+
+        #[test]
+        fn basic() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(!a)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(1, None))
+                    .unwrap();
+
+                let f1 = parse_modal_formula("!a").unwrap().1;
+                let f2 = parse_modal_formula("a").unwrap().1;
+
+                assert!(
+                    s.nodes[1].formula.syn_eq(&f1),
+                    "{} != {}",
+                    s.nodes[1].formula,
+                    f1
+                );
+                assert!(s.nodes[2].formula.syn_eq(&f2));
+            })
+        }
+
+        #[test]
+        fn complex() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("!(a | b)", None).unwrap();
+                let s = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None))
+                    .unwrap();
+                let s =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Beta(1, None)).unwrap();
+
+                let f = parse_modal_formula("a | b").unwrap().1;
+                let s1 = SignedModalTableaux::apply_move(
+                    s.clone(),
+                    SignedModalTabMove::Negation(0, Some(2)),
+                )
+                .unwrap();
+
+                assert!(s1.nodes[4].formula.syn_eq(&f));
+                let s2 =
+                    SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, Some(3)))
+                        .unwrap();
+                assert!(s2.nodes[4].formula.syn_eq(&f));
+            })
+        }
+
+        #[test]
+        fn wrong_node() {
+            session(|| {
+                let s = SignedModalTableaux::parse_formula("a & b", None).unwrap();
+                let r = SignedModalTableaux::apply_move(s, SignedModalTabMove::Negation(0, None));
+                assert!(r.is_err())
+            })
+        }
     }
 }

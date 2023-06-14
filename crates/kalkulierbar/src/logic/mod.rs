@@ -126,6 +126,7 @@ impl SynEq for LogicNode {
     fn syn_eq(&self, o: &Self) -> bool {
         match (self, o) {
             (Self::Var(s1), Self::Var(s2)) => s1 == s2,
+            (Self::Not(c1), Self::Not(c2)) => c1.syn_eq(c2),
             (Self::And(l1, r1), Self::And(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
             (Self::Or(l1, r1), Self::Or(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),
             (Self::Impl(l1, r1), Self::Impl(l2, r2)) => l1.syn_eq(l2) && r1.syn_eq(r2),

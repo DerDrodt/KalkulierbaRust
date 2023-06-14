@@ -33,12 +33,14 @@ impl<'f> ModalParser<'f> {
     fn parse_sign(&mut self) -> ParseResult<(bool, Box<LogicNode>)> {
         let assumption = if self.next_is(TokenKind::SignT) {
             self.bump()?;
+            self.eat(TokenKind::Colon)?;
             true
         } else if self.next_is(TokenKind::SignF) {
             self.bump()?;
+            self.eat(TokenKind::Colon)?;
             false
         } else {
-            true
+            false
         };
 
         Ok((assumption, self.parse_equiv()?))
