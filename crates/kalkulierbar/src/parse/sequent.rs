@@ -89,7 +89,7 @@ mod tests {
     use crate::session;
 
     mod prop {
-        use crate::calculi::sequent::{prop::PropSeqMove, SequentNode};
+        use crate::calculi::sequent::{prop::Move, SequentNode};
 
         use super::*;
 
@@ -153,7 +153,7 @@ mod tests {
             session(|| {
                 for (f, e) in valid {
                     let (l, r) = parse_prop(f).expect(e);
-                    let n = SequentNode::<PropSeqMove>::new(None, l, r, None);
+                    let n = SequentNode::<Move>::new(None, l, r, None);
                     assert_eq!(e, n.to_string());
                 }
             })
@@ -162,7 +162,7 @@ mod tests {
 
     mod fo {
         use super::*;
-        use crate::calculi::sequent::{fo::FOSeqMove, SequentNode};
+        use crate::calculi::sequent::{fo::Move, SequentNode};
 
         #[test]
         fn invalid() {
@@ -236,7 +236,7 @@ mod tests {
             session(|| {
                 for (f, e) in valid {
                     let (l, r) = parse_fo(f).expect(e);
-                    let n = SequentNode::<FOSeqMove>::new(None, l, r, None);
+                    let n = SequentNode::<Move>::new(None, l, r, None);
                     assert_eq!(e, n.to_string());
                 }
             })

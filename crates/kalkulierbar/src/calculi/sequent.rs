@@ -19,12 +19,12 @@ pub mod prop;
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
-pub struct SequentParams {
+pub struct Params {
     pub show_only_applicable_rules: bool,
 }
 
 #[derive(Debug)]
-pub enum SequentErr {
+pub enum Err {
     ParseErr(ParseErr),
     InvalidNodeId(usize),
     ExpectedLeaf,
@@ -37,50 +37,50 @@ pub enum SequentErr {
     SigAdherenceErr(SigAdherenceErr),
 }
 
-impl From<ParseErr> for SequentErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
         Self::ParseErr(e)
     }
 }
 
-impl From<SigAdherenceErr> for SequentErr {
+impl From<SigAdherenceErr> for Err {
     fn from(value: SigAdherenceErr) -> Self {
         Self::SigAdherenceErr(value)
     }
 }
 
-impl fmt::Display for SequentErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SequentErr::ParseErr(e) => fmt::Display::fmt(e, f),
-            SequentErr::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
-            SequentErr::InvalidNodeId(n) => write!(f, "Node with ID {n} does not exist"),
-            SequentErr::ExpectedLeaf => write!(f, "Rules can only be applied on leaf level"),
-            SequentErr::AxNotApplicable => write!(
+            Err::ParseErr(e) => fmt::Display::fmt(e, f),
+            Err::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
+            Err::InvalidNodeId(n) => write!(f, "Node with ID {n} does not exist"),
+            Err::ExpectedLeaf => write!(f, "Rules can only be applied on leaf level"),
+            Err::AxNotApplicable => write!(
                 f,
                 "Axiom rule needs two identical formulas on both sides to be applied"
             ),
-            SequentErr::InvalidFormulaId(id) => {
+            Err::InvalidFormulaId(id) => {
                 write!(
                     f,
                     "Formula with ID {id} does not exist in the selected node"
                 )
             }
-            SequentErr::RuleNotApplicable(rule, expected) => {
+            Err::RuleNotApplicable(rule, expected) => {
                 if expected.starts_with('i') {
                     write!(f, "Rule {rule} can only be applied on an {expected}")
                 } else {
                     write!(f, "Rule {rule} can only be applied on a {expected}")
                 }
             }
-            SequentErr::NothingToUndo => write!(f, "No move to undo"),
-            SequentErr::ExpectedConst(t) => write!(f, "Expected a constant, got {t}"),
-            SequentErr::SymbolAlreadyUsed(s) => write!(f, "Identifier '{s}' is already in use"),
+            Err::NothingToUndo => write!(f, "No move to undo"),
+            Err::ExpectedConst(t) => write!(f, "Expected a constant, got {t}"),
+            Err::SymbolAlreadyUsed(s) => write!(f, "Identifier '{s}' is already in use"),
         }
     }
 }
 
-pub type SequentResult<T> = Result<T, SequentErr>;
+pub type SequentResult<T> = Result<T, Err>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,10 +155,7 @@ trait CommonSequentMove {
     fn impl_r(node_id: usize, f_id: usize) -> Self;
 }
 
-fn apply_ax<M: CommonSequentMove>(
-    mut state: SequentState<M>,
-    node_id: usize,
-) -> SequentResult<SequentState<M>> {
+fn apply_ax<M: CommonSequentMove>(mut state: State<M>, node_id: usize) -> SequentResult<State<M>> {
     check_node_id(&state, node_id)?;
     check_leaf(&state, node_id)?;
     let leaf = &state.nodes[node_id];
@@ -172,14 +169,14 @@ fn apply_ax<M: CommonSequentMove>(
         }
     }
 
-    Err(SequentErr::AxNotApplicable)
+    Err(Err::AxNotApplicable)
 }
 
 fn apply_not_l<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_left(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.left_formulas[f_id];
@@ -195,15 +192,15 @@ fn apply_not_l<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("notLeft", "negation"))
+        Err(Err::RuleNotApplicable("notLeft", "negation"))
     }
 }
 
 fn apply_not_r<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_right(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.right_formulas[f_id];
@@ -219,15 +216,15 @@ fn apply_not_r<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("notRight", "negation"))
+        Err(Err::RuleNotApplicable("notRight", "negation"))
     }
 }
 
 fn apply_and_l<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_left(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.left_formulas[f_id];
@@ -244,15 +241,15 @@ fn apply_and_l<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("andLeft", "conjunction"))
+        Err(Err::RuleNotApplicable("andLeft", "conjunction"))
     }
 }
 
 fn apply_and_r<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_right(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.right_formulas[f_id];
@@ -277,15 +274,15 @@ fn apply_and_r<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("andRight", "conjunction"))
+        Err(Err::RuleNotApplicable("andRight", "conjunction"))
     }
 }
 
 fn apply_or_l<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_left(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.left_formulas[f_id];
@@ -310,15 +307,15 @@ fn apply_or_l<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("orLeft", "disjunction"))
+        Err(Err::RuleNotApplicable("orLeft", "disjunction"))
     }
 }
 
 fn apply_or_r<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_right(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.right_formulas[f_id];
@@ -335,15 +332,15 @@ fn apply_or_r<M: CommonSequentMove>(
         );
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("orRight", "disjunction"))
+        Err(Err::RuleNotApplicable("orRight", "disjunction"))
     }
 }
 
 fn apply_impl_l<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_left(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.left_formulas[f_id];
@@ -370,15 +367,15 @@ fn apply_impl_l<M: CommonSequentMove>(
 
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("implLeft", "implication"))
+        Err(Err::RuleNotApplicable("implLeft", "implication"))
     }
 }
 
 fn apply_impl_r<M: CommonSequentMove>(
-    mut state: SequentState<M>,
+    mut state: State<M>,
     node_id: usize,
     f_id: usize,
-) -> SequentResult<SequentState<M>> {
+) -> SequentResult<State<M>> {
     check_right(&state, node_id, f_id)?;
     let leaf = &state.nodes[node_id];
     let formula = &leaf.right_formulas[f_id];
@@ -397,13 +394,13 @@ fn apply_impl_r<M: CommonSequentMove>(
 
         Ok(state)
     } else {
-        Err(SequentErr::RuleNotApplicable("implRight", "implication"))
+        Err(Err::RuleNotApplicable("implRight", "implication"))
     }
 }
 
-fn apply_undo<M>(state: SequentState<M>) -> SequentResult<SequentState<M>> {
+fn apply_undo<M>(state: State<M>) -> SequentResult<State<M>> {
     if state.nodes.len() <= 1 {
-        return Err(SequentErr::NothingToUndo);
+        return Err(Err::NothingToUndo);
     }
 
     let latest = state.nodes.last().unwrap();
@@ -431,7 +428,7 @@ fn apply_undo<M>(state: SequentState<M>) -> SequentResult<SequentState<M>> {
     Ok(state)
 }
 
-fn apply_prune<M>(mut state: SequentState<M>, node_id: usize) -> SequentResult<SequentState<M>> {
+fn apply_prune<M>(mut state: State<M>, node_id: usize) -> SequentResult<State<M>> {
     check_node_id(&state, node_id)?;
 
     let n = &state.nodes[node_id];
@@ -483,51 +480,51 @@ fn apply_prune<M>(mut state: SequentState<M>, node_id: usize) -> SequentResult<S
     Ok(state)
 }
 
-fn check_node_id<M>(state: &SequentState<M>, node_id: usize) -> SequentResult<()> {
+fn check_node_id<M>(state: &State<M>, node_id: usize) -> SequentResult<()> {
     if node_id >= state.nodes.len() {
-        Err(SequentErr::InvalidNodeId(node_id))
+        Err(Err::InvalidNodeId(node_id))
     } else {
         Ok(())
     }
 }
 
-fn check_leaf<M>(state: &SequentState<M>, node_id: usize) -> SequentResult<()> {
+fn check_leaf<M>(state: &State<M>, node_id: usize) -> SequentResult<()> {
     let leaf = &state.nodes[node_id];
 
     if !leaf.is_leaf() {
-        Err(SequentErr::ExpectedLeaf)
+        Err(Err::ExpectedLeaf)
     } else {
         Ok(())
     }
 }
 
-fn check_left<M>(state: &SequentState<M>, node_id: usize, f_id: usize) -> SequentResult<()> {
+fn check_left<M>(state: &State<M>, node_id: usize, f_id: usize) -> SequentResult<()> {
     check_node_id(state, node_id)?;
     check_leaf(state, node_id)?;
     if f_id >= state.nodes[node_id].left_formulas.len() {
-        Err(SequentErr::InvalidFormulaId(f_id))
+        Err(Err::InvalidFormulaId(f_id))
     } else {
         Ok(())
     }
 }
 
-fn check_right<M>(state: &SequentState<M>, node_id: usize, f_id: usize) -> SequentResult<()> {
+fn check_right<M>(state: &State<M>, node_id: usize, f_id: usize) -> SequentResult<()> {
     check_node_id(state, node_id)?;
     check_leaf(state, node_id)?;
     if f_id >= state.nodes[node_id].right_formulas.len() {
-        Err(SequentErr::InvalidFormulaId(f_id))
+        Err(Err::InvalidFormulaId(f_id))
     } else {
         Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct SequentState<M> {
+pub struct State<M> {
     nodes: Vec<SequentNode<M>>,
     show_only_applicable_rules: bool,
 }
 
-impl<M> SequentState<M> {
+impl<M> State<M> {
     pub fn new(nodes: Vec<SequentNode<M>>, show_only_applicable_rules: bool) -> Self {
         Self {
             nodes,
@@ -562,7 +559,7 @@ impl<M> SequentState<M> {
     }
 }
 
-impl<M> ProtectedState for SequentState<M> {
+impl<M> ProtectedState for State<M> {
     fn compute_seal_info(&self) -> String {
         format!(
             "psc|{}|{}",
@@ -576,7 +573,7 @@ impl<M> ProtectedState for SequentState<M> {
     }
 }
 
-impl<M> Serialize for SequentState<M>
+impl<M> Serialize for State<M>
 where
     M: Serialize,
 {
@@ -592,7 +589,7 @@ where
     }
 }
 
-impl<'de, M> Deserialize<'de> for SequentState<M>
+impl<'de, M> Deserialize<'de> for State<M>
 where
     M: Deserialize<'de>,
 {
@@ -615,13 +612,13 @@ where
         }
 
         impl<'de, M: Deserialize<'de>> Visitor<'de> for StateVisitor<M> {
-            type Value = SequentState<M>;
+            type Value = State<M>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct SequentState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<SequentState<M>, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State<M>, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -656,7 +653,7 @@ where
                 let show_only_applicable_rules =
                     show_only.ok_or_else(|| de::Error::missing_field("showOnlyApplicableRules"))?;
                 let seal = seal.ok_or_else(|| de::Error::missing_field("seal"))?;
-                let s = SequentState {
+                let s = State {
                     nodes,
                     show_only_applicable_rules,
                 };

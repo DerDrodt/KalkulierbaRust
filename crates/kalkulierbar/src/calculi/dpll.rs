@@ -14,54 +14,54 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum DPLLErr {
+pub enum Err {
     ParseErr(ParseErr),
     InvalidBranchId(usize),
     AtomsNotCompatible(Atom<Symbol>, Atom<Symbol>),
     ExpectedLeaf(usize),
-    PropAnnotation(DPLLNode),
+    PropAnnotation(Node),
     InvalidClauseId(usize),
     NoSuchAtom(Clause<Symbol>, usize),
     SameClauseIds,
     MayOnlyHaveOneAtom(Clause<Symbol>),
-    SplitAnnotation(DPLLNode),
+    SplitAnnotation(Node),
     InvalidVarName(String),
     CannotPruneAnnotation(usize),
-    ExpectedModelNode(DPLLNode),
+    ExpectedModelNode(Node),
     HasAlreadyBeenChecked,
     IDoesNotSatisfy(Clause<Symbol>),
 }
 
-impl From<ParseErr> for DPLLErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
         Self::ParseErr(e)
     }
 }
 
-impl fmt::Display for DPLLErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DPLLErr::ParseErr(e) => fmt::Display::fmt(e, f),
-            DPLLErr::InvalidBranchId(b) => write!(f, "Branch with ID {b} does not exist"),
-            DPLLErr::AtomsNotCompatible(a1, a2) => {
+            Err::ParseErr(e) => fmt::Display::fmt(e, f),
+            Err::InvalidBranchId(b) => write!(f, "Branch with ID {b} does not exist"),
+            Err::AtomsNotCompatible(a1, a2) => {
                 write!(f, "Selected atom '{a1}' is not compatible with '{a2}'")
             }
-            DPLLErr::ExpectedLeaf(b) => write!(f, "ID {b} does not reference a leaf"),
-            DPLLErr::PropAnnotation(b) => write!(f, "Cannot propagate on annotation '{b}'"),
-            DPLLErr::InvalidClauseId(c) => write!(f, "Clause set has no clause with ID {c}"),
-            DPLLErr::NoSuchAtom(c, a) => write!(f, "Clause '{c}' has no atom with ID {a}"),
-            DPLLErr::SameClauseIds => {
+            Err::ExpectedLeaf(b) => write!(f, "ID {b} does not reference a leaf"),
+            Err::PropAnnotation(b) => write!(f, "Cannot propagate on annotation '{b}'"),
+            Err::InvalidClauseId(c) => write!(f, "Clause set has no clause with ID {c}"),
+            Err::NoSuchAtom(c, a) => write!(f, "Clause '{c}' has no atom with ID {a}"),
+            Err::SameClauseIds => {
                 write!(f, "Base and propagation clauses have to be different")
             }
-            DPLLErr::MayOnlyHaveOneAtom(c) => {
+            Err::MayOnlyHaveOneAtom(c) => {
                 write!(f, "Base clause {c} may only have exactly one atom")
             }
-            DPLLErr::SplitAnnotation(b) => write!(f, "Cannot split on annotation '{b}'"),
-            DPLLErr::InvalidVarName(l) => write!(f, "Invalid variable name '{l}'"),
-            DPLLErr::CannotPruneAnnotation(b) => write!(f, "Cannot prune annotation '{b}'"),
-            DPLLErr::ExpectedModelNode(b) => write!(f, "Node '{b}' is not a model node"),
-            DPLLErr::HasAlreadyBeenChecked => write!(f, "This node has already been checked"),
-            DPLLErr::IDoesNotSatisfy(c) => write!(
+            Err::SplitAnnotation(b) => write!(f, "Cannot split on annotation '{b}'"),
+            Err::InvalidVarName(l) => write!(f, "Invalid variable name '{l}'"),
+            Err::CannotPruneAnnotation(b) => write!(f, "Cannot prune annotation '{b}'"),
+            Err::ExpectedModelNode(b) => write!(f, "Node '{b}' is not a model node"),
+            Err::HasAlreadyBeenChecked => write!(f, "This node has already been checked"),
+            Err::IDoesNotSatisfy(c) => write!(
                 f,
                 "The given interpretation does not satisfy any atom of clause {c}"
             ),
@@ -69,10 +69,10 @@ impl fmt::Display for DPLLErr {
     }
 }
 
-pub type DPLLResult<T> = Result<T, DPLLErr>;
+pub type DPLLResult<T> = Result<T, Err>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DPLLMove {
+pub enum Move {
     Split(usize, String),
     Propagate(usize, usize, usize, usize),
     Prune(usize),
@@ -80,12 +80,12 @@ pub enum DPLLMove {
 }
 
 #[derive(Debug, Clone)]
-pub struct DPLLState {
+pub struct State {
     clause_set: ClauseSet<Symbol>,
-    nodes: Vec<DPLLNode>,
+    nodes: Vec<Node>,
 }
 
-impl DPLLState {
+impl State {
     pub fn new(clause_set: ClauseSet<Symbol>) -> Self {
         Self {
             clause_set,
@@ -111,14 +111,14 @@ impl DPLLState {
         cs
     }
 
-    pub fn add_child(&mut self, p: usize, n: DPLLNode) {
+    pub fn add_child(&mut self, p: usize, n: Node) {
         let idx = self.nodes.len();
         self.nodes[p].children.push(idx);
         self.nodes.push(n);
     }
 }
 
-impl ProtectedState for DPLLState {
+impl ProtectedState for State {
     fn compute_seal_info(&self) -> String {
         let nis: Vec<String> = self.nodes.iter().map(|n| n.info()).collect();
         format!("pdpll|{}|[{}]", self.clause_set, nis.join(", "))
@@ -205,7 +205,7 @@ impl fmt::Display for CsDiff {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DPLLNode {
+pub struct Node {
     parent: Option<usize>,
     #[serde(rename = "type")]
     ty: NodeType,
@@ -216,7 +216,7 @@ pub struct DPLLNode {
     verified: Option<bool>,
 }
 
-impl DPLLNode {
+impl Node {
     pub fn new(parent: Option<usize>, ty: NodeType, label: Symbol, diff: CsDiff) -> Self {
         Self {
             parent,
@@ -263,7 +263,7 @@ impl DPLLNode {
     }
 }
 
-impl fmt::Display for DPLLNode {
+impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.label, f)
     }
@@ -274,43 +274,37 @@ pub struct DPLL;
 impl<'f> Calculus<'f> for DPLL {
     type Params = ();
 
-    type State = DPLLState;
+    type State = State;
 
-    type Move = DPLLMove;
+    type Move = Move;
 
-    type Error = DPLLErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
         _: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
         let cs = parse_prop_flexible(formula, CNFStrategy::Optimal)?;
-        let mut s = DPLLState::new(cs);
-        s.nodes.push(DPLLNode::new(
-            None,
-            NodeType::Root,
-            "true".into(),
-            CsDiff::Id,
-        ));
+        let mut s = State::new(cs);
+        s.nodes
+            .push(Node::new(None, NodeType::Root, "true".into(), CsDiff::Id));
 
         Ok(s)
     }
 
     fn apply_move(state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
         match k_move {
-            DPLLMove::Split(branch, lit) => split(state, branch, lit),
-            DPLLMove::Propagate(branch, base_clause, prop_clause, prop_atom) => {
+            Move::Split(branch, lit) => split(state, branch, lit),
+            Move::Propagate(branch, base_clause, prop_clause, prop_atom) => {
                 propagate(state, branch, base_clause, prop_clause, prop_atom)
             }
-            DPLLMove::Prune(branch) => prune(state, branch),
-            DPLLMove::ModelCheck(branch, interpretation) => {
-                model_check(state, branch, interpretation)
-            }
+            Move::Prune(branch) => prune(state, branch),
+            Move::ModelCheck(branch, interpretation) => model_check(state, branch, interpretation),
         }
     }
 
     fn check_close(state: Self::State) -> crate::calculus::CloseMsg {
-        let closed = state.nodes.iter().all(DPLLNode::is_closed);
+        let closed = state.nodes.iter().all(Node::is_closed);
         let done = state
             .nodes
             .iter()
@@ -330,12 +324,12 @@ impl<'f> Calculus<'f> for DPLL {
 }
 
 fn propagate(
-    mut state: DPLLState,
+    mut state: State,
     branch: usize,
     base_c: usize,
     prop_c: usize,
     prop_a: usize,
-) -> DPLLResult<DPLLState> {
+) -> DPLLResult<State> {
     let cs = check_propagate_restrictions(&state, branch, base_c, prop_c, prop_a)?;
     let base_a = &cs.clauses()[base_c].atoms()[0];
     let prop_atom = &cs.clauses()[prop_c].atoms()[prop_a];
@@ -348,14 +342,11 @@ fn propagate(
     } else if base_a.lit() == prop_atom.lit() && base_a.negated() != prop_atom.negated() {
         CsDiff::RemoveAtom(prop_c, prop_a)
     } else {
-        return Err(DPLLErr::AtomsNotCompatible(
-            base_a.clone(),
-            prop_atom.clone(),
-        ));
+        return Err(Err::AtomsNotCompatible(base_a.clone(), prop_atom.clone()));
     };
 
     let ncs = diff.apply(cs);
-    let prop_node = DPLLNode::new(Some(branch), NodeType::Prop, "prop".into(), diff);
+    let prop_node = Node::new(Some(branch), NodeType::Prop, "prop".into(), diff);
     state.add_child(branch, prop_node);
     let pn_id = state.nodes.len() - 1;
 
@@ -365,7 +356,7 @@ fn propagate(
     if ncs.clauses().iter().any(|c| c.is_empty()) {
         state.add_child(
             pn_id,
-            DPLLNode::new(Some(pn_id), NodeType::Closed, "closed".into(), CsDiff::Id),
+            Node::new(Some(pn_id), NodeType::Closed, "closed".into(), CsDiff::Id),
         );
     }
     // A node is considered a model if it contains only single-atom clauses
@@ -373,26 +364,26 @@ fn propagate(
     else if ncs.clauses().iter().all(|c| c.size() == 1) && check_no_dups(&ncs) {
         state.add_child(
             pn_id,
-            DPLLNode::new(Some(pn_id), NodeType::Model, "model".into(), CsDiff::Id),
+            Node::new(Some(pn_id), NodeType::Model, "model".into(), CsDiff::Id),
         );
     }
 
     Ok(state)
 }
 
-fn split(mut state: DPLLState, branch: usize, l: String) -> DPLLResult<DPLLState> {
+fn split(mut state: State, branch: usize, l: String) -> DPLLResult<State> {
     let lit = check_split_restrictions(&state, branch, l)?;
 
     // Add a case distinction for $literal
     let true_c = Clause::new(vec![Atom::new(lit, false)]);
     let false_c = Clause::new(vec![Atom::new(lit, true)]);
-    let true_n = DPLLNode::new(
+    let true_n = Node::new(
         Some(branch),
         NodeType::Split,
         lit,
         CsDiff::AddClause(true_c),
     );
-    let false_n = DPLLNode::new(
+    let false_n = Node::new(
         Some(branch),
         NodeType::Split,
         Symbol::intern(&format!("¬{lit}")),
@@ -404,9 +395,9 @@ fn split(mut state: DPLLState, branch: usize, l: String) -> DPLLResult<DPLLState
     Ok(state)
 }
 
-fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
+fn prune(mut state: State, branch: usize) -> DPLLResult<State> {
     if branch >= state.nodes.len() {
-        return Err(DPLLErr::InvalidBranchId(branch));
+        return Err(Err::InvalidBranchId(branch));
     }
 
     let n = &state.nodes[branch];
@@ -415,7 +406,7 @@ fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
     if n.children.len() == 1 {
         let c = n.children[0];
         if state.nodes[c].is_annotation() {
-            return Err(DPLLErr::CannotPruneAnnotation(c));
+            return Err(Err::CannotPruneAnnotation(c));
         }
     }
 
@@ -467,23 +458,19 @@ fn prune(mut state: DPLLState, branch: usize) -> DPLLResult<DPLLState> {
     Ok(state)
 }
 
-fn model_check(
-    mut state: DPLLState,
-    branch: usize,
-    i: HashMap<Symbol, bool>,
-) -> DPLLResult<DPLLState> {
+fn model_check(mut state: State, branch: usize, i: HashMap<Symbol, bool>) -> DPLLResult<State> {
     if branch >= state.nodes.len() {
-        return Err(DPLLErr::InvalidBranchId(branch));
+        return Err(Err::InvalidBranchId(branch));
     }
 
     let b = &state.nodes[branch];
 
     if !b.ty.is_model() {
-        return Err(DPLLErr::ExpectedModelNode(b.clone()));
+        return Err(Err::ExpectedModelNode(b.clone()));
     }
 
     if let Some(true) = b.verified {
-        return Err(DPLLErr::HasAlreadyBeenChecked);
+        return Err(Err::HasAlreadyBeenChecked);
     }
 
     let cs = state.get_cs(branch);
@@ -495,7 +482,7 @@ fn model_check(
             .iter()
             .any(|a| i.contains_key(a.lit()) && a.negated() != i[a.lit()])
         {
-            return Err(DPLLErr::IDoesNotSatisfy(c.clone()));
+            return Err(Err::IDoesNotSatisfy(c.clone()));
         }
     }
 
@@ -507,7 +494,7 @@ fn model_check(
 }
 
 fn check_propagate_restrictions(
-    state: &DPLLState,
+    state: &State,
     branch: usize,
     base_c: usize,
     prop_c: usize,
@@ -515,36 +502,36 @@ fn check_propagate_restrictions(
 ) -> DPLLResult<ClauseSet<Symbol>> {
     // Check branch validity
     if branch >= state.nodes.len() {
-        return Err(DPLLErr::InvalidBranchId(branch));
+        return Err(Err::InvalidBranchId(branch));
     }
     let b = &state.nodes[branch];
     if !b.is_leaf() {
-        return Err(DPLLErr::ExpectedLeaf(branch));
+        return Err(Err::ExpectedLeaf(branch));
     }
     if b.is_annotation() {
-        return Err(DPLLErr::PropAnnotation(b.clone()));
+        return Err(Err::PropAnnotation(b.clone()));
     }
 
     let cs = state.get_cs(branch);
 
     // Check baseID, propID, atomID validity
     if base_c >= cs.size() {
-        return Err(DPLLErr::InvalidClauseId(base_c));
+        return Err(Err::InvalidClauseId(base_c));
     }
     if prop_c >= cs.size() {
-        return Err(DPLLErr::InvalidClauseId(prop_c));
+        return Err(Err::InvalidClauseId(prop_c));
     }
     if base_c == prop_c {
-        return Err(DPLLErr::SameClauseIds);
+        return Err(Err::SameClauseIds);
     }
     let c = &cs.clauses()[prop_c];
     if prop_a >= c.size() {
-        return Err(DPLLErr::NoSuchAtom(c.clone(), prop_a));
+        return Err(Err::NoSuchAtom(c.clone(), prop_a));
     }
 
     let base = &cs.clauses()[base_c];
     if base.size() != 1 {
-        return Err(DPLLErr::MayOnlyHaveOneAtom(base.clone()));
+        return Err(Err::MayOnlyHaveOneAtom(base.clone()));
     }
 
     Ok(cs)
@@ -557,29 +544,29 @@ fn check_no_dups(cs: &ClauseSet<Symbol>) -> bool {
     v.len() == cs.size()
 }
 
-fn check_split_restrictions(state: &DPLLState, branch: usize, lit: String) -> DPLLResult<Symbol> {
+fn check_split_restrictions(state: &State, branch: usize, lit: String) -> DPLLResult<Symbol> {
     use crate::parse::{Token, TokenKind, Tokenizer};
     if branch >= state.nodes.len() {
-        return Err(DPLLErr::InvalidBranchId(branch));
+        return Err(Err::InvalidBranchId(branch));
     }
     let b = &state.nodes[branch];
     if !b.is_leaf() {
-        return Err(DPLLErr::ExpectedLeaf(branch));
+        return Err(Err::ExpectedLeaf(branch));
     }
     if b.is_annotation() {
-        return Err(DPLLErr::PropAnnotation(b.clone()));
+        return Err(Err::PropAnnotation(b.clone()));
     }
 
     let tokenized: Result<Vec<Token>, ParseErr> = Tokenizer::new(&lit, false, false).collect();
     let mut tokenized = tokenized?;
 
     if tokenized.len() != 1 {
-        return Err(DPLLErr::InvalidVarName(lit));
+        return Err(Err::InvalidVarName(lit));
     }
     let v = tokenized.remove(0);
 
     if v.kind != TokenKind::CapIdent && v.kind != TokenKind::LowIdent {
-        return Err(DPLLErr::InvalidVarName(lit));
+        return Err(Err::InvalidVarName(lit));
     }
 
     Ok(v.spelling.into())
@@ -712,7 +699,7 @@ impl<'de> Deserialize<'de> for CsDiff {
     }
 }
 
-impl Serialize for DPLLState {
+impl Serialize for State {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -725,7 +712,7 @@ impl Serialize for DPLLState {
     }
 }
 
-impl<'de> Deserialize<'de> for DPLLState {
+impl<'de> Deserialize<'de> for State {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -743,18 +730,18 @@ impl<'de> Deserialize<'de> for DPLLState {
         struct StateVisitor;
 
         impl<'de> Visitor<'de> for StateVisitor {
-            type Value = DPLLState;
+            type Value = State;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct DPLLState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<DPLLState, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State, V::Error>
             where
                 V: MapAccess<'de>,
             {
                 let mut clause_set: Option<ClauseSet<Symbol>> = None;
-                let mut nodes: Option<Vec<DPLLNode>> = None;
+                let mut nodes: Option<Vec<Node>> = None;
                 let mut seal: Option<String> = None;
 
                 while let Some(key) = map.next_key()? {
@@ -784,7 +771,7 @@ impl<'de> Deserialize<'de> for DPLLState {
                 let nodes = nodes.ok_or_else(|| de::Error::missing_field("tree"))?;
                 let seal = seal.ok_or_else(|| de::Error::missing_field("seal"))?;
 
-                let s = DPLLState { clause_set, nodes };
+                let s = State { clause_set, nodes };
 
                 if !s.verify_seal(&seal) {
                     Err(de::Error::invalid_value(
@@ -802,34 +789,34 @@ impl<'de> Deserialize<'de> for DPLLState {
     }
 }
 
-impl Serialize for DPLLMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let (ty, len) = match self {
-            DPLLMove::Split(_, _) => ("dpll-split", 3),
-            DPLLMove::Propagate(_, _, _, _) => ("dpll-prop", 5),
-            DPLLMove::Prune(_) => ("dpll-prune", 2),
-            DPLLMove::ModelCheck(_, _) => ("dpll-modelcheck", 3),
+            Move::Split(_, _) => ("dpll-split", 3),
+            Move::Propagate(_, _, _, _) => ("dpll-prop", 5),
+            Move::Prune(_) => ("dpll-prune", 2),
+            Move::ModelCheck(_, _) => ("dpll-modelcheck", 3),
         };
         let mut state = serializer.serialize_struct("DPLLMove", len)?;
         state.serialize_field("type", ty)?;
         match self {
-            DPLLMove::Split(b, l) => {
+            Move::Split(b, l) => {
                 state.serialize_field("branch", b)?;
                 state.serialize_field("literal", l)?;
             }
-            DPLLMove::Propagate(b, base, pc, pa) => {
+            Move::Propagate(b, base, pc, pa) => {
                 state.serialize_field("branch", b)?;
                 state.serialize_field("baseClause", base)?;
                 state.serialize_field("propClause", pc)?;
                 state.serialize_field("propAtom", pa)?;
             }
-            DPLLMove::Prune(b) => {
+            Move::Prune(b) => {
                 state.serialize_field("branch", b)?;
             }
-            DPLLMove::ModelCheck(b, i) => {
+            Move::ModelCheck(b, i) => {
                 state.serialize_field("branch", b)?;
                 state.serialize_field("interpretation", i)?;
             }
@@ -838,7 +825,7 @@ impl Serialize for DPLLMove {
     }
 }
 
-impl<'de> Deserialize<'de> for DPLLMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -864,13 +851,13 @@ impl<'de> Deserialize<'de> for DPLLMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = DPLLMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct DPLLMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<DPLLMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -933,18 +920,18 @@ impl<'de> Deserialize<'de> for DPLLMove {
                 let ty: &str = &ty;
                 let branch = branch.ok_or_else(|| de::Error::missing_field("branch"))?;
                 Ok(match ty {
-                    "dpll-split" => DPLLMove::Split(
+                    "dpll-split" => Move::Split(
                         branch,
                         lit.ok_or_else(|| de::Error::missing_field("literal"))?,
                     ),
-                    "dpll-prop" => DPLLMove::Propagate(
+                    "dpll-prop" => Move::Propagate(
                         branch,
                         base_c.ok_or_else(|| de::Error::missing_field("baseClause"))?,
                         prop_c.ok_or_else(|| de::Error::missing_field("propClause"))?,
                         prop_a.ok_or_else(|| de::Error::missing_field("propAtom"))?,
                     ),
-                    "dpll-prune" => DPLLMove::Prune(branch),
-                    "dpll-modelcheck" => DPLLMove::ModelCheck(
+                    "dpll-prune" => Move::Prune(branch),
+                    "dpll-modelcheck" => Move::ModelCheck(
                         branch,
                         i.ok_or_else(|| de::Error::missing_field("interpretation"))?,
                     ),
@@ -970,7 +957,7 @@ mod tests {
         fn valid_differs() {
             session(|| {
                 let s = DPLL::parse_formula("a;!a,b,c", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
 
                 assert_eq!(NodeType::Prop, s.nodes[1].ty);
                 assert_eq!(
@@ -984,7 +971,7 @@ mod tests {
         fn valid_equals() {
             session(|| {
                 let s = DPLL::parse_formula("a;a,b,c", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
 
                 assert_eq!(NodeType::Model, s.nodes[2].ty);
                 assert_eq!(3, s.nodes.len());
@@ -999,8 +986,8 @@ mod tests {
         fn valid_many() {
             session(|| {
                 let s = DPLL::parse_formula("a;!a,b;a,c", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(1, 0, 2, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(1, 0, 2, 0)).unwrap();
 
                 assert_eq!(4, s.nodes.len());
 
@@ -1046,7 +1033,7 @@ mod tests {
         fn valid_closed() {
             session(|| {
                 let s = DPLL::parse_formula("a;!a;a,b", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
 
                 assert_eq!(NodeType::Closed, s.nodes[2].ty);
             });
@@ -1058,21 +1045,21 @@ mod tests {
                 let s = DPLL::parse_formula("a;!a,b;a,c", None).unwrap();
 
                 // Out of bounds
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(101, 0, 1, 0)).is_err());
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 101, 1, 0)).is_err());
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 101, 0)).is_err());
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 1, 101)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(101, 0, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(0, 101, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(0, 0, 101, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(0, 0, 1, 101)).is_err());
 
                 // Conflicts
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
                 // Same branch twice
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 0, 2, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(0, 0, 2, 0)).is_err());
                 // Propagate Annotation
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(2, 0, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(2, 0, 1, 0)).is_err());
                 // Base clause with 2 objects
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Propagate(0, 1, 1, 0)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Propagate(0, 1, 1, 0)).is_err());
                 // Wrong prop atom
-                assert!(DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 1)).is_err());
+                assert!(DPLL::apply_move(s, Move::Propagate(0, 0, 1, 1)).is_err());
             });
         }
     }
@@ -1084,7 +1071,7 @@ mod tests {
         fn valid_single_clause() {
             session(|| {
                 let s = DPLL::parse_formula("!a,b,c", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Split(0, "c".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(0, "c".to_string())).unwrap();
 
                 assert_eq!(3, s.nodes.len());
 
@@ -1119,8 +1106,8 @@ mod tests {
         fn valid_single_atom() {
             session(|| {
                 let s = DPLL::parse_formula("!a;b,c;b", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Split(0, "a".to_string())).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Split(1, "b".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(0, "a".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(1, "b".to_string())).unwrap();
 
                 assert_eq!(5, s.nodes.len());
 
@@ -1166,7 +1153,7 @@ mod tests {
         fn valid_number() {
             session(|| {
                 let s = DPLL::parse_formula("a,b,c", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Split(0, "42".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(0, "42".to_string())).unwrap();
 
                 assert_eq!(3, s.nodes.len());
 
@@ -1203,21 +1190,21 @@ mod tests {
                 let s = DPLL::parse_formula("a;a,b,c", None).unwrap();
 
                 // Out of bounds
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(1, "a".to_string())).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Split(1, "a".to_string())).is_err());
 
                 // Conflicts
-                let s = DPLL::apply_move(s, DPLLMove::Split(0, "a".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(0, "a".to_string())).unwrap();
                 // Split on same twice
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(0, "b".to_string())).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Split(0, "b".to_string())).is_err());
 
                 // Wrong parsing
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Split(2, "".to_string())).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Split(2, "".to_string())).is_err());
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::Split(2, "This is nonsense".to_string())
+                    Move::Split(2, "This is nonsense".to_string())
                 )
                 .is_err());
-                assert!(DPLL::apply_move(s, DPLLMove::Split(2, "HELLO!".to_string())).is_err());
+                assert!(DPLL::apply_move(s, Move::Split(2, "HELLO!".to_string())).is_err());
             })
         }
     }
@@ -1230,7 +1217,7 @@ mod tests {
             session(|| {
                 let s = DPLL::parse_formula("c,!a;a", None).unwrap();
 
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 1)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 1)).unwrap();
 
                 assert_eq!(3, s.nodes.len());
                 assert!(s.nodes[2].children.is_empty());
@@ -1241,7 +1228,7 @@ mod tests {
                 let cs0 = s.nodes[0].diff.apply(s.clause_set.clone());
 
                 // Nothing happens and tests remain the same
-                let s = DPLL::apply_move(s, DPLLMove::Prune(2)).unwrap();
+                let s = DPLL::apply_move(s, Move::Prune(2)).unwrap();
                 assert_eq!(3, s.nodes.len());
                 assert!(s.nodes[2].children.is_empty());
                 assert_eq!(1, s.nodes[2].parent.unwrap());
@@ -1252,10 +1239,10 @@ mod tests {
                 );
 
                 // Annotation Prune fails
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Prune(1)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Prune(1)).is_err());
 
                 // Reset to start state
-                let s = DPLL::apply_move(s, DPLLMove::Prune(0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Prune(0)).unwrap();
                 assert_eq!(1, s.nodes.len());
                 assert!(s.nodes[0].children.is_empty());
                 assert!(s.nodes[0].is_leaf());
@@ -1271,13 +1258,13 @@ mod tests {
             session(|| {
                 let s = DPLL::parse_formula("a,b;b,c", None).unwrap();
 
-                let s = DPLL::apply_move(s, DPLLMove::Split(0, "b".to_string())).unwrap();
+                let s = DPLL::apply_move(s, Move::Split(0, "b".to_string())).unwrap();
 
                 assert_eq!(3, s.nodes.len());
                 assert_eq!(vec![1, 2], s.nodes[0].children);
                 assert!(!s.nodes[0].is_leaf());
 
-                let s = DPLL::apply_move(s, DPLLMove::Prune(0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Prune(0)).unwrap();
                 assert_eq!(1, s.nodes.len());
                 assert!(s.nodes[0].children.is_empty());
                 assert!(s.nodes[0].is_leaf());
@@ -1288,17 +1275,15 @@ mod tests {
         fn valid_model_prune() {
             session(|| {
                 let s = DPLL::parse_formula("a,b;a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
-                let s = DPLL::apply_move(
-                    s,
-                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), true)])),
-                )
-                .unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 0)).unwrap();
+                let s =
+                    DPLL::apply_move(s, Move::ModelCheck(2, HashMap::from([("a".into(), true)])))
+                        .unwrap();
 
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
                 assert!(s.nodes[2].verified.unwrap());
 
-                let s = DPLL::apply_move(s, DPLLMove::Prune(2)).unwrap();
+                let s = DPLL::apply_move(s, Move::Prune(2)).unwrap();
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
                 assert!(s.nodes[2].verified.unwrap());
             })
@@ -1308,10 +1293,10 @@ mod tests {
         fn invalid() {
             session(|| {
                 let s = DPLL::parse_formula("a,b;!a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 0)).unwrap();
 
-                assert!(DPLL::apply_move(s.clone(), DPLLMove::Prune(42)).is_err());
-                assert!(DPLL::apply_move(s, DPLLMove::Prune(1)).is_err());
+                assert!(DPLL::apply_move(s.clone(), Move::Prune(42)).is_err());
+                assert!(DPLL::apply_move(s, Move::Prune(1)).is_err());
             })
         }
     }
@@ -1323,22 +1308,20 @@ mod tests {
         fn model1() {
             session(|| {
                 let s = DPLL::parse_formula("a,b;a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 0)).unwrap();
 
                 assert_eq!("model", s.nodes[2].label.to_string());
                 assert!(s.nodes[2].verified.is_none());
 
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), false)]))
+                    Move::ModelCheck(2, HashMap::from([("a".into(), false)]))
                 )
                 .is_err());
 
-                let s = DPLL::apply_move(
-                    s,
-                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), true)])),
-                )
-                .unwrap();
+                let s =
+                    DPLL::apply_move(s, Move::ModelCheck(2, HashMap::from([("a".into(), true)])))
+                        .unwrap();
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
                 assert!(s.nodes[2].verified.unwrap());
 
@@ -1351,20 +1334,17 @@ mod tests {
         fn model2() {
             session(|| {
                 let s = DPLL::parse_formula("a,b;!a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 0)).unwrap();
 
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::ModelCheck(2, HashMap::from([("a".into(), false)]))
+                    Move::ModelCheck(2, HashMap::from([("a".into(), false)]))
                 )
                 .is_err());
 
                 let s = DPLL::apply_move(
                     s,
-                    DPLLMove::ModelCheck(
-                        2,
-                        HashMap::from([("a".into(), false), ("b".into(), true)]),
-                    ),
+                    Move::ModelCheck(2, HashMap::from([("a".into(), false), ("b".into(), true)])),
                 )
                 .unwrap();
                 assert_eq!("model ✓", s.nodes[2].label.to_string());
@@ -1372,10 +1352,7 @@ mod tests {
 
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::ModelCheck(
-                        2,
-                        HashMap::from([("a".into(), false), ("b".into(), true)]),
-                    )
+                    Move::ModelCheck(2, HashMap::from([("a".into(), false), ("b".into(), true)]),)
                 )
                 .is_err());
 
@@ -1388,7 +1365,7 @@ mod tests {
         fn model_unsat() {
             session(|| {
                 let s = DPLL::parse_formula("a;!a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 0, 1, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 0, 1, 0)).unwrap();
 
                 assert_eq!(3, s.nodes.len());
                 assert_eq!("prop", s.nodes[1].label.to_string());
@@ -1403,27 +1380,26 @@ mod tests {
         fn invalid() {
             session(|| {
                 let s = DPLL::parse_formula("a,b;a", None).unwrap();
-                let s = DPLL::apply_move(s, DPLLMove::Propagate(0, 1, 0, 0)).unwrap();
+                let s = DPLL::apply_move(s, Move::Propagate(0, 1, 0, 0)).unwrap();
 
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::ModelCheck(3, HashMap::from([("a".into(), true)]))
+                    Move::ModelCheck(3, HashMap::from([("a".into(), true)]))
                 )
                 .is_err());
 
                 assert!(
-                    DPLL::apply_move(s.clone(), DPLLMove::ModelCheck(2, HashMap::from([])))
-                        .is_err()
+                    DPLL::apply_move(s.clone(), Move::ModelCheck(2, HashMap::from([]))).is_err()
                 );
 
                 assert!(DPLL::apply_move(
                     s.clone(),
-                    DPLLMove::ModelCheck(0, HashMap::from([("a".into(), true)]))
+                    Move::ModelCheck(0, HashMap::from([("a".into(), true)]))
                 )
                 .is_err());
                 assert!(DPLL::apply_move(
                     s,
-                    DPLLMove::ModelCheck(1, HashMap::from([("a".into(), true)]))
+                    Move::ModelCheck(1, HashMap::from([("a".into(), true)]))
                 )
                 .is_err());
             })
@@ -1438,25 +1414,22 @@ mod tests {
             session(|| {
                 let json = "{\"type\":\"dpll-split\",\"branch\":42,\"literal\":\"hello\"}";
                 assert_eq!(
-                    DPLLMove::Split(42, "hello".to_string()),
+                    Move::Split(42, "hello".to_string()),
                     serde_json::from_str(json).unwrap()
                 );
 
                 let json = "{\"type\":\"dpll-prop\",\"branch\":1,\"baseClause\":2,\"propClause\":3,\"propAtom\":4}";
                 assert_eq!(
-                    DPLLMove::Propagate(1, 2, 3, 4),
+                    Move::Propagate(1, 2, 3, 4),
                     serde_json::from_str(json).unwrap()
                 );
 
                 let json = "{\"type\":\"dpll-prune\",\"branch\":5}";
-                assert_eq!(DPLLMove::Prune(5), serde_json::from_str(json).unwrap());
+                assert_eq!(Move::Prune(5), serde_json::from_str(json).unwrap());
 
                 let json = "{\"type\":\"dpll-modelcheck\",\"branch\":12,\"interpretation\":{\"a\":true,\"b\":false}}";
                 assert_eq!(
-                    DPLLMove::ModelCheck(
-                        12,
-                        HashMap::from([("a".into(), true), ("b".into(), false)])
-                    ),
+                    Move::ModelCheck(12, HashMap::from([("a".into(), true), ("b".into(), false)])),
                     serde_json::from_str(json).unwrap()
                 );
             })
@@ -1466,19 +1439,19 @@ mod tests {
         fn invalid_move() {
             session(|| {
                 let json = "{\"type\":\"dpll-split\",\"branch42,\"literal\":\"hello\"}";
-                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                let r#move: serde_json::error::Result<Move> = serde_json::from_str(json);
                 assert!(r#move.is_err());
 
                 let json = "{\"branch\":42,\"literal\":\"hello\"}";
-                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                let r#move: serde_json::error::Result<Move> = serde_json::from_str(json);
                 assert!(r#move.is_err());
 
                 let json = "{\"type\":\"dpll-split\",\"branch\":,\"literal\":\"hello\"}";
-                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                let r#move: serde_json::error::Result<Move> = serde_json::from_str(json);
                 assert!(r#move.is_err());
 
                 let json = "{\"type\":\"dpll-split\",\"literal\":\"hello\"}";
-                let r#move: serde_json::error::Result<DPLLMove> = serde_json::from_str(json);
+                let r#move: serde_json::error::Result<Move> = serde_json::from_str(json);
                 assert!(r#move.is_err());
             })
         }
@@ -1487,7 +1460,7 @@ mod tests {
         fn to_state() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
-                let s: DPLLState = serde_json::from_str(json).unwrap();
+                let s: State = serde_json::from_str(json).unwrap();
                 let expected = "pdpll|{!a, c}, {a, !c}|[(null|[1, 2]|ROOT|true|identity|null), (0|[]|SPLIT|a|add-{a}|null), (0|[3, 4]|SPLIT|¬a|add-{!a}|null), (2|[]|SPLIT|c|add-{c}|null), (2|[]|SPLIT|¬c|add-{!c}|null)]";
                 assert_eq!(expected, s.compute_seal_info());
             })
@@ -1497,7 +1470,7 @@ mod tests {
         fn corrupt_state() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"litc\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
-                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                let s: serde_json::error::Result<State> = serde_json::from_str(json);
                 assert!(s.is_err());
             })
         }
@@ -1506,7 +1479,7 @@ mod tests {
         fn state_missing_field() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
-                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                let s: serde_json::error::Result<State> = serde_json::from_str(json);
                 assert!(s.is_err());
             })
         }
@@ -1515,7 +1488,7 @@ mod tests {
         fn state_modify() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FA2559DBE0945B38BCD64A6806D6C1AD\"}";
-                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                let s: serde_json::error::Result<State> = serde_json::from_str(json);
                 assert!(s.is_err());
             })
         }
@@ -1524,7 +1497,7 @@ mod tests {
         fn state_seal() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":\"a\",\"negated\":true},{\"lit\":\"c\",\"negated\":false}]},{\"atoms\":[{\"lit\":\"a\",\"negated\":false},{\"lit\":\"c\",\"negated\":true}]}]},\"tree\":[{\"parent\":null,\"type\":\"ROOT\",\"label\":\"true\",\"diff\":{\"type\":\"cd-identity\"},\"children\":[1,2],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":0,\"type\":\"SPLIT\",\"label\":\"¬a\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"a\",\"negated\":true}]}},\"children\":[3,4],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":false}]}},\"children\":[],\"modelVerified\":null},{\"parent\":2,\"type\":\"SPLIT\",\"label\":\"¬c\",\"diff\":{\"type\":\"cd-addclause\",\"clause\":{\"atoms\":[{\"lit\":\"c\",\"negated\":true}]}},\"children\":[],\"modelVerified\":null}],\"seal\":\"A8651499DDF3E5E9D724CB4E7F35F318FAFAFAFADBE0945B38BCD64A6806D6C1AD\"}";
-                let s: serde_json::error::Result<DPLLState> = serde_json::from_str(json);
+                let s: serde_json::error::Result<State> = serde_json::from_str(json);
                 assert!(s.is_err());
             })
         }

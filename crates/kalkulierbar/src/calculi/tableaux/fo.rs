@@ -30,47 +30,47 @@ use crate::{
 use super::{TableauxErr, TableauxNode, TableauxType};
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum FOTabErr {
+pub enum Err {
     Parse(ParseErr),
     CNF(FOCNFErr),
     InvalidNodeId(usize),
     InvalidClauseId(usize),
-    ExpectedLeaf(FOTabNode),
-    AlreadyClosed(FOTabNode),
-    ExpectedClosed(FOTabNode),
+    ExpectedLeaf(Node),
+    AlreadyClosed(Node),
+    ExpectedClosed(Node),
     LemmaRoot,
     LemmaLeaf,
-    ExpectedSiblings(FOTabNode, FOTabNode),
+    ExpectedSiblings(Node, Node),
     AutoCloseNotEnabled,
-    ExpectedSameLit(FOTabNode, FOTabNode),
+    ExpectedSameLit(Node, Node),
     CloseRoot,
-    ExpectedParent(FOTabNode, FOTabNode),
-    CloseBothNeg(FOTabNode, FOTabNode),
-    CloseBothPos(FOTabNode, FOTabNode),
+    ExpectedParent(Node, Node),
+    CloseBothNeg(Node, Node),
+    CloseBothPos(Node, Node),
     Unification(UnificationErr),
-    UnEqAfterInst(FOTabNode, FOTabNode),
+    UnEqAfterInst(Node, Node),
     InstWouldViolateReg,
     WouldMakeIrregular(Atom<Relation>),
     WouldMakeNotWeaklyUnconnected,
-    WouldMakeNotStronglyUnconnected(FOTabNode),
+    WouldMakeNotStronglyUnconnected(Node),
     NotConnected,
     BacktrackingDisabled,
     SigAdherenceErr(SigAdherenceErr),
 }
 
-impl From<ParseErr> for FOTabErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
-        FOTabErr::Parse(e)
+        Err::Parse(e)
     }
 }
 
-impl From<FOCNFErr> for FOTabErr {
+impl From<FOCNFErr> for Err {
     fn from(e: FOCNFErr) -> Self {
-        FOTabErr::CNF(e)
+        Err::CNF(e)
     }
 }
 
-impl From<FOToCNFParseErr> for FOTabErr {
+impl From<FOToCNFParseErr> for Err {
     fn from(e: FOToCNFParseErr) -> Self {
         match e {
             FOToCNFParseErr::ParseErr(e) => Self::Parse(e),
@@ -79,65 +79,65 @@ impl From<FOToCNFParseErr> for FOTabErr {
     }
 }
 
-impl From<SigAdherenceErr> for FOTabErr {
+impl From<SigAdherenceErr> for Err {
     fn from(value: SigAdherenceErr) -> Self {
         Self::SigAdherenceErr(value)
     }
 }
 
-impl From<UnificationErr> for FOTabErr {
+impl From<UnificationErr> for Err {
     fn from(e: UnificationErr) -> Self {
-        FOTabErr::Unification(e)
+        Err::Unification(e)
     }
 }
 
-impl fmt::Display for FOTabErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FOTabErr::Parse(e) => fmt::Display::fmt(e, f),
-            FOTabErr::CNF(e) => fmt::Display::fmt(e, f),
-            FOTabErr::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
-            FOTabErr::InvalidNodeId(id) => write!(f, "Node with ID {id} does not exist"),
-            FOTabErr::InvalidClauseId(id) => write!(f, "Clause with ID {id} does not exist"),
-            FOTabErr::ExpectedLeaf(n) => write!(f, "Node '{n}' is not a leaf"),
-            FOTabErr::AlreadyClosed(n) => write!(f, "Node '{n}' is already closed"),
-            FOTabErr::ExpectedClosed(n) => {
+            Err::Parse(e) => fmt::Display::fmt(e, f),
+            Err::CNF(e) => fmt::Display::fmt(e, f),
+            Err::SigAdherenceErr(e) => fmt::Display::fmt(e, f),
+            Err::InvalidNodeId(id) => write!(f, "Node with ID {id} does not exist"),
+            Err::InvalidClauseId(id) => write!(f, "Clause with ID {id} does not exist"),
+            Err::ExpectedLeaf(n) => write!(f, "Node '{n}' is not a leaf"),
+            Err::AlreadyClosed(n) => write!(f, "Node '{n}' is already closed"),
+            Err::ExpectedClosed(n) => {
                 write!(f, "Node '{n}' is not the root of a closed subtableaux")
             }
-            FOTabErr::LemmaRoot => write!(f, "Root node cannot be used for lemma creation"),
-            FOTabErr::LemmaLeaf => write!(f, "Cannot create lemma from a leaf"),
-            FOTabErr::ExpectedSiblings(n1, n2) => {
+            Err::LemmaRoot => write!(f, "Root node cannot be used for lemma creation"),
+            Err::LemmaLeaf => write!(f, "Cannot create lemma from a leaf"),
+            Err::ExpectedSiblings(n1, n2) => {
                 write!(f, "Nodes '{n1}' and '{n2}' are not siblings")
             }
-            FOTabErr::AutoCloseNotEnabled => write!(f, "Auto-close is not enabled for this proof"),
-            FOTabErr::ExpectedSameLit(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' do not reference the same literal"),
-            FOTabErr::CloseRoot => write!(f, "The root node cannot be used for branch closure"),
-            FOTabErr::ExpectedParent(node, leaf) => write!(f, "Node '{node}' is not an ancestor of leaf '{leaf}'"),
-            FOTabErr::CloseBothNeg(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but both of them are negated"),
-            FOTabErr::CloseBothPos(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but neither of them are negated"),
-            FOTabErr::Unification(e) => fmt::Display::fmt(e, f),
-            FOTabErr::UnEqAfterInst(n1, n2) => write!(
+            Err::AutoCloseNotEnabled => write!(f, "Auto-close is not enabled for this proof"),
+            Err::ExpectedSameLit(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' do not reference the same literal"),
+            Err::CloseRoot => write!(f, "The root node cannot be used for branch closure"),
+            Err::ExpectedParent(node, leaf) => write!(f, "Node '{node}' is not an ancestor of leaf '{leaf}'"),
+            Err::CloseBothNeg(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but both of them are negated"),
+            Err::CloseBothPos(leaf, node) => write!(f, "Leaf '{leaf}' and node '{node}' reference the same literal, but neither of them are negated"),
+            Err::Unification(e) => fmt::Display::fmt(e, f),
+            Err::UnEqAfterInst(n1, n2) => write!(
                 f,
                 "Nodes '{n1}' and '{n2}' are not equal after variable instantiation"
             ),
-            FOTabErr::InstWouldViolateReg => write!(
+            Err::InstWouldViolateReg => write!(
                 f,
                 "This variable instantiation would violate the proof regularity"
             ),
-            FOTabErr::WouldMakeIrregular(a) => write!(f, "Expanding this clause would introduce a duplicate node {a} on the branch, making the tree irregular"),
-            FOTabErr::WouldMakeNotWeaklyUnconnected => write!(f, "No literal in this clause would be closeable, making the tree unconnected"),
-            FOTabErr::WouldMakeNotStronglyUnconnected(n) => write!(f, "No literal in this clause would be closeable with '{n}', making the tree not strongly connected"),
-            FOTabErr::NotConnected => write!(f, "The proof tree is currently not sufficiently connected, please close branches first to restore connectedness before expanding more leaves"),
-            FOTabErr::BacktrackingDisabled => write!(f, "Backtracking is not enabled for this proof"),
+            Err::WouldMakeIrregular(a) => write!(f, "Expanding this clause would introduce a duplicate node {a} on the branch, making the tree irregular"),
+            Err::WouldMakeNotWeaklyUnconnected => write!(f, "No literal in this clause would be closeable, making the tree unconnected"),
+            Err::WouldMakeNotStronglyUnconnected(n) => write!(f, "No literal in this clause would be closeable with '{n}', making the tree not strongly connected"),
+            Err::NotConnected => write!(f, "The proof tree is currently not sufficiently connected, please close branches first to restore connectedness before expanding more leaves"),
+            Err::BacktrackingDisabled => write!(f, "Backtracking is not enabled for this proof"),
         }
     }
 }
 
-pub type FOTabResult<T> = Result<T, FOTabErr>;
+pub type FOTabResult<T> = Result<T, Err>;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
-pub struct FOTabParams {
+pub struct Params {
     #[serde(rename = "type")]
     pub ty: TableauxType,
     pub regular: bool,
@@ -146,7 +146,7 @@ pub struct FOTabParams {
     pub manual_var_assign: bool,
 }
 
-impl Default for FOTabParams {
+impl Default for Params {
     fn default() -> Self {
         Self {
             ty: TableauxType::Unconnected,
@@ -160,13 +160,13 @@ impl Default for FOTabParams {
 pub struct FOTableaux;
 
 impl<'f> Calculus<'f> for FOTableaux {
-    type Params = FOTabParams;
+    type Params = Params;
 
-    type State = FOTabState;
+    type State = State;
 
-    type Move = FOTabMove;
+    type Move = Move;
 
-    type Error = FOTabErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
@@ -174,24 +174,20 @@ impl<'f> Calculus<'f> for FOTableaux {
     ) -> Result<Self::State, Self::Error> {
         let clauses = parse_fo_flexibly_to_cnf(formula)?;
 
-        Ok(FOTabState::new(
-            clauses,
-            formula,
-            params.unwrap_or_default(),
-        ))
+        Ok(State::new(clauses, formula, params.unwrap_or_default()))
     }
 
     fn apply_move(state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
         let mut state = state;
         state.status_msg.take();
         match k_move {
-            FOTabMove::AutoClose(leaf, node) => apply_auto_close(state, leaf, node),
-            FOTabMove::CloseAssign(leaf, node, var_assign) => {
+            Move::AutoClose(leaf, node) => apply_auto_close(state, leaf, node),
+            Move::CloseAssign(leaf, node, var_assign) => {
                 apply_close_assign(state, leaf, node, var_assign)
             }
-            FOTabMove::Expand(leaf, clause) => apply_expand(state, leaf, clause),
-            FOTabMove::Lemma(leaf, lemma) => apply_lemma(state, leaf, lemma),
-            FOTabMove::Undo => apply_undo(state),
+            Move::Expand(leaf, clause) => apply_expand(state, leaf, clause),
+            Move::Lemma(leaf, lemma) => apply_lemma(state, leaf, lemma),
+            Move::Undo => apply_undo(state),
         }
     }
 
@@ -200,13 +196,9 @@ impl<'f> Calculus<'f> for FOTableaux {
     }
 }
 
-pub fn apply_auto_close(
-    state: FOTabState,
-    leaf_id: usize,
-    node_id: usize,
-) -> FOTabResult<FOTabState> {
+pub fn apply_auto_close(state: State, leaf_id: usize, node_id: usize) -> FOTabResult<State> {
     if state.manual_var_assign {
-        return Err(FOTabErr::AutoCloseNotEnabled);
+        return Err(Err::AutoCloseNotEnabled);
     }
 
     ensure_basic_closeability(&state, leaf_id, node_id)?;
@@ -221,11 +213,11 @@ pub fn apply_auto_close(
 }
 
 pub fn apply_close_assign(
-    mut state: FOTabState,
+    mut state: State,
     leaf_id: usize,
     node_id: usize,
     unifier: Substitution,
-) -> FOTabResult<FOTabState> {
+) -> FOTabResult<State> {
     ensure_basic_closeability(&state, leaf_id, node_id)?;
 
     if !is_mgu_or_not_unifiable(
@@ -243,11 +235,7 @@ pub fn apply_close_assign(
     close_branch_common(state, leaf_id, node_id, unifier)
 }
 
-pub fn apply_expand(
-    mut state: FOTabState,
-    leaf_id: usize,
-    clause_id: usize,
-) -> FOTabResult<FOTabState> {
+pub fn apply_expand(mut state: State, leaf_id: usize, clause_id: usize) -> FOTabResult<State> {
     // Ensure that preconditions (correct indices, regularity) are met
     ensure_expandable(&state, leaf_id, clause_id)?;
     let clause = &state.clause_set.clauses()[clause_id];
@@ -259,7 +247,7 @@ pub fn apply_expand(
 
     for (i, atom) in atoms.into_iter().enumerate() {
         let negated = atom.negated();
-        let new_leaf = FOTabNode::new(Some(leaf_id), atom.take_lit(), negated, None);
+        let new_leaf = Node::new(Some(leaf_id), atom.take_lit(), negated, None);
         state.nodes.push(new_leaf);
         let leaf = &mut state.nodes[leaf_id];
         leaf.children.push(len + i)
@@ -270,7 +258,7 @@ pub fn apply_expand(
 
     // Record expansion for backtracking
     if state.backtracking {
-        state.moves.push(FOTabMove::Expand(leaf_id, clause_id))
+        state.moves.push(Move::Expand(leaf_id, clause_id))
     }
 
     state.expansion_counter += 1;
@@ -278,18 +266,14 @@ pub fn apply_expand(
     Ok(state)
 }
 
-pub fn apply_lemma(
-    mut state: FOTabState,
-    leaf_id: usize,
-    lemma_id: usize,
-) -> FOTabResult<FOTabState> {
+pub fn apply_lemma(mut state: State, leaf_id: usize, lemma_id: usize) -> FOTabResult<State> {
     // Get lemma atom and verify all preconditions
     let atom = state.get_lemma(leaf_id, lemma_id)?;
 
     // Add lemma atom to leaf
     // NOTE: We explicitly do not apply clause pre-processing for Lemma expansions
     let negated = atom.negated();
-    let new_leaf = FOTabNode::new(Some(leaf_id), atom.take_lit(), negated, Some(lemma_id));
+    let new_leaf = Node::new(Some(leaf_id), atom.take_lit(), negated, Some(lemma_id));
     let size = state.nodes.len();
     state.nodes.push(new_leaf);
     state.nodes.get_mut(leaf_id).unwrap().children.push(size);
@@ -299,15 +283,15 @@ pub fn apply_lemma(
 
     // Add move to state history
     if state.backtracking {
-        state.moves.push(FOTabMove::Lemma(leaf_id, lemma_id));
+        state.moves.push(Move::Lemma(leaf_id, lemma_id));
     }
 
     Ok(state)
 }
 
-pub fn apply_undo(mut state: FOTabState) -> FOTabResult<FOTabState> {
+pub fn apply_undo(mut state: State) -> FOTabResult<State> {
     if !state.backtracking {
-        return Err(FOTabErr::BacktrackingDisabled);
+        return Err(Err::BacktrackingDisabled);
     }
 
     // Can't undo any more moves in initial state
@@ -316,7 +300,7 @@ pub fn apply_undo(mut state: FOTabState) -> FOTabResult<FOTabState> {
     }
 
     // Create a fresh clone-state with the same parameters and input formula
-    let params = FOTabParams {
+    let params = Params {
         ty: state.ty,
         regular: state.regular,
         backtracking: state.backtracking,
@@ -337,21 +321,21 @@ pub fn apply_undo(mut state: FOTabState) -> FOTabResult<FOTabState> {
 }
 
 fn close_branch_common(
-    mut state: FOTabState,
+    mut state: State,
     leaf_id: usize,
     node_id: usize,
     unifier: Substitution,
-) -> FOTabResult<FOTabState> {
+) -> FOTabResult<State> {
     state.apply_unifier(unifier.clone());
     let close_node = state.node(node_id)?;
     let leaf = state.node(leaf_id)?;
 
     if !leaf.relation.syn_eq(&close_node.relation) {
-        return Err(FOTabErr::UnEqAfterInst(leaf.clone(), close_node.clone()));
+        return Err(Err::UnEqAfterInst(leaf.clone(), close_node.clone()));
     }
 
     if state.regular && !check_regularity(&state) {
-        return Err(FOTabErr::InstWouldViolateReg);
+        return Err(Err::InstWouldViolateReg);
     }
 
     let leaf = state.node_mut(leaf_id).unwrap();
@@ -359,7 +343,7 @@ fn close_branch_common(
     state.mark_node_closed(leaf_id);
 
     if state.backtracking {
-        let r#move = FOTabMove::CloseAssign(leaf_id, node_id, unifier);
+        let r#move = Move::CloseAssign(leaf_id, node_id, unifier);
         state.moves.push(r#move);
     }
 
@@ -367,7 +351,7 @@ fn close_branch_common(
 }
 
 fn verify_expand_regularity(
-    state: &FOTabState,
+    state: &State,
     leaf_id: usize,
     clause: &Clause<Relation>,
 ) -> FOTabResult<()> {
@@ -409,14 +393,14 @@ fn verify_expand_regularity(
 
     for atom in clause {
         if lst.contains(atom) {
-            return Err(FOTabErr::WouldMakeIrregular(atom.clone()));
+            return Err(Err::WouldMakeIrregular(atom.clone()));
         }
     }
 
     Ok(())
 }
 
-fn verify_expand_connectedness(state: &FOTabState, leaf_id: usize) -> FOTabResult<()> {
+fn verify_expand_connectedness(state: &State, leaf_id: usize) -> FOTabResult<()> {
     if leaf_id == 0 {
         return Ok(());
     }
@@ -425,17 +409,17 @@ fn verify_expand_connectedness(state: &FOTabState, leaf_id: usize) -> FOTabResul
 
     if state.ty.is_weakly_connected() {
         if !children.iter().any(|c| state.node_is_closable(*c)) {
-            return Err(FOTabErr::WouldMakeNotWeaklyUnconnected);
+            return Err(Err::WouldMakeNotWeaklyUnconnected);
         }
     } else if state.ty.is_strongly_connected()
         && !children.iter().any(|c| state.node_is_directly_closable(*c))
     {
-        return Err(FOTabErr::WouldMakeNotStronglyUnconnected(leaf.clone()));
+        return Err(Err::WouldMakeNotStronglyUnconnected(leaf.clone()));
     }
     Ok(())
 }
 
-fn check_connectedness(state: &FOTabState, ty: TableauxType) -> bool {
+fn check_connectedness(state: &State, ty: TableauxType) -> bool {
     if ty.is_unconnected() {
         return true;
     }
@@ -447,7 +431,7 @@ fn check_connectedness(state: &FOTabState, ty: TableauxType) -> bool {
         .all(|n| check_connectedness_subtree(state, *n, strong))
 }
 
-fn check_connectedness_subtree(state: &FOTabState, root: usize, strong: bool) -> bool {
+fn check_connectedness_subtree(state: &State, root: usize, strong: bool) -> bool {
     let node = &state.nodes[root];
 
     // A sub-tree is weakly/strongly connected iff:
@@ -482,42 +466,38 @@ fn check_connectedness_subtree(state: &FOTabState, root: usize, strong: bool) ->
     has_directly_closed_child && all_children_connected
 }
 
-fn ensure_basic_closeability(
-    state: &FOTabState,
-    leaf_id: usize,
-    node_id: usize,
-) -> FOTabResult<()> {
+fn ensure_basic_closeability(state: &State, leaf_id: usize, node_id: usize) -> FOTabResult<()> {
     let leaf = state.node(leaf_id)?;
     let node = state.node(node_id)?;
 
     if !leaf.is_leaf() {
-        return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
+        return Err(Err::ExpectedLeaf(leaf.clone()));
     }
 
     if leaf.is_closed {
-        return Err(FOTabErr::AlreadyClosed(leaf.clone()));
+        return Err(Err::AlreadyClosed(leaf.clone()));
     }
 
     if leaf.lit_stem() != node.lit_stem() {
-        return Err(FOTabErr::ExpectedSameLit(leaf.clone(), node.clone()));
+        return Err(Err::ExpectedSameLit(leaf.clone(), node.clone()));
     }
 
     if node_id == 0 {
-        return Err(FOTabErr::CloseRoot);
+        return Err(Err::CloseRoot);
     }
 
     if !state.node_is_parent_of(node_id, leaf_id)? {
-        return Err(FOTabErr::ExpectedParent(node.clone(), leaf.clone()));
+        return Err(Err::ExpectedParent(node.clone(), leaf.clone()));
     }
 
     match (leaf.negated, node.negated) {
-        (true, true) => Err(FOTabErr::CloseBothNeg(leaf.clone(), node.clone())),
-        (false, false) => Err(FOTabErr::CloseBothPos(leaf.clone(), node.clone())),
+        (true, true) => Err(Err::CloseBothNeg(leaf.clone(), node.clone())),
+        (false, false) => Err(Err::CloseBothPos(leaf.clone(), node.clone())),
         _ => Ok(()),
     }
 }
 
-pub(crate) fn check_regularity(state: &FOTabState) -> bool {
+pub(crate) fn check_regularity(state: &State) -> bool {
     let start = &state.root().children;
 
     start
@@ -525,7 +505,7 @@ pub(crate) fn check_regularity(state: &FOTabState) -> bool {
         .all(|id| check_regularity_subtree(state, *id, vec![]))
 }
 
-fn check_regularity_subtree(state: &FOTabState, root: usize, mut lst: Vec<Atom<Relation>>) -> bool {
+fn check_regularity_subtree(state: &State, root: usize, mut lst: Vec<Atom<Relation>>) -> bool {
     let node = &state.nodes[root];
     let atom = node.into();
 
@@ -541,25 +521,25 @@ fn check_regularity_subtree(state: &FOTabState, root: usize, mut lst: Vec<Atom<R
     }
 }
 
-fn ensure_expandable(state: &FOTabState, leaf_id: usize, clause_id: usize) -> FOTabResult<()> {
+fn ensure_expandable(state: &State, leaf_id: usize, clause_id: usize) -> FOTabResult<()> {
     if !check_connectedness(state, state.ty) {
-        return Err(FOTabErr::NotConnected);
+        return Err(Err::NotConnected);
     }
 
     if leaf_id >= state.nodes.len() {
-        return Err(FOTabErr::InvalidNodeId(leaf_id));
+        return Err(Err::InvalidNodeId(leaf_id));
     }
     if clause_id >= state.clause_set.size() {
-        return Err(FOTabErr::InvalidClauseId(clause_id));
+        return Err(Err::InvalidClauseId(clause_id));
     }
 
     let leaf = &state.nodes[leaf_id];
 
     if !leaf.is_leaf() {
-        return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
+        return Err(Err::ExpectedLeaf(leaf.clone()));
     }
     if leaf.is_closed() {
-        return Err(FOTabErr::AlreadyClosed(leaf.clone()));
+        return Err(Err::AlreadyClosed(leaf.clone()));
     }
 
     let clause = &state.clause_set.clauses()[clause_id];
@@ -572,7 +552,7 @@ fn ensure_expandable(state: &FOTabState, leaf_id: usize, clause_id: usize) -> FO
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FOTabMove {
+pub enum Move {
     AutoClose(usize, usize),
     CloseAssign(usize, usize, Substitution),
     Expand(usize, usize),
@@ -580,34 +560,34 @@ pub enum FOTabMove {
     Undo,
 }
 
-impl fmt::Display for FOTabMove {
+impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            FOTabMove::AutoClose(l, r) => write!(f, "AutoClose({},{})", l, r),
-            FOTabMove::CloseAssign(l, r, v) => write!(f, "CloseAssign({},{}, {})", l, r, v),
-            FOTabMove::Expand(l, r) => write!(f, "Expand({},{})", l, r),
-            FOTabMove::Lemma(l, r) => write!(f, "Lemma({},{})", l, r),
-            FOTabMove::Undo => write!(f, "Undo"),
+            Move::AutoClose(l, r) => write!(f, "AutoClose({},{})", l, r),
+            Move::CloseAssign(l, r, v) => write!(f, "CloseAssign({},{}, {})", l, r, v),
+            Move::Expand(l, r) => write!(f, "Expand({},{})", l, r),
+            Move::Lemma(l, r) => write!(f, "Lemma({},{})", l, r),
+            Move::Undo => write!(f, "Undo"),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct FOTabState {
+pub struct State {
     clause_set: ClauseSet<Relation>,
     formula: String,
     ty: TableauxType,
     regular: bool,
     backtracking: bool,
     manual_var_assign: bool,
-    nodes: Vec<FOTabNode>,
-    moves: Vec<FOTabMove>,
+    nodes: Vec<Node>,
+    moves: Vec<Move>,
     used_backtracking: bool,
     expansion_counter: u32,
     status_msg: Option<String>,
 }
 
-impl ProtectedState for FOTabState {
+impl ProtectedState for State {
     fn compute_seal_info(&self) -> String {
         let various = format!("{}|{}", self.formula, self.expansion_counter);
         let opts = format!(
@@ -646,8 +626,8 @@ impl ProtectedState for FOTabState {
     }
 }
 
-impl FOTabState {
-    pub fn new(clause_set: ClauseSet<Relation>, formula: &str, params: FOTabParams) -> Self {
+impl State {
+    pub fn new(clause_set: ClauseSet<Relation>, formula: &str, params: Params) -> Self {
         Self {
             clause_set,
             formula: formula.to_string(),
@@ -655,7 +635,7 @@ impl FOTabState {
             regular: params.regular,
             backtracking: params.backtracking,
             manual_var_assign: params.manual_var_assign,
-            nodes: vec![FOTabNode::new(
+            nodes: vec![Node::new(
                 None,
                 Relation::new("true".into(), vec![]),
                 false,
@@ -668,23 +648,23 @@ impl FOTabState {
         }
     }
 
-    fn root(&self) -> &FOTabNode {
+    fn root(&self) -> &Node {
         self.node(0).unwrap()
     }
 
-    fn nodes(&self) -> &Vec<FOTabNode> {
+    fn nodes(&self) -> &Vec<Node> {
         &self.nodes
     }
 
-    fn node(&self, id: usize) -> FOTabResult<&FOTabNode> {
+    fn node(&self, id: usize) -> FOTabResult<&Node> {
         if let Some(node) = self.nodes.get(id) {
             Ok(node)
         } else {
-            Err(FOTabErr::InvalidNodeId(id))
+            Err(Err::InvalidNodeId(id))
         }
     }
 
-    fn node_mut(&mut self, id: usize) -> super::TableauxResult<&mut FOTabNode> {
+    fn node_mut(&mut self, id: usize) -> super::TableauxResult<&mut Node> {
         if let Some(node) = self.nodes.get_mut(id) {
             Ok(node)
         } else {
@@ -824,29 +804,29 @@ impl FOTabState {
         let lemma = self.node(lemma_id)?;
 
         if !leaf.is_leaf() {
-            return Err(FOTabErr::ExpectedLeaf(leaf.clone()));
+            return Err(Err::ExpectedLeaf(leaf.clone()));
         }
 
         if leaf.is_closed() {
-            return Err(FOTabErr::AlreadyClosed(leaf.clone()));
+            return Err(Err::AlreadyClosed(leaf.clone()));
         }
 
         if !lemma.is_closed() {
-            return Err(FOTabErr::ExpectedClosed(lemma.clone()));
+            return Err(Err::ExpectedClosed(lemma.clone()));
         }
 
         if lemma.parent().is_none() {
-            return Err(FOTabErr::LemmaRoot);
+            return Err(Err::LemmaRoot);
         }
 
         if lemma.is_leaf() {
-            return Err(FOTabErr::LemmaLeaf);
+            return Err(Err::LemmaLeaf);
         }
 
         let common_parent = lemma.parent().unwrap();
 
         if !self.node_is_parent_of(common_parent, leaf_id)? {
-            return Err(FOTabErr::ExpectedSiblings(leaf.clone(), lemma.clone()));
+            return Err(Err::ExpectedSiblings(leaf.clone(), lemma.clone()));
         }
 
         let atom: Atom<Relation> = lemma.into();
@@ -862,7 +842,7 @@ impl FOTabState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct FOTabNode {
+pub struct Node {
     parent: Option<usize>,
     pub relation: Relation,
     negated: bool,
@@ -872,7 +852,7 @@ pub struct FOTabNode {
     children: Vec<usize>,
 }
 
-impl FOTabNode {
+impl Node {
     pub fn new(
         parent: Option<usize>,
         relation: Relation,
@@ -927,19 +907,19 @@ impl FOTabNode {
     }
 }
 
-impl From<FOTabNode> for Atom<Relation> {
-    fn from(n: FOTabNode) -> Self {
+impl From<Node> for Atom<Relation> {
+    fn from(n: Node) -> Self {
         Atom::new(n.relation, n.negated)
     }
 }
 
-impl From<&FOTabNode> for Atom<Relation> {
-    fn from(n: &FOTabNode) -> Self {
+impl From<&Node> for Atom<Relation> {
+    fn from(n: &Node) -> Self {
         Atom::new(n.relation.clone(), n.negated)
     }
 }
 
-impl TableauxNode<Relation> for FOTabNode {
+impl TableauxNode<Relation> for Node {
     fn parent(&self) -> Option<usize> {
         self.parent
     }
@@ -985,7 +965,7 @@ impl TableauxNode<Relation> for FOTabNode {
     }
 }
 
-impl fmt::Display for FOTabNode {
+impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.negated {
             write!(f, "!{}", self.relation)
@@ -995,7 +975,7 @@ impl fmt::Display for FOTabNode {
     }
 }
 
-impl Serialize for FOTabState {
+impl Serialize for State {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -1029,7 +1009,7 @@ impl Serialize for FOTabState {
     }
 }
 
-impl<'de> Deserialize<'de> for FOTabState {
+impl<'de> Deserialize<'de> for State {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -1067,13 +1047,13 @@ impl<'de> Deserialize<'de> for FOTabState {
         struct StateVisitor;
 
         impl<'de> Visitor<'de> for StateVisitor {
-            type Value = FOTabState;
+            type Value = State;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct FOTabState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<FOTabState, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -1083,8 +1063,8 @@ impl<'de> Deserialize<'de> for FOTabState {
                 let mut regular: Option<bool> = None;
                 let mut backtracking: Option<bool> = None;
                 let mut manual_var_assign: Option<bool> = None;
-                let mut nodes: Option<Vec<FOTabNode>> = None;
-                let mut moves: Option<Vec<FOTabMove>> = None;
+                let mut nodes: Option<Vec<Node>> = None;
+                let mut moves: Option<Vec<Move>> = None;
                 let mut used_backtracking: Option<bool> = None;
                 let mut expansion_counter: Option<u32> = None;
                 let mut seal: Option<String> = None;
@@ -1193,7 +1173,7 @@ impl<'de> Deserialize<'de> for FOTabState {
                     return Err(de::Error::missing_field("renderedClauseSet"));
                 }
 
-                let s = FOTabState {
+                let s = State {
                     clause_set,
                     formula,
                     ty,
@@ -1237,44 +1217,44 @@ impl<'de> Deserialize<'de> for FOTabState {
     }
 }
 
-impl Serialize for FOTabMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let num_fields = match self {
-            FOTabMove::Undo => 1,
-            FOTabMove::CloseAssign(..) => 4,
+            Move::Undo => 1,
+            Move::CloseAssign(..) => 4,
             _ => 3,
         };
         let mut state = serializer.serialize_struct("FOTabMove", num_fields)?;
         let ty = match self {
-            FOTabMove::Undo => "tableaux-undo",
-            FOTabMove::AutoClose(..) => "tableaux-close",
-            FOTabMove::CloseAssign(..) => "tableaux-close-assign",
-            FOTabMove::Expand(..) => "tableaux-expand",
-            FOTabMove::Lemma(..) => "tableaux-lemma",
+            Move::Undo => "tableaux-undo",
+            Move::AutoClose(..) => "tableaux-close",
+            Move::CloseAssign(..) => "tableaux-close-assign",
+            Move::Expand(..) => "tableaux-expand",
+            Move::Lemma(..) => "tableaux-lemma",
         };
         state.serialize_field("type", ty)?;
         if num_fields == 3 {
             let (id1, id2) = match self {
-                FOTabMove::Undo => panic!(),
-                FOTabMove::AutoClose(id1, id2) => (id1, id2),
-                FOTabMove::Expand(id1, id2) => (id1, id2),
-                FOTabMove::Lemma(id1, id2) => (id1, id2),
-                FOTabMove::CloseAssign(id1, id2, _) => (id1, id2),
+                Move::Undo => panic!(),
+                Move::AutoClose(id1, id2) => (id1, id2),
+                Move::Expand(id1, id2) => (id1, id2),
+                Move::Lemma(id1, id2) => (id1, id2),
+                Move::CloseAssign(id1, id2, _) => (id1, id2),
             };
             state.serialize_field("id1", id1)?;
             state.serialize_field("id2", id2)?;
         }
-        if let FOTabMove::CloseAssign(_, _, u) = self {
+        if let Move::CloseAssign(_, _, u) = self {
             state.serialize_field("varAssign", &u.rendered_map())?;
         }
         state.end()
     }
 }
 
-impl<'de> Deserialize<'de> for FOTabMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -1294,13 +1274,13 @@ impl<'de> Deserialize<'de> for FOTabMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = FOTabMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct FOTabMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<FOTabMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -1340,16 +1320,16 @@ impl<'de> Deserialize<'de> for FOTabMove {
 
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 Ok(if ty == "tableaux-undo" {
-                    FOTabMove::Undo
+                    Move::Undo
                 } else {
                     let id1 = id1.ok_or_else(|| de::Error::missing_field("id1"))?;
                     let id2 = id2.ok_or_else(|| de::Error::missing_field("id2"))?;
 
                     let ty: &str = &ty;
                     match ty {
-                        "tableaux-expand" => FOTabMove::Expand(id1, id2),
-                        "tableaux-close" => FOTabMove::AutoClose(id1, id2),
-                        "tableaux-lemma" => FOTabMove::Lemma(id1, id2),
+                        "tableaux-expand" => Move::Expand(id1, id2),
+                        "tableaux-close" => Move::AutoClose(id1, id2),
+                        "tableaux-lemma" => Move::Lemma(id1, id2),
                         "tableaux-close-assign" => {
                             let unifier =
                                 unifier.ok_or_else(|| de::Error::missing_field("varAssign"))?;
@@ -1357,7 +1337,7 @@ impl<'de> Deserialize<'de> for FOTabMove {
                                 Ok(u) => u,
                                 Err(e) => return Err(de::Error::custom(e.to_string())),
                             };
-                            FOTabMove::CloseAssign(id1, id2, unifier)
+                            Move::CloseAssign(id1, id2, unifier)
                         }
                         _ => panic!(),
                     }
@@ -1378,8 +1358,8 @@ mod tests {
     mod auto_close {
         use super::{super::*, *};
 
-        fn param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: false,
@@ -1399,7 +1379,7 @@ mod tests {
             }
         }
 
-        fn state(i: u8) -> FOTabState {
+        fn state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), param()).unwrap()
         }
 
@@ -1407,17 +1387,17 @@ mod tests {
         fn state1() {
             session(|| {
                 let s = state(0);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(5, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(6, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(4, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(5, 2)).unwrap();
 
                 assert!(s.nodes[6].is_closed);
                 assert_eq!(2, s.nodes[6].close_ref.unwrap());
 
-                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(4, 1)).is_err());
-                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 3)).is_err());
+                assert!(FOTableaux::apply_move(s.clone(), Move::AutoClose(4, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, Move::AutoClose(4, 3)).is_err());
             })
         }
 
@@ -1425,11 +1405,11 @@ mod tests {
         fn state2() {
             session(|| {
                 let s = state(1);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(3, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(4, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(5, 3)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(10, 4)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(3, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(4, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(5, 3)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(10, 4)).unwrap();
 
                 assert!(s.nodes[5].is_closed);
                 assert_eq!(3, s.nodes[5].close_ref.unwrap());
@@ -1437,8 +1417,8 @@ mod tests {
                 assert!(s.nodes[10].is_closed);
                 assert_eq!(4, s.nodes[10].close_ref.unwrap());
 
-                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(5, 1)).is_err());
-                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 3)).is_err());
+                assert!(FOTableaux::apply_move(s.clone(), Move::AutoClose(5, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, Move::AutoClose(6, 3)).is_err());
             })
         }
 
@@ -1446,18 +1426,18 @@ mod tests {
         fn state3() {
             session(|| {
                 let s = state(2);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 1)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(3, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(3, 1)).unwrap();
 
                 assert!(s.nodes[3].is_closed);
                 assert_eq!(1, s.nodes[3].close_ref.unwrap());
 
                 assert!(s.nodes[1].is_closed);
 
-                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(3, 1)).is_err());
-                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(2, 1)).is_err());
+                assert!(FOTableaux::apply_move(s.clone(), Move::AutoClose(3, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, Move::AutoClose(2, 1)).is_err());
             })
         }
 
@@ -1465,21 +1445,21 @@ mod tests {
         fn invalid() {
             session(|| {
                 let s = state(0);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
 
                 assert_eq!(
-                    FOTabErr::InvalidNodeId(42),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(6, 42)).unwrap_err()
+                    Err::InvalidNodeId(42),
+                    FOTableaux::apply_move(s.clone(), Move::AutoClose(6, 42)).unwrap_err()
                 );
-                assert!(FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(6, 0)).is_err());
+                assert!(FOTableaux::apply_move(s.clone(), Move::AutoClose(6, 0)).is_err());
                 assert_eq!(
-                    FOTabErr::InvalidNodeId(777),
-                    FOTableaux::apply_move(s.clone(), FOTabMove::AutoClose(777, 2)).unwrap_err()
+                    Err::InvalidNodeId(777),
+                    FOTableaux::apply_move(s.clone(), Move::AutoClose(777, 2)).unwrap_err()
                 );
                 assert_eq!(
-                    FOTabErr::InvalidNodeId(usize::MAX),
-                    FOTableaux::apply_move(s, FOTabMove::AutoClose(usize::MAX, 5)).unwrap_err()
+                    Err::InvalidNodeId(usize::MAX),
+                    FOTableaux::apply_move(s, Move::AutoClose(usize::MAX, 5)).unwrap_err()
                 );
             })
         }
@@ -1488,10 +1468,10 @@ mod tests {
         fn impossible_uni() {
             session(|| {
                 let s = state(5);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 1)).unwrap();
 
-                assert!(FOTableaux::apply_move(s, FOTabMove::AutoClose(2, 1)).is_err());
+                assert!(FOTableaux::apply_move(s, Move::AutoClose(2, 1)).is_err());
             })
         }
     }
@@ -1502,8 +1482,8 @@ mod tests {
         use std::collections::HashMap;
         use unify::Substitution;
 
-        fn param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: true,
                 backtracking: false,
@@ -1511,8 +1491,8 @@ mod tests {
             })
         }
 
-        fn param_non_reg() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn param_non_reg() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: false,
@@ -1530,11 +1510,11 @@ mod tests {
             }
         }
 
-        fn state(i: u8) -> FOTabState {
+        fn state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), param()).unwrap()
         }
 
-        fn state_non_reg(i: u8) -> FOTabState {
+        fn state_non_reg(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), param_non_reg()).unwrap()
         }
 
@@ -1552,13 +1532,13 @@ mod tests {
         fn reg_violation() {
             session(|| {
                 let s = state(0);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 1)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 2)).unwrap();
 
                 assert_eq!(
-                    FOTabErr::InstWouldViolateReg,
-                    FOTableaux::apply_move(s, FOTabMove::CloseAssign(3, 1, unifier!("X_1", "c")))
+                    Err::InstWouldViolateReg,
+                    FOTableaux::apply_move(s, Move::CloseAssign(3, 1, unifier!("X_1", "c")))
                         .unwrap_err()
                 )
             })
@@ -1568,12 +1548,12 @@ mod tests {
         fn manual_assign() {
             session(|| {
                 let s = state(0);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 1)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 2)).unwrap();
 
                 assert_eq!(
-                    FOTabErr::AutoCloseNotEnabled,
-                    FOTableaux::apply_move(s, FOTabMove::AutoClose(2, 1)).unwrap_err()
+                    Err::AutoCloseNotEnabled,
+                    FOTableaux::apply_move(s, Move::AutoClose(2, 1)).unwrap_err()
                 )
             })
         }
@@ -1582,12 +1562,12 @@ mod tests {
         fn incorrect_inst() {
             session(|| {
                 let s = state(1);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 1)).unwrap();
 
                 assert!(FOTableaux::apply_move(
                     s,
-                    FOTabMove::CloseAssign(2, 1, unifier!("X_1", "sk2"; "W_2", "sk1(c)")),
+                    Move::CloseAssign(2, 1, unifier!("X_1", "sk2"; "W_2", "sk1(c)")),
                 )
                 .is_err(),)
             })
@@ -1597,12 +1577,12 @@ mod tests {
         fn valid1() {
             session(|| {
                 let s = state(1);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(1, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(1, 1)).unwrap();
 
                 let s = FOTableaux::apply_move(
                     s,
-                    FOTabMove::CloseAssign(2, 1, unifier!("X_1", "sk2"; "W_2", "sk1(sk2)")),
+                    Move::CloseAssign(2, 1, unifier!("X_1", "sk2"; "W_2", "sk1(sk2)")),
                 )
                 .unwrap();
                 assert!(FOTableaux::check_close(s).closed)
@@ -1613,14 +1593,14 @@ mod tests {
         fn valid2() {
             session(|| {
                 let s = state_non_reg(2);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
 
                 let u = unifier!("B_2", "B_1"; "A_2", "B_1");
 
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(6, 2, u.clone())).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(5, 2, u)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::CloseAssign(6, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, Move::CloseAssign(4, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, Move::CloseAssign(5, 2, u)).unwrap();
 
                 assert!(s.nodes[2].is_closed);
                 assert!(s.nodes[4].is_closed);
@@ -1643,7 +1623,7 @@ mod tests {
             session(|| {
                 let json = "{\"type\": \"tableaux-expand\", \"id1\": 0, \"id2\": 42}";
                 let r#move = serde_json::from_str(json).unwrap();
-                assert_eq!(FOTabMove::Expand(0, 42), r#move);
+                assert_eq!(Move::Expand(0, 42), r#move);
             });
         }
 
@@ -1651,7 +1631,7 @@ mod tests {
         fn move_null() {
             session(|| {
                 let json = "{\"type\": \"tableaux-expand\", \"id1\": 0, \"id2\": null}";
-                let r#move: Result<FOTabMove, serde_json::Error> = serde_json::from_str(json);
+                let r#move: Result<Move, serde_json::Error> = serde_json::from_str(json);
                 assert!(r#move.is_err());
             });
         }
@@ -1660,7 +1640,7 @@ mod tests {
         fn move_missing_field() {
             session(|| {
                 let json = "{\"type\": \"tableaux-expand\", \"id2\": 42, \"varAssign\":{}}";
-                let r#move: Result<FOTabMove, serde_json::Error> = serde_json::from_str(json);
+                let r#move: Result<Move, serde_json::Error> = serde_json::from_str(json);
                 assert!(r#move.is_err());
             });
         }
@@ -1669,7 +1649,7 @@ mod tests {
         fn move_type_mismatch() {
             session(|| {
                 let json = "{\"type\": \"tableaux-expand\", \"id2\": \"dream\", \"varAssign\":{}}";
-                let r#move: Result<FOTabMove, serde_json::Error> = serde_json::from_str(json);
+                let r#move: Result<Move, serde_json::Error> = serde_json::from_str(json);
                 assert!(r#move.is_err());
             });
         }
@@ -1678,7 +1658,7 @@ mod tests {
         fn state_empty() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":{\"spelling\":\"R\",\"arguments\":[{\"type\":\"QuantifiedVariable\",\"spelling\":\"X\"}]},\"negated\":false}]},{\"atoms\":[{\"lit\":{\"spelling\":\"R\",\"arguments\":[{\"type\":\"Constant\",\"spelling\":\"c\"}]},\"negated\":true}]}]},\"formula\":\"\\\\all X: R(X) & !R(c)\",\"type\":\"UNCONNECTED\",\"regular\":false,\"backtracking\":false,\"manualVarAssign\":false,\"tree\":[{\"parent\":null,\"relation\":{\"spelling\":\"true\",\"arguments\":[]},\"negated\":false,\"isClosed\":false,\"closeRef\":null,\"children\":[],\"spelling\":\"true()\"}],\"moveHistory\":[],\"usedBacktracking\":false,\"expansionCounter\":0,\"seal\":\"47E0E51B486CDF0FEB644B195CFBCB08E61C2556BD67D84B86B08CB658055ACB\",\"renderedClauseSet\":[\"R(X)\",\"!R(c)\"]}";
-                let state: FOTabState = serde_json::from_str(json).unwrap();
+                let state: State = serde_json::from_str(json).unwrap();
                 let hash = "fotableaux|\\all X: R(X) & !R(c)|0|UNCONNECTED|false|false|false|false|{R(X)}, {!R(c)}|[true();p;null;-;o;()]|[]";
                 assert_eq!(hash, state.compute_seal_info())
             });
@@ -1688,7 +1668,7 @@ mod tests {
         fn state_mod() {
             session(|| {
                 let json = "{\"clauseSet\":{\"clauses\":[{\"atoms\":[{\"lit\":{\"spelling\":\"R\",\"arguments\":[{\"type\":\"Constant\",\"spelling\":\"sk1\"}]},\"negated\":false}]}]},\"formula\":\"\\\\ex X: R(X)\",\"type\":\"UNCONNECTED\",\"regular\":false,\"backtracking\":false,\"manualVarAssign\":false,\"tree\":[{\"parent\":null,\"relation\":{\"spelling\":\"true\",\"arguments\":[]},\"negated\":false,\"lemmaSource\":null,\"isClosed\":false,\"closeRef\":null,\"children\":[],\"spelling\":\"true()\"}],\"moveHistory\":[],\"usedBacktracking\":false,\"expansionCounter\":0,\"seal\":\"22B8CEDC626EBF36DAAA3E50356CD328C075805A0538EA0F91B4C88658D8C465\",\"renderedClauseSet\":[\"R(sk1)\"],\"statusMessage\":null}";
-                assert!(serde_json::from_str::<FOTabState>(json).is_err())
+                assert!(serde_json::from_str::<State>(json).is_err())
             });
         }
     }
@@ -1699,8 +1679,8 @@ mod tests {
         use crate::session;
         use std::collections::HashMap;
 
-        fn auto_param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn auto_param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: false,
@@ -1708,8 +1688,8 @@ mod tests {
             })
         }
 
-        fn manual_param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn manual_param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: false,
@@ -1725,11 +1705,11 @@ mod tests {
             }
         }
 
-        fn auto_state(i: u8) -> FOTabState {
+        fn auto_state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), auto_param()).unwrap()
         }
 
-        fn manual_state(i: u8) -> FOTabState {
+        fn manual_state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), manual_param()).unwrap()
         }
 
@@ -1749,16 +1729,16 @@ mod tests {
                 let state = manual_state(0);
                 // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
                 let u = unifier!("B_1", "c"; "A_2", "c"; "B_2", "c");
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(2, 1)).unwrap();
 
                 let state =
-                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(4, 2, u.clone())).unwrap();
+                    FOTableaux::apply_move(state, Move::CloseAssign(4, 2, u.clone())).unwrap();
                 let state =
-                    FOTableaux::apply_move(state, FOTabMove::CloseAssign(5, 2, u.clone())).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::CloseAssign(6, 2, u)).unwrap();
+                    FOTableaux::apply_move(state, Move::CloseAssign(5, 2, u.clone())).unwrap();
+                let state = FOTableaux::apply_move(state, Move::CloseAssign(6, 2, u)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[7].lemma_source.unwrap());
                 assert!(state.nodes[7].negated);
@@ -1770,14 +1750,14 @@ mod tests {
             session(|| {
                 let state = auto_state(0);
                 // {!R(A), R(B), !R(B)}, {!R(A), !R(A), !R(B)}
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(2, 1)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(6, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(6, 2)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[7].lemma_source.unwrap());
                 assert!(state.nodes[7].negated);
@@ -1789,20 +1769,20 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(2, 2)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(5, 2)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Lemma(1, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Lemma(1, 2)).unwrap();
 
                 assert_eq!(2, state.nodes[6].lemma_source.unwrap());
                 assert!(state.nodes[6].negated);
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(6, 0)).unwrap();
-                FOTableaux::apply_move(state, FOTabMove::AutoClose(8, 6)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(6, 0)).unwrap();
+                FOTableaux::apply_move(state, Move::AutoClose(8, 6)).unwrap();
             });
         }
 
@@ -1811,15 +1791,15 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(5, 2)).unwrap();
 
-                FOTableaux::apply_move(state, FOTabMove::Lemma(6, 2)).unwrap();
+                FOTableaux::apply_move(state, Move::Lemma(6, 2)).unwrap();
             });
         }
 
@@ -1828,17 +1808,17 @@ mod tests {
             session(|| {
                 let state = auto_state(1);
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B), !R(A)}
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(2, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(2, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(3, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(4, 2)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::AutoClose(5, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(3, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(4, 2)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::AutoClose(5, 2)).unwrap();
 
-                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
-                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 2)).is_err());
-                assert!(FOTableaux::apply_move(state, FOTabMove::Lemma(5, 3)).is_err());
+                assert!(FOTableaux::apply_move(state.clone(), Move::Lemma(0, 2)).is_err());
+                assert!(FOTableaux::apply_move(state.clone(), Move::Lemma(0, 2)).is_err());
+                assert!(FOTableaux::apply_move(state, Move::Lemma(5, 3)).is_err());
             });
         }
 
@@ -1846,9 +1826,9 @@ mod tests {
         fn special_case() {
             session(|| {
                 let state = auto_state(0);
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                assert!(FOTableaux::apply_move(state.clone(), FOTabMove::Lemma(0, 0)).is_err());
-                assert!(FOTableaux::apply_move(state, FOTabMove::Lemma(usize::MAX, 0)).is_err());
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                assert!(FOTableaux::apply_move(state.clone(), Move::Lemma(0, 0)).is_err());
+                assert!(FOTableaux::apply_move(state, Move::Lemma(usize::MAX, 0)).is_err());
             })
         }
     }
@@ -1874,10 +1854,10 @@ mod tests {
             session(|| {
                 let state =
                     FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "c"; "Y_2", "c"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("X_1", "c"; "Y_2", "c"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert!(state.status_msg.is_some())
@@ -1888,20 +1868,20 @@ mod tests {
         fn valid_mgu() {
             session(|| {
                 let state = FOTableaux::parse_formula("/all X: R(X) & !R(c)", None).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "c"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("X_1", "c"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert_eq!(None, state.status_msg);
 
                 let state =
                     FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("Y_2", "X_1"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("Y_2", "X_1"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert_eq!(None, state.status_msg)
@@ -1913,20 +1893,20 @@ mod tests {
             session(|| {
                 let state =
                     FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "X_1"; "Y_2", "X_1"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("X_1", "X_1"; "Y_2", "X_1"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert_eq!(None, state.status_msg);
 
                 let state =
                     FOTableaux::parse_formula("/all X: R(X) & /all Y: !R(Y)", None).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 0)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 1)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_1", "Y_2"; "Y_2", "Y_2"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("X_1", "Y_2"; "Y_2", "Y_2"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert_eq!(None, state.status_msg)
@@ -1939,14 +1919,11 @@ mod tests {
                 let state =
                     FOTableaux::parse_formula("/all X: /all Z: (R(X)|Q(Z)) & /all Y: !R(Y)", None)
                         .unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 1)).unwrap();
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 0)).unwrap();
 
-                let r#move = FOTabMove::CloseAssign(
-                    2,
-                    1,
-                    unifier!("X_2", "X_2"; "Y_1", "X_2"; "Z_2", "X_2"),
-                );
+                let r#move =
+                    Move::CloseAssign(2, 1, unifier!("X_2", "X_2"; "Y_1", "X_2"; "Z_2", "X_2"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
 
                 assert_eq!(None, state.status_msg);
@@ -1959,16 +1936,16 @@ mod tests {
                 let state =
                     FOTableaux::parse_formula("/all X: (R(X)|Q(c)) & /all Y: !R(Y)", None).unwrap();
                 assert_eq!(None, state.status_msg);
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(0, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(0, 1)).unwrap();
                 assert_eq!(None, state.status_msg);
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(1, 0)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(1, 0)).unwrap();
                 assert_eq!(None, state.status_msg);
 
-                let r#move = FOTabMove::CloseAssign(2, 1, unifier!("X_2", "c"; "Y_1", "c"));
+                let r#move = Move::CloseAssign(2, 1, unifier!("X_2", "c"; "Y_1", "c"));
                 let state = FOTableaux::apply_move(state, r#move).unwrap();
                 assert!(state.status_msg.is_some());
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Expand(3, 1)).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Expand(3, 1)).unwrap();
                 assert_eq!(None, state.status_msg)
             });
         }
@@ -1980,8 +1957,8 @@ mod tests {
         use crate::session;
         use std::collections::HashMap;
 
-        fn param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: true,
@@ -1989,8 +1966,8 @@ mod tests {
             })
         }
 
-        fn manual_param() -> Option<FOTabParams> {
-            Some(FOTabParams {
+        fn manual_param() -> Option<Params> {
+            Some(Params {
                 ty: TableauxType::Unconnected,
                 regular: false,
                 backtracking: true,
@@ -2007,11 +1984,11 @@ mod tests {
             }
         }
 
-        fn state(i: u8) -> FOTabState {
+        fn state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), param()).unwrap()
         }
 
-        fn manual_state(i: u8) -> FOTabState {
+        fn manual_state(i: u8) -> State {
             FOTableaux::parse_formula(formula(i), manual_param()).unwrap()
         }
 
@@ -2031,7 +2008,7 @@ mod tests {
                 let state = state(0);
                 assert!(!state.used_backtracking);
 
-                let state = FOTableaux::apply_move(state, FOTabMove::Undo).unwrap();
+                let state = FOTableaux::apply_move(state, Move::Undo).unwrap();
                 assert_eq!(1, state.nodes.len());
                 assert!(state.moves.is_empty());
                 assert!(!state.used_backtracking);
@@ -2043,14 +2020,14 @@ mod tests {
             session(|| {
                 // {!R(a), R(b), !R(b)}, {!R(a), !R(a), !R(b)}
                 let s = state(1);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(6, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(4, 2)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::AutoClose(5, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(6, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(4, 2)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::AutoClose(5, 2)).unwrap();
 
-                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Undo).unwrap();
 
                 assert!(s.nodes[6].is_closed);
                 assert_eq!(2, s.nodes[6].close_ref.unwrap());
@@ -2071,18 +2048,18 @@ mod tests {
                 let u = unifier!("B_2", "A_1"; "A_2", "A_1");
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B)}, {!R(A), !R(A)}
                 let s = manual_state(2);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
 
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(3, 2, u.clone())).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::CloseAssign(4, 2, u)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::CloseAssign(3, 2, u.clone())).unwrap();
+                let s = FOTableaux::apply_move(s, Move::CloseAssign(4, 2, u)).unwrap();
 
                 assert_eq!("R(A_1)", &s.nodes[2].spelling());
                 assert_eq!("R(A_1)", &s.nodes[3].spelling());
                 assert_eq!("R(A_1)", &s.nodes[4].spelling());
 
-                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Undo).unwrap();
 
                 assert_eq!("R(A_1)", &s.nodes[2].spelling());
                 assert_eq!("R(A_2)", &s.nodes[3].spelling());
@@ -2103,10 +2080,10 @@ mod tests {
             session(|| {
                 // {!R(A), R(A)}, {!R(A), !R(B)}, {!R(A), !R(B)}, {!R(A), !R(A)}
                 let s = state(2);
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(0, 0)).unwrap();
-                let s = FOTableaux::apply_move(s, FOTabMove::Expand(2, 1)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(0, 0)).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Expand(2, 1)).unwrap();
 
-                let s = FOTableaux::apply_move(s, FOTabMove::Undo).unwrap();
+                let s = FOTableaux::apply_move(s, Move::Undo).unwrap();
 
                 assert_eq!(1, s.moves.len());
                 assert!(s.used_backtracking);

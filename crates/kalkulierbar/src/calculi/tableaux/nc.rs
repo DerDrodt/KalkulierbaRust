@@ -36,11 +36,11 @@ pub struct NCTableaux;
 impl<'f> Calculus<'f> for NCTableaux {
     type Params = ();
 
-    type State = NCTabState;
+    type State = State;
 
-    type Move = NCTabMove;
+    type Move = Move;
 
-    type Error = NCTabErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
@@ -48,18 +48,18 @@ impl<'f> Calculus<'f> for NCTableaux {
     ) -> Result<Self::State, Self::Error> {
         let p = parse_fo_formula(formula)?;
         let nnf = negation_normal_form(p)?;
-        Ok(NCTabState::new(nnf, true))
+        Ok(State::new(nnf, true))
     }
 
     fn apply_move(mut state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
         state.status_msg.take();
         match k_move {
-            NCTabMove::Alpha(node) => apply_alpha(state, node),
-            NCTabMove::Beta(node) => apply_beta(state, node),
-            NCTabMove::Gamma(node) => apply_gamma(state, node),
-            NCTabMove::Delta(node) => apply_delta(state, node),
-            NCTabMove::Close(node, close, u) => apply_close(state, node, close, u),
-            NCTabMove::Undo => apply_undo(state),
+            Move::Alpha(node) => apply_alpha(state, node),
+            Move::Beta(node) => apply_beta(state, node),
+            Move::Gamma(node) => apply_gamma(state, node),
+            Move::Delta(node) => apply_delta(state, node),
+            Move::Close(node, close, u) => apply_close(state, node, close, u),
+            Move::Undo => apply_undo(state),
         }
     }
 
@@ -79,11 +79,11 @@ impl<'f> Calculus<'f> for NCTableaux {
     }
 }
 
-pub struct NCTabState {
+pub struct State {
     formula: LogicNode,
     backtracking: bool,
-    nodes: Vec<NCTabNode>,
-    moves: Vec<NCTabMove>,
+    nodes: Vec<Node>,
+    moves: Vec<Move>,
     idents: HashSet<Symbol>,
     used_backtracking: bool,
     gamma_suffix_counter: u32,
@@ -91,13 +91,13 @@ pub struct NCTabState {
     status_msg: Option<String>,
 }
 
-impl NCTabState {
+impl State {
     pub fn new(formula: LogicNode, backtracking: bool) -> Self {
         let idents = Signature::of_node(&formula).get_const_and_fn_names();
         Self {
             formula: formula.clone(),
             backtracking,
-            nodes: vec![NCTabNode::new(None, formula)],
+            nodes: vec![Node::new(None, formula)],
             moves: vec![],
             idents,
             used_backtracking: false,
@@ -154,7 +154,7 @@ impl NCTabState {
     }
 }
 
-impl ProtectedState for NCTabState {
+impl ProtectedState for State {
     fn compute_seal_info(&self) -> String {
         let various = format!(
             "{}|{}|{}|{}|{}",
@@ -173,7 +173,7 @@ impl ProtectedState for NCTabState {
         let nodes = self
             .nodes
             .iter()
-            .map(NCTabNode::info)
+            .map(Node::info)
             .collect::<Vec<String>>()
             .join(",");
         let history = self
@@ -187,7 +187,7 @@ impl ProtectedState for NCTabState {
 }
 
 #[derive(Debug, Clone)]
-pub enum NCTabMove {
+pub enum Move {
     Alpha(usize),
     Beta(usize),
     Gamma(usize),
@@ -196,14 +196,14 @@ pub enum NCTabMove {
     Undo,
 }
 
-impl fmt::Display for NCTabMove {
+impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NCTabMove::Alpha(id) => write!(f, "(alpha|{id})"),
-            NCTabMove::Beta(id) => write!(f, "(beta|{id})"),
-            NCTabMove::Gamma(id) => write!(f, "(gamma|{id})"),
-            NCTabMove::Delta(id) => write!(f, "(delta|{id})"),
-            NCTabMove::Close(node, close, u) => write!(
+            Move::Alpha(id) => write!(f, "(alpha|{id})"),
+            Move::Beta(id) => write!(f, "(beta|{id})"),
+            Move::Gamma(id) => write!(f, "(gamma|{id})"),
+            Move::Delta(id) => write!(f, "(delta|{id})"),
+            Move::Close(node, close, u) => write!(
                 f,
                 "(close|{node}|{close}|{})",
                 match u {
@@ -211,24 +211,24 @@ impl fmt::Display for NCTabMove {
                     _ => "null".to_string(),
                 }
             ),
-            NCTabMove::Undo => write!(f, "(undo)"),
+            Move::Undo => write!(f, "(undo)"),
         }
     }
 }
 
 #[derive(Debug)]
-pub enum NCTabErr {
+pub enum Err {
     ParseErr(ParseErr),
     Str(&'static str),
     UnificationErr(UnificationErr),
     BacktrackingDisabled,
     IllegalNodeId(usize),
-    AlreadyClosed(NCTabNode),
+    AlreadyClosed(Node),
     ExpectedAnd,
     ExpectedOr,
     ExpectedAll,
     ExpectedEx,
-    ExpectedAncestor(NCTabNode, NCTabNode),
+    ExpectedAncestor(Node, Node),
     NodeFormulaNotNegRel(String),
     CloseFormulaNotPosRel(String),
     NodeFormulaNotPosRel(String),
@@ -236,68 +236,68 @@ pub enum NCTabErr {
     NeitherAreNegated(String, String),
 }
 
-impl From<ParseErr> for NCTabErr {
+impl From<ParseErr> for Err {
     fn from(e: ParseErr) -> Self {
         Self::ParseErr(e)
     }
 }
 
-impl From<&'static str> for NCTabErr {
+impl From<&'static str> for Err {
     fn from(e: &'static str) -> Self {
         Self::Str(e)
     }
 }
 
-impl From<UnificationErr> for NCTabErr {
+impl From<UnificationErr> for Err {
     fn from(e: UnificationErr) -> Self {
         Self::UnificationErr(e)
     }
 }
 
-impl fmt::Display for NCTabErr {
+impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NCTabErr::ParseErr(e) => fmt::Display::fmt(e, f),
-            NCTabErr::Str(e) => fmt::Display::fmt(e, f),
-            NCTabErr::UnificationErr(e) => fmt::Display::fmt(e, f),
-            NCTabErr::BacktrackingDisabled => {
+            Err::ParseErr(e) => fmt::Display::fmt(e, f),
+            Err::Str(e) => fmt::Display::fmt(e, f),
+            Err::UnificationErr(e) => fmt::Display::fmt(e, f),
+            Err::BacktrackingDisabled => {
                 write!(f, "Backtracking is not enabled for this proof")
             }
-            NCTabErr::IllegalNodeId(n) => write!(f, "Node with ID {n} does not exist"),
-            NCTabErr::AlreadyClosed(n) => write!(f, "Node '{n}' is already closed"),
-            NCTabErr::ExpectedAnd => write!(f, "Outermost logic operator is not AND"),
-            NCTabErr::ExpectedOr => write!(f, "Outermost logic operator is not OR"),
-            NCTabErr::ExpectedAll => {
+            Err::IllegalNodeId(n) => write!(f, "Node with ID {n} does not exist"),
+            Err::AlreadyClosed(n) => write!(f, "Node '{n}' is already closed"),
+            Err::ExpectedAnd => write!(f, "Outermost logic operator is not AND"),
+            Err::ExpectedOr => write!(f, "Outermost logic operator is not OR"),
+            Err::ExpectedAll => {
                 write!(f, "Outermost logic operator is not a universal quantifier")
             }
-            NCTabErr::ExpectedEx => write!(
+            Err::ExpectedEx => write!(
                 f,
                 "Outermost logic operator is not an existential quantifier"
             ),
-            NCTabErr::ExpectedAncestor(c, n) => {
+            Err::ExpectedAncestor(c, n) => {
                 write!(f, "Node '{c}' is not an ancestor of node '{n}'")
             }
-            NCTabErr::NodeFormulaNotNegRel(n) => {
+            Err::NodeFormulaNotNegRel(n) => {
                 write!(f, "Node formula '{n}' is not a negated relation")
             }
-            NCTabErr::CloseFormulaNotPosRel(c) => {
+            Err::CloseFormulaNotPosRel(c) => {
                 write!(f, "Close node formula '{c}' has to be a positive relation")
             }
-            NCTabErr::NodeFormulaNotPosRel(n) => {
+            Err::NodeFormulaNotPosRel(n) => {
                 write!(f, "Node formula '{n}' has to be a positive relation")
             }
-            NCTabErr::CloseFormulaNotNegRel(c) => {
+            Err::CloseFormulaNotNegRel(c) => {
                 write!(f, "Close node formula '{c}' is not a negated relation")
             }
-            NCTabErr::NeitherAreNegated(n, c) => write!(f, "Neither '{n}' nor '{c}' are negated"),
+            Err::NeitherAreNegated(n, c) => write!(f, "Neither '{n}' nor '{c}' are negated"),
         }
     }
 }
 
-pub type NCTabResult<T> = Result<T, NCTabErr>;
+pub type NCTabResult<T> = Result<T, Err>;
 
 #[derive(Debug, Clone)]
-pub struct NCTabNode {
+pub struct Node {
     parent: Option<usize>,
     formula: LogicNode,
     is_closed: bool,
@@ -305,7 +305,7 @@ pub struct NCTabNode {
     children: Vec<usize>,
 }
 
-impl NCTabNode {
+impl Node {
     pub fn new(parent: Option<usize>, formula: LogicNode) -> Self {
         Self {
             parent,
@@ -341,13 +341,13 @@ impl NCTabNode {
     }
 }
 
-impl fmt::Display for NCTabNode {
+impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.formula, f)
     }
 }
 
-fn apply_alpha(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
+fn apply_alpha(mut state: State, node: usize) -> NCTabResult<State> {
     check_node_restrictions(&state, node)?;
     let n = &mut state.nodes[node];
     let formula = n.formula.clone();
@@ -355,7 +355,7 @@ fn apply_alpha(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     n.children.clear();
 
     if !matches!(formula, LogicNode::And(..)) {
-        return Err(NCTabErr::ExpectedAnd);
+        return Err(Err::ExpectedAnd);
     }
 
     let mut w = vec![formula];
@@ -370,7 +370,7 @@ fn apply_alpha(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
             }
             f => {
                 let len = state.nodes.len();
-                state.nodes.push(NCTabNode::new(Some(p_id), f));
+                state.nodes.push(Node::new(Some(p_id), f));
                 state.nodes[p_id].children.push(len);
                 p_id = len;
             }
@@ -384,19 +384,19 @@ fn apply_alpha(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     }
 
     if state.backtracking {
-        state.moves.push(NCTabMove::Alpha(node));
+        state.moves.push(Move::Alpha(node));
     }
 
     Ok(state)
 }
 
-fn apply_beta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
+fn apply_beta(mut state: State, node: usize) -> NCTabResult<State> {
     check_node_restrictions(&state, node)?;
     let n = &mut state.nodes[node];
     let formula = n.formula.clone();
 
     if !matches!(formula, LogicNode::Or(..)) {
-        return Err(NCTabErr::ExpectedOr);
+        return Err(Err::ExpectedOr);
     }
 
     // Collect all leaves in the current branch where the split nodes
@@ -416,7 +416,7 @@ fn apply_beta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
             f => {
                 for l in &leave_ids {
                     let l = *l;
-                    let n = NCTabNode::new(Some(l), f.clone());
+                    let n = Node::new(Some(l), f.clone());
                     let len = state.nodes.len();
                     state.nodes[l].children.push(len);
                     state.nodes.push(n);
@@ -426,20 +426,20 @@ fn apply_beta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     }
 
     if state.backtracking {
-        state.moves.push(NCTabMove::Alpha(node));
+        state.moves.push(Move::Alpha(node));
     }
 
     Ok(state)
 }
 
-fn apply_gamma(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
+fn apply_gamma(mut state: State, node: usize) -> NCTabResult<State> {
     check_node_restrictions(&state, node)?;
     let n = &mut state.nodes[node];
     let formula = &n.formula;
 
     let (fs, fc) = match formula {
         LogicNode::All(s, c) => (*s, *(c.clone())),
-        _ => return Err(NCTabErr::ExpectedAll),
+        _ => return Err(Err::ExpectedAll),
     };
 
     let children = n.children.clone();
@@ -460,7 +460,7 @@ fn apply_gamma(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     }
 
     // Add new node to tree
-    let mut nn = NCTabNode::new(Some(node), nf);
+    let mut nn = Node::new(Some(node), nf);
     let idx = state.nodes.len();
     for c in children {
         nn.children.push(c);
@@ -469,20 +469,20 @@ fn apply_gamma(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     state.nodes.push(nn);
 
     if state.backtracking {
-        state.moves.push(NCTabMove::Gamma(node));
+        state.moves.push(Move::Gamma(node));
     }
 
     Ok(state)
 }
 
-fn apply_delta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
+fn apply_delta(mut state: State, node: usize) -> NCTabResult<State> {
     check_node_restrictions(&state, node)?;
     let n = &mut state.nodes[node];
     let formula = &n.formula;
 
     let (fs, fc) = match formula {
         LogicNode::Ex(s, c) => (*s, *(c.clone())),
-        _ => return Err(NCTabErr::ExpectedEx),
+        _ => return Err(Err::ExpectedEx),
     };
 
     let children = n.children.clone();
@@ -495,7 +495,7 @@ fn apply_delta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     state.idents.insert(new_sym);
 
     // Add new node to tree
-    let mut nn = NCTabNode::new(Some(node), nf);
+    let mut nn = Node::new(Some(node), nf);
     let idx = state.nodes.len();
     for c in children {
         nn.children.push(c);
@@ -504,18 +504,18 @@ fn apply_delta(mut state: NCTabState, node: usize) -> NCTabResult<NCTabState> {
     state.nodes.push(nn);
 
     if state.backtracking {
-        state.moves.push(NCTabMove::Delta(node));
+        state.moves.push(Move::Delta(node));
     }
 
     Ok(state)
 }
 
 fn apply_close(
-    mut state: NCTabState,
+    mut state: State,
     node_id: usize,
     close_id: usize,
     u: Option<Substitution>,
-) -> NCTabResult<NCTabState> {
+) -> NCTabResult<State> {
     check_close_id_restrictions(&state, node_id, close_id)?;
     let node = &state.nodes[node_id];
     let close = &state.nodes[close_id];
@@ -545,17 +545,15 @@ fn apply_close(
 
     // Record close move for backtracking purposes
     if state.backtracking {
-        state
-            .moves
-            .push(NCTabMove::Close(node_id, close_id, Some(u)));
+        state.moves.push(Move::Close(node_id, close_id, Some(u)));
     }
 
     Ok(state)
 }
 
-fn apply_undo(state: NCTabState) -> NCTabResult<NCTabState> {
+fn apply_undo(state: State) -> NCTabResult<State> {
     if !state.backtracking {
-        return Err(NCTabErr::BacktrackingDisabled);
+        return Err(Err::BacktrackingDisabled);
     }
 
     // Can't undo any more moves in initial state
@@ -567,7 +565,7 @@ fn apply_undo(state: NCTabState) -> NCTabResult<NCTabState> {
     let mut moves = state.moves;
     moves.pop();
     let formula = state.formula;
-    let mut state = NCTabState::new(formula, true);
+    let mut state = State::new(formula, true);
     state.used_backtracking = true;
 
     // Re-build the proof tree in the clone state
@@ -578,25 +576,21 @@ fn apply_undo(state: NCTabState) -> NCTabResult<NCTabState> {
     Ok(state)
 }
 
-fn check_node_restrictions(state: &NCTabState, n_id: usize) -> NCTabResult<()> {
+fn check_node_restrictions(state: &State, n_id: usize) -> NCTabResult<()> {
     if n_id >= state.nodes.len() {
-        return Err(NCTabErr::IllegalNodeId(n_id));
+        return Err(Err::IllegalNodeId(n_id));
     }
     let n = &state.nodes[n_id];
     if n.is_closed {
-        return Err(NCTabErr::AlreadyClosed(n.clone()));
+        return Err(Err::AlreadyClosed(n.clone()));
     }
     Ok(())
 }
 
-fn check_close_id_restrictions(
-    state: &NCTabState,
-    node_id: usize,
-    close_id: usize,
-) -> NCTabResult<()> {
+fn check_close_id_restrictions(state: &State, node_id: usize, close_id: usize) -> NCTabResult<()> {
     check_node_restrictions(state, node_id)?;
     if close_id >= state.nodes.len() {
-        return Err(NCTabErr::IllegalNodeId(close_id));
+        return Err(Err::IllegalNodeId(close_id));
     }
 
     let node = &state.nodes[node_id];
@@ -604,7 +598,7 @@ fn check_close_id_restrictions(
 
     // Verify that closeNode is transitive parent of node
     if !state.node_is_ancestor_of(close_id, node_id) {
-        return Err(NCTabErr::ExpectedAncestor(close.clone(), node.clone()));
+        return Err(Err::ExpectedAncestor(close.clone(), node.clone()));
     }
 
     Ok(())
@@ -622,9 +616,9 @@ fn check_close_relation(
                 Relation::new(*s2, args2.clone()),
             ),
             (_, LogicNode::Rel(..)) => {
-                return Err(NCTabErr::NodeFormulaNotNegRel(node_formula.to_string()))
+                return Err(Err::NodeFormulaNotNegRel(node_formula.to_string()))
             }
-            _ => return Err(NCTabErr::CloseFormulaNotPosRel(close_formula.to_string())),
+            _ => return Err(Err::CloseFormulaNotPosRel(close_formula.to_string())),
         }
     } else if let LogicNode::Not(c) = close_formula {
         let c = c.as_ref();
@@ -634,19 +628,19 @@ fn check_close_relation(
                 Relation::new(*s1, args1.clone()),
             ),
             (_, LogicNode::Rel(..)) => {
-                return Err(NCTabErr::NodeFormulaNotPosRel(node_formula.to_string()))
+                return Err(Err::NodeFormulaNotPosRel(node_formula.to_string()))
             }
-            _ => return Err(NCTabErr::CloseFormulaNotNegRel(close_formula.to_string())),
+            _ => return Err(Err::CloseFormulaNotNegRel(close_formula.to_string())),
         }
     } else {
-        return Err(NCTabErr::NeitherAreNegated(
+        return Err(Err::NeitherAreNegated(
             node_formula.to_string(),
             close_formula.to_string(),
         ));
     })
 }
 
-fn open_child_leaves_of(state: &NCTabState, n_id: usize) -> Vec<usize> {
+fn open_child_leaves_of(state: &State, n_id: usize) -> Vec<usize> {
     let mut w = vec![n_id];
     let mut ls = vec![];
 
@@ -812,7 +806,7 @@ impl FOTermTransformer for DeltaTermReplacer {
     }
 }
 
-impl Serialize for NCTabNode {
+impl Serialize for Node {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -828,7 +822,7 @@ impl Serialize for NCTabNode {
     }
 }
 
-impl<'de> Deserialize<'de> for NCTabNode {
+impl<'de> Deserialize<'de> for Node {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -852,13 +846,13 @@ impl<'de> Deserialize<'de> for NCTabNode {
         struct NodeVisitor;
 
         impl<'de> Visitor<'de> for NodeVisitor {
-            type Value = NCTabNode;
+            type Value = Node;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct NCTabNode")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<NCTabNode, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Node, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -914,7 +908,7 @@ impl<'de> Deserialize<'de> for NCTabNode {
                 let is_closed = is_closed.ok_or_else(|| de::Error::missing_field("isClosed"))?;
                 let children = children.ok_or_else(|| de::Error::missing_field("children"))?;
 
-                Ok(NCTabNode {
+                Ok(Node {
                     parent,
                     formula,
                     is_closed,
@@ -931,18 +925,18 @@ impl<'de> Deserialize<'de> for NCTabNode {
     }
 }
 
-impl Serialize for NCTabMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let (ty, len, n_id) = match self {
-            NCTabMove::Alpha(n) => ("alpha", 2, n),
-            NCTabMove::Beta(n) => ("beta", 2, n),
-            NCTabMove::Gamma(n) => ("gamma", 2, n),
-            NCTabMove::Delta(n) => ("delta", 2, n),
-            NCTabMove::Close(n, _, _) => ("close", 4, n),
-            NCTabMove::Undo => ("undo", 1, &0),
+            Move::Alpha(n) => ("alpha", 2, n),
+            Move::Beta(n) => ("beta", 2, n),
+            Move::Gamma(n) => ("gamma", 2, n),
+            Move::Delta(n) => ("delta", 2, n),
+            Move::Close(n, _, _) => ("close", 4, n),
+            Move::Undo => ("undo", 1, &0),
         };
         let mut state = serializer.serialize_struct("NCTabMove", len)?;
         state.serialize_field("type", ty)?;
@@ -957,7 +951,7 @@ impl Serialize for NCTabMove {
     }
 }
 
-impl<'de> Deserialize<'de> for NCTabMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -977,13 +971,13 @@ impl<'de> Deserialize<'de> for NCTabMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = NCTabMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct NCTabMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<NCTabMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -1024,16 +1018,16 @@ impl<'de> Deserialize<'de> for NCTabMove {
                 let ty: &str = &ty;
                 Ok(match ty {
                     "alpha" => {
-                        NCTabMove::Alpha(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
+                        Move::Alpha(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
                     }
                     "beta" => {
-                        NCTabMove::Beta(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
+                        Move::Beta(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
                     }
                     "gamma" => {
-                        NCTabMove::Gamma(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
+                        Move::Gamma(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
                     }
                     "delta" => {
-                        NCTabMove::Delta(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
+                        Move::Delta(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
                     }
                     "close" => {
                         let u = if let Some(v) = var_assign {
@@ -1045,13 +1039,13 @@ impl<'de> Deserialize<'de> for NCTabMove {
                             None
                         };
 
-                        NCTabMove::Close(
+                        Move::Close(
                             node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
                             close_id.ok_or_else(|| de::Error::missing_field("closeID"))?,
                             u,
                         )
                     }
-                    "undo" => NCTabMove::Undo,
+                    "undo" => Move::Undo,
                     _ => todo!(),
                 })
             }
@@ -1071,7 +1065,7 @@ impl<'de> Deserialize<'de> for NCTabMove {
     }
 }
 
-impl Serialize for NCTabState {
+impl Serialize for State {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -1092,7 +1086,7 @@ impl Serialize for NCTabState {
     }
 }
 
-impl<'de> Deserialize<'de> for NCTabState {
+impl<'de> Deserialize<'de> for State {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -1124,20 +1118,20 @@ impl<'de> Deserialize<'de> for NCTabState {
         struct StateVisitor;
 
         impl<'de> Visitor<'de> for StateVisitor {
-            type Value = NCTabState;
+            type Value = State;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct NCTabState")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<NCTabState, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<State, V::Error>
             where
                 V: MapAccess<'de>,
             {
                 let mut formula: Option<LogicNode> = None;
                 let mut backtracking: Option<bool> = None;
-                let mut tree: Option<Vec<NCTabNode>> = None;
-                let mut moves: Option<Vec<NCTabMove>> = None;
+                let mut tree: Option<Vec<Node>> = None;
+                let mut moves: Option<Vec<Move>> = None;
                 let mut idents: Option<Vec<Symbol>> = None;
                 let mut used_backtracking: Option<bool> = None;
                 let mut gamma_suffix_counter: Option<u32> = None;
@@ -1225,7 +1219,7 @@ impl<'de> Deserialize<'de> for NCTabState {
                     skolem_counter.ok_or_else(|| de::Error::missing_field("skolemCounter"))?;
                 let seal = seal.ok_or_else(|| de::Error::missing_field("seal"))?;
 
-                let s = NCTabState {
+                let s = State {
                     formula,
                     backtracking,
                     nodes: tree,

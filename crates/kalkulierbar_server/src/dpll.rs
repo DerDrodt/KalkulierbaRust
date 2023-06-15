@@ -34,7 +34,7 @@ pub(crate) async fn validate(form: web::Form<StateForm>) -> Result<HttpResponse>
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: dpll::DPLLState = serde_json::from_str(&state)?;
+        let state: dpll::State = serde_json::from_str(&state)?;
         let res = dpll::DPLL::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -47,8 +47,8 @@ pub(crate) async fn r#move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: dpll::DPLLState = serde_json::from_str(&state)?;
-        let r#move: dpll::DPLLMove = serde_json::from_str(&r#move)?;
+        let state: dpll::State = serde_json::from_str(&state)?;
+        let r#move: dpll::Move = serde_json::from_str(&r#move)?;
 
         let state = dpll::DPLL::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -63,7 +63,7 @@ pub(crate) async fn close(form: web::Form<StateForm>) -> Result<HttpResponse> {
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: dpll::DPLLState = serde_json::from_str(&state)?;
+        let state: dpll::State = serde_json::from_str(&state)?;
 
         let res = dpll::DPLL::check_close(state);
 

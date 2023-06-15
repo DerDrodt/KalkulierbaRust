@@ -16,7 +16,7 @@ pub(crate) async fn prop_parse(form: web::Form<ParseForm>) -> Result<HttpRespons
 
     session(|| {
         let ParseForm { formula, params } = form.0;
-        let params: Option<prop::PropTableauxParams> = match params {
+        let params: Option<prop::Params> = match params {
             Some(p) => Some(serde_json::from_str(&p)?),
             None => None,
         };
@@ -34,7 +34,7 @@ pub(crate) async fn prop_validate(form: web::Form<StateForm>) -> Result<HttpResp
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropTableauxState = serde_json::from_str(&state)?;
+        let state: prop::State = serde_json::from_str(&state)?;
         let res = prop::PropTableaux::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -47,8 +47,8 @@ pub(crate) async fn prop_move(form: web::Form<MoveForm>) -> Result<HttpResponse>
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: prop::PropTableauxState = serde_json::from_str(&state)?;
-        let r#move: prop::PropTableauxMove = serde_json::from_str(&r#move)?;
+        let state: prop::State = serde_json::from_str(&state)?;
+        let r#move: prop::Move = serde_json::from_str(&r#move)?;
 
         let state = prop::PropTableaux::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -63,7 +63,7 @@ pub(crate) async fn prop_close(form: web::Form<StateForm>) -> Result<HttpRespons
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: prop::PropTableauxState = serde_json::from_str(&state)?;
+        let state: prop::State = serde_json::from_str(&state)?;
 
         let res = prop::PropTableaux::check_close(state);
 
@@ -84,7 +84,7 @@ pub(crate) async fn fo_parse(form: web::Form<ParseForm>) -> Result<HttpResponse>
 
     session(|| {
         let ParseForm { formula, params } = form.0;
-        let params: Option<fo::FOTabParams> = match params {
+        let params: Option<fo::Params> = match params {
             Some(p) => Some(serde_json::from_str(&p)?),
             None => None,
         };
@@ -102,7 +102,7 @@ pub(crate) async fn fo_validate(form: web::Form<StateForm>) -> Result<HttpRespon
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: fo::FOTabState = serde_json::from_str(&state)?;
+        let state: fo::State = serde_json::from_str(&state)?;
         let res = fo::FOTableaux::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -115,8 +115,8 @@ pub(crate) async fn fo_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: fo::FOTabState = serde_json::from_str(&state)?;
-        let r#move: fo::FOTabMove = serde_json::from_str(&r#move)?;
+        let state: fo::State = serde_json::from_str(&state)?;
+        let r#move: fo::Move = serde_json::from_str(&r#move)?;
 
         let state = fo::FOTableaux::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -131,7 +131,7 @@ pub(crate) async fn fo_close(form: web::Form<StateForm>) -> Result<HttpResponse>
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: fo::FOTabState = serde_json::from_str(&state)?;
+        let state: fo::State = serde_json::from_str(&state)?;
 
         let res = fo::FOTableaux::check_close(state);
 
@@ -170,7 +170,7 @@ pub(crate) async fn nc_validate(form: web::Form<StateForm>) -> Result<HttpRespon
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: nc::NCTabState = serde_json::from_str(&state)?;
+        let state: nc::State = serde_json::from_str(&state)?;
         let res = nc::NCTableaux::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -183,8 +183,8 @@ pub(crate) async fn nc_move(form: web::Form<MoveForm>) -> Result<HttpResponse> {
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: nc::NCTabState = serde_json::from_str(&state)?;
-        let r#move: nc::NCTabMove = serde_json::from_str(&r#move)?;
+        let state: nc::State = serde_json::from_str(&state)?;
+        let r#move: nc::Move = serde_json::from_str(&r#move)?;
 
         let state = nc::NCTableaux::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -199,7 +199,7 @@ pub(crate) async fn nc_close(form: web::Form<StateForm>) -> Result<HttpResponse>
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: nc::NCTabState = serde_json::from_str(&state)?;
+        let state: nc::State = serde_json::from_str(&state)?;
 
         let res = nc::NCTableaux::check_close(state);
 
@@ -238,7 +238,7 @@ pub(crate) async fn modal_validate(form: web::Form<StateForm>) -> Result<HttpRes
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
+        let state: modal::State = serde_json::from_str(&state)?;
         let res = modal::SignedModalTableaux::validate(state);
 
         Ok(HttpResponse::Ok().json(res))
@@ -251,8 +251,8 @@ pub(crate) async fn modal_move(form: web::Form<MoveForm>) -> Result<HttpResponse
     session(|| {
         let MoveForm { state, r#move } = form.0;
 
-        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
-        let r#move: modal::SignedModalTabMove = serde_json::from_str(&r#move)?;
+        let state: modal::State = serde_json::from_str(&state)?;
+        let r#move: modal::Move = serde_json::from_str(&r#move)?;
 
         let state = modal::SignedModalTableaux::apply_move(state, r#move)
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
@@ -267,7 +267,7 @@ pub(crate) async fn modal_close(form: web::Form<StateForm>) -> Result<HttpRespon
     session(|| {
         let StateForm { state } = form.0;
 
-        let state: modal::SignedModalTabState = serde_json::from_str(&state)?;
+        let state: modal::State = serde_json::from_str(&state)?;
 
         let res = modal::SignedModalTableaux::check_close(state);
 

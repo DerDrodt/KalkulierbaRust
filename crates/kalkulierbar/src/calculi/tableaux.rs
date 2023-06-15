@@ -94,7 +94,7 @@ mod tests {
         session(|| {
             let s = Prop::parse_formula(
                 "q;!q,r;!q",
-                Some(prop::PropTableauxParams {
+                Some(prop::Params {
                     tab_type: TableauxType::Unconnected,
                     regular: true,
                     backtracking: false,
@@ -103,15 +103,15 @@ mod tests {
             )
             .unwrap();
 
-            let s = Prop::apply_move(s, prop::PropTableauxMove::Expand(0, 0)).unwrap();
-            let s = Prop::apply_move(s, prop::PropTableauxMove::Expand(1, 1)).unwrap();
-            let s = Prop::apply_move(s, prop::PropTableauxMove::Expand(3, 2)).unwrap();
+            let s = Prop::apply_move(s, prop::Move::Expand(0, 0)).unwrap();
+            let s = Prop::apply_move(s, prop::Move::Expand(1, 1)).unwrap();
+            let s = Prop::apply_move(s, prop::Move::Expand(3, 2)).unwrap();
 
             assert!(prop::check_regularity(&s));
 
             let s = FO::parse_formula(
                 "\\all Z: Q(Z) & \\all Y: (!Q(Y) | R(c)) & !Q(v)",
-                Some(fo::FOTabParams {
+                Some(fo::Params {
                     ty: TableauxType::Unconnected,
                     regular: true,
                     backtracking: false,
@@ -120,11 +120,11 @@ mod tests {
             )
             .unwrap();
 
-            let s = FO::apply_move(s, fo::FOTabMove::Expand(0, 0)).unwrap();
-            let s = FO::apply_move(s, fo::FOTabMove::Expand(1, 1)).unwrap();
-            let s = FO::apply_move(s, fo::FOTabMove::Expand(3, 2)).unwrap();
-            let s = FO::apply_move(s, fo::FOTabMove::AutoClose(4, 1)).unwrap();
-            let s = FO::apply_move(s, fo::FOTabMove::AutoClose(2, 1)).unwrap();
+            let s = FO::apply_move(s, fo::Move::Expand(0, 0)).unwrap();
+            let s = FO::apply_move(s, fo::Move::Expand(1, 1)).unwrap();
+            let s = FO::apply_move(s, fo::Move::Expand(3, 2)).unwrap();
+            let s = FO::apply_move(s, fo::Move::AutoClose(4, 1)).unwrap();
+            let s = FO::apply_move(s, fo::Move::AutoClose(2, 1)).unwrap();
 
             assert!(fo::check_regularity(&s));
             assert!(FO::check_close(s).closed);

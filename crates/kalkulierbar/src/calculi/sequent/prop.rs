@@ -10,12 +10,12 @@ use crate::{calculus::CloseMsg, parse::sequent, Calculus};
 
 use super::{
     apply_and_l, apply_and_r, apply_ax, apply_impl_l, apply_impl_r, apply_not_l, apply_not_r,
-    apply_or_l, apply_or_r, apply_prune, apply_undo, CommonSequentMove, SequentErr, SequentNode,
-    SequentParams, SequentState,
+    apply_or_l, apply_or_r, apply_prune, apply_undo, CommonSequentMove, Err, Params, SequentNode,
+    State,
 };
 
 #[derive(Debug, Clone)]
-pub enum PropSeqMove {
+pub enum Move {
     Ax(usize),
     NotL(usize, usize),
     NotR(usize, usize),
@@ -29,7 +29,7 @@ pub enum PropSeqMove {
     Prune(usize),
 }
 
-impl CommonSequentMove for PropSeqMove {
+impl CommonSequentMove for Move {
     fn ax(node_id: usize) -> Self {
         Self::Ax(node_id)
     }
@@ -70,20 +70,20 @@ impl CommonSequentMove for PropSeqMove {
 pub struct PropSequent;
 
 impl<'f> Calculus<'f> for PropSequent {
-    type Params = SequentParams;
+    type Params = Params;
 
-    type State = SequentState<PropSeqMove>;
+    type State = State<Move>;
 
-    type Move = PropSeqMove;
+    type Move = Move;
 
-    type Error = SequentErr;
+    type Error = Err;
 
     fn parse_formula(
         formula: &'f str,
         params: Option<Self::Params>,
     ) -> Result<Self::State, Self::Error> {
         let (left, right) = sequent::parse_prop(formula)?;
-        Ok(SequentState::new(
+        Ok(State::new(
             vec![SequentNode::new(None, left, right, None)],
             params.unwrap_or_default().show_only_applicable_rules,
         ))
@@ -91,17 +91,17 @@ impl<'f> Calculus<'f> for PropSequent {
 
     fn apply_move(state: Self::State, k_move: Self::Move) -> Result<Self::State, Self::Error> {
         match k_move {
-            PropSeqMove::Ax(n) => apply_ax(state, n),
-            PropSeqMove::NotL(node, formula) => apply_not_l(state, node, formula),
-            PropSeqMove::NotR(node, formula) => apply_not_r(state, node, formula),
-            PropSeqMove::AndL(node, formula) => apply_and_l(state, node, formula),
-            PropSeqMove::AndR(node, formula) => apply_and_r(state, node, formula),
-            PropSeqMove::OrL(node, formula) => apply_or_l(state, node, formula),
-            PropSeqMove::OrR(node, formula) => apply_or_r(state, node, formula),
-            PropSeqMove::ImplL(node, formula) => apply_impl_l(state, node, formula),
-            PropSeqMove::ImplR(node, formula) => apply_impl_r(state, node, formula),
-            PropSeqMove::Undo => apply_undo(state),
-            PropSeqMove::Prune(node) => apply_prune(state, node),
+            Move::Ax(n) => apply_ax(state, n),
+            Move::NotL(node, formula) => apply_not_l(state, node, formula),
+            Move::NotR(node, formula) => apply_not_r(state, node, formula),
+            Move::AndL(node, formula) => apply_and_l(state, node, formula),
+            Move::AndR(node, formula) => apply_and_r(state, node, formula),
+            Move::OrL(node, formula) => apply_or_l(state, node, formula),
+            Move::OrR(node, formula) => apply_or_r(state, node, formula),
+            Move::ImplL(node, formula) => apply_impl_l(state, node, formula),
+            Move::ImplR(node, formula) => apply_impl_r(state, node, formula),
+            Move::Undo => apply_undo(state),
+            Move::Prune(node) => apply_prune(state, node),
         }
     }
 
@@ -120,23 +120,23 @@ impl<'f> Calculus<'f> for PropSequent {
     }
 }
 
-impl Serialize for PropSeqMove {
+impl Serialize for Move {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let (ty, len, node_id, f_id) = match self {
-            PropSeqMove::Ax(n) => ("Ax", 2, n, &0),
-            PropSeqMove::NotL(n, f) => ("notLeft", 3, n, f),
-            PropSeqMove::NotR(n, f) => ("notRight", 3, n, f),
-            PropSeqMove::AndL(n, f) => ("andLeft", 3, n, f),
-            PropSeqMove::AndR(n, f) => ("andRight", 3, n, f),
-            PropSeqMove::OrL(n, f) => ("orLeft", 3, n, f),
-            PropSeqMove::OrR(n, f) => ("orRight", 3, n, f),
-            PropSeqMove::ImplL(n, f) => ("impLeft", 3, n, f),
-            PropSeqMove::ImplR(n, f) => ("impRight", 3, n, f),
-            PropSeqMove::Undo => ("undo", 1, &0, &0),
-            PropSeqMove::Prune(n) => ("prune", 2, n, &0),
+            Move::Ax(n) => ("Ax", 2, n, &0),
+            Move::NotL(n, f) => ("notLeft", 3, n, f),
+            Move::NotR(n, f) => ("notRight", 3, n, f),
+            Move::AndL(n, f) => ("andLeft", 3, n, f),
+            Move::AndR(n, f) => ("andRight", 3, n, f),
+            Move::OrL(n, f) => ("orLeft", 3, n, f),
+            Move::OrR(n, f) => ("orRight", 3, n, f),
+            Move::ImplL(n, f) => ("impLeft", 3, n, f),
+            Move::ImplR(n, f) => ("impRight", 3, n, f),
+            Move::Undo => ("undo", 1, &0, &0),
+            Move::Prune(n) => ("prune", 2, n, &0),
         };
         let mut state = serializer.serialize_struct("PropSeqMove", len)?;
         state.serialize_field("type", ty)?;
@@ -150,7 +150,7 @@ impl Serialize for PropSeqMove {
     }
 }
 
-impl<'de> Deserialize<'de> for PropSeqMove {
+impl<'de> Deserialize<'de> for Move {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -168,13 +168,13 @@ impl<'de> Deserialize<'de> for PropSeqMove {
         struct MoveVisitor;
 
         impl<'de> Visitor<'de> for MoveVisitor {
-            type Value = PropSeqMove;
+            type Value = Move;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct PropSeqMove")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<PropSeqMove, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Move, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -208,45 +208,43 @@ impl<'de> Deserialize<'de> for PropSeqMove {
                 let ty = ty.ok_or_else(|| de::Error::missing_field("type"))?;
                 let ty: &str = &ty;
                 Ok(match ty {
-                    "Ax" => {
-                        PropSeqMove::Ax(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
+                    "Ax" => Move::Ax(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?),
+                    "notLeft" => Move::NotL(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "notRight" => Move::NotR(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "andLeft" => Move::AndL(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "andRight" => Move::AndR(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "orLeft" => Move::OrL(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "orRight" => Move::OrR(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "implLeft" => Move::ImplL(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "implRight" => Move::ImplR(
+                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
+                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
+                    ),
+                    "undo" => Move::Undo,
+                    "prune" => {
+                        Move::Prune(node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?)
                     }
-                    "notLeft" => PropSeqMove::NotL(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "notRight" => PropSeqMove::NotR(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "andLeft" => PropSeqMove::AndL(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "andRight" => PropSeqMove::AndR(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "orLeft" => PropSeqMove::OrL(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "orRight" => PropSeqMove::OrR(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "implLeft" => PropSeqMove::ImplL(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "implRight" => PropSeqMove::ImplR(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                        f_id.ok_or_else(|| de::Error::missing_field("listIndex"))?,
-                    ),
-                    "undo" => PropSeqMove::Undo,
-                    "prune" => PropSeqMove::Prune(
-                        node_id.ok_or_else(|| de::Error::missing_field("nodeID"))?,
-                    ),
                     _ => todo!(),
                 })
             }
@@ -272,8 +270,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!(a & b)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::AndL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::AndL(1, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a ").unwrap();
                 let f2 = parse_prop_formula("b ").unwrap();
@@ -292,9 +290,9 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!(a & b)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
                 assert!(s.nodes[0].parent.is_none());
-                let s = PropSequent::apply_move(s, PropSeqMove::AndL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::AndL(1, 0)).unwrap();
                 assert_eq!(1, s.nodes[0].children.len());
                 assert_eq!(0, s.nodes[1].parent.unwrap())
             })
@@ -304,7 +302,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("a & b", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::AndL(0, 0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::AndL(0, 0)).is_err());
             })
         }
     }
@@ -319,7 +317,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("(a & b) & (b |c)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::AndR(0, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a & b").unwrap();
                 let f2 = parse_prop_formula("b | c").unwrap();
@@ -338,7 +336,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("(a & b) & (b |c)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::AndR(0, 0)).unwrap();
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(2, s.nodes[0].children.len());
                 assert_eq!(0, s.nodes[1].parent.unwrap())
@@ -349,7 +347,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("(a & b) | (b |c)", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::AndR(0, 0)).is_err());
             })
         }
     }
@@ -363,10 +361,10 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | !a", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(1, 1)).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+                let s = PropSequent::apply_move(s, Move::Ax(2)).unwrap();
 
                 assert!(s.nodes.iter().all(|n| n.is_closed))
             })
@@ -377,10 +375,10 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | !a", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(1, 1)).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+                let s = PropSequent::apply_move(s, Move::Ax(2)).unwrap();
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(1, s.nodes[1].children.len());
                 assert_eq!(1, s.nodes[2].parent.unwrap())
@@ -391,7 +389,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("a | !a", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::Ax(0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::Ax(0)).is_err());
             })
         }
     }
@@ -406,8 +404,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!(!a)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotL(1, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a").unwrap();
                 let n = &s.nodes[2];
@@ -422,8 +420,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!(!a)", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotL(1, 0)).unwrap();
 
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(1, s.nodes[1].children.len());
@@ -435,7 +433,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("a & !a", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::NotL(0, 0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::NotL(0, 0)).is_err());
             })
         }
     }
@@ -450,7 +448,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!a", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a").unwrap();
                 let n = &s.nodes[1];
@@ -465,7 +463,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!a", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
 
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(1, s.nodes[0].children.len());
@@ -477,7 +475,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("a & !a", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::NotR(0, 0)).is_err());
             })
         }
     }
@@ -492,8 +490,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!((a & b) | (b |c))", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrL(1, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a & b").unwrap();
                 let f2 = parse_prop_formula("b | c").unwrap();
@@ -510,8 +508,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("!((a & b) | (b |c))", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrL(1, 0)).unwrap();
 
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(2, s.nodes[1].children.len());
@@ -523,8 +521,8 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("!((a & b) & (b |c))", None).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(0, 0)).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::OrL(1, 0)).is_err());
+                let s = PropSequent::apply_move(s, Move::NotR(0, 0)).unwrap();
+                assert!(PropSequent::apply_move(s, Move::OrL(1, 0)).is_err());
             })
         }
     }
@@ -539,7 +537,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | b", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
 
                 let f1 = parse_prop_formula("a").unwrap();
                 let f2 = parse_prop_formula("b").unwrap();
@@ -555,7 +553,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | b", None).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
 
                 assert!(s.nodes[0].parent.is_none());
                 assert_eq!(1, s.nodes[0].children.len());
@@ -567,7 +565,7 @@ mod tests {
         fn wrong_node() {
             session(|| {
                 let s = PropSequent::parse_formula("a & b", None).unwrap();
-                assert!(PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).is_err());
+                assert!(PropSequent::apply_move(s, Move::OrR(0, 0)).is_err());
             })
         }
     }
@@ -582,7 +580,7 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | b", None).unwrap();
 
-                assert!(PropSequent::apply_move(s, PropSeqMove::Undo).is_err())
+                assert!(PropSequent::apply_move(s, Move::Undo).is_err())
             })
         }
 
@@ -593,8 +591,8 @@ mod tests {
 
                 let h = s.compute_seal_info();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::Undo).unwrap();
 
                 assert_eq!(h, s.compute_seal_info())
             })
@@ -605,8 +603,8 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a & b", None).unwrap();
                 let h = s.compute_seal_info();
-                let s = PropSequent::apply_move(s, PropSeqMove::AndR(0, 0)).unwrap();
-                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                let s = PropSequent::apply_move(s, Move::AndR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::Undo).unwrap();
 
                 assert_eq!(h, s.compute_seal_info())
             })
@@ -617,17 +615,17 @@ mod tests {
             session(|| {
                 let s = PropSequent::parse_formula("a | !a", None).unwrap();
                 let h0 = s.compute_seal_info();
-                let s = PropSequent::apply_move(s, PropSeqMove::OrR(0, 0)).unwrap();
+                let s = PropSequent::apply_move(s, Move::OrR(0, 0)).unwrap();
                 let h1 = s.compute_seal_info();
-                let s = PropSequent::apply_move(s, PropSeqMove::NotR(1, 1)).unwrap();
+                let s = PropSequent::apply_move(s, Move::NotR(1, 1)).unwrap();
                 let h2 = s.compute_seal_info();
-                let s = PropSequent::apply_move(s, PropSeqMove::Ax(2)).unwrap();
+                let s = PropSequent::apply_move(s, Move::Ax(2)).unwrap();
 
-                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                let s = PropSequent::apply_move(s, Move::Undo).unwrap();
                 assert_eq!(h2, s.compute_seal_info());
-                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                let s = PropSequent::apply_move(s, Move::Undo).unwrap();
                 assert_eq!(h1, s.compute_seal_info());
-                let s = PropSequent::apply_move(s, PropSeqMove::Undo).unwrap();
+                let s = PropSequent::apply_move(s, Move::Undo).unwrap();
                 assert_eq!(h0, s.compute_seal_info());
             })
         }
